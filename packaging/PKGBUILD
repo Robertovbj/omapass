@@ -52,6 +52,13 @@ package() {
     depends=("${depends[@]/#qt6-base/qt6-base>=$_qt}")
     depends=("${depends[@]/#qt6-declarative/qt6-declarative>=$_qt}")
 
+    # O soname do botan 3 acompanha a versao menor (3.14 -> libbotan-3.so.14):
+    # o binario so roda com a mesma serie com que foi compilado
+    local _botan _botan_next
+    _botan=$(pkg-config --modversion botan-3 | cut -d. -f1,2)
+    _botan_next="${_botan%.*}.$(( ${_botan#*.} + 1 ))"
+    depends=("${depends[@]/#botan/botan>=$_botan}" "botan<$_botan_next")
+
     cd "$srcdir/$pkgname"
     make DESTDIR="$pkgdir" PREFIX=/usr install
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
