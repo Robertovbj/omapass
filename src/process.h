@@ -26,6 +26,9 @@ ProcResult runProcess(const QString &program, const QStringList &args,
                       const QProcessEnvironment &env = QProcessEnvironment(),
                       int timeoutMs = processTimeoutMs);
 
+// The executable used for database searches, including tools installed by mise.
+QString findFdExecutable();
+
 // Whether the `script` in PATH is the util-linux one, which is the only
 // version that takes `-c`. The name alone does not answer it: macOS and the
 // BSDs ship a `script` of their own, same name, different command line — so

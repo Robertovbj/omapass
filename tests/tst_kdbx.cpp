@@ -8,6 +8,7 @@
 #include "process.h"
 
 #include <QElapsedTimer>
+#include <QScopeGuard>
 
 #include <memory>
 
@@ -40,6 +41,39 @@ class TestKdbx : public QObject {
     Q_OBJECT
 
 private slots:
+#ifdef Q_OS_UNIX
+    void findsMiseFdWithARestrictedPath() {
+        const QTemporaryDir home;
+        QVERIFY(home.isValid());
+        QVERIFY(QDir(home.path()).mkpath(QStringLiteral(".local/bin")));
+        QVERIFY(QDir(home.path()).mkdir(QStringLiteral("search")));
+        const QString mise = home.filePath(QStringLiteral(".local/bin/mise"));
+        const QString fd = home.filePath(QStringLiteral("fd"));
+        const auto executable = QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner;
+        QVERIFY(writeBytes(mise, "#!/bin/sh\n[ \"$3:$4\" = which:fd ] && printf '%s\\n' \"$HOME/fd\"\n"));
+        QVERIFY(writeBytes(fd, "#!/bin/sh\n"
+                               "if [ \"$2\" = \"$HOME/search\" ]; then\n"
+                               "    printf '%s\\n' \"$2/test.kdbx\"\n"
+                               "fi\n"));
+        QVERIFY(QFile::setPermissions(mise, executable));
+        QVERIFY(QFile::setPermissions(fd, executable));
+
+        const QByteArray previousHome = qgetenv("HOME");
+        const auto restoreHome = qScopeGuard([&] {
+            if (previousHome.isNull())
+                qunsetenv("HOME");
+            else
+                qputenv("HOME", previousHome);
+        });
+        qputenv("HOME", QFile::encodeName(home.path()));
+        const PathOverride cleanPath(QFile::encodeName(home.filePath(QStringLiteral(".local"))));
+        QCOMPARE(findFdExecutable(), fd);
+        const auto databases = Vault::findLocalDatabases(home.filePath(QStringLiteral("search")));
+        QCOMPARE(databases.size(), 1);
+        QCOMPARE(databases.first().path, home.filePath(QStringLiteral("search/test.kdbx")));
+    }
+#endif
+
     void kdbxTruncatedFilesAreRefusedNotCrashedOn() {
         QTemporaryDir dir;
         const QString path = dir.filePath(QStringLiteral("t.kdbx"));

@@ -24,29 +24,25 @@ QString keepassDatabaseDir() {
 // Finds files matching `pattern` under `path`. Prefers `fd`, which is what
 // omapass has always used and is markedly faster over a whole home directory;
 // falls back to walking the tree when it is not installed.
-QStringList findFiles(const QString &pattern, const QString &path, bool includeHidden) {
+QStringList findFiles(const QString &fd, const QString &pattern, const QString &path, bool includeHidden) {
     QStringList results;
 
-    QStringList args;
-    if (includeHidden)
-        args << QStringLiteral("--hidden") << QStringLiteral("--no-ignore");
-    args << pattern << path;
+    if (!fd.isEmpty()) {
+        QStringList args;
+        if (includeHidden)
+            args << QStringLiteral("--hidden") << QStringLiteral("--no-ignore");
+        args << pattern << path;
 
-    // Debian and Ubuntu ship the same tool as `fdfind`, the name having been
-    // taken; looking only for `fd` there means always walking by hand, which
-    // on a home of half a million files is seconds instead of a tenth of one.
-    ProcResult fd = runProcess(QStringLiteral("fd"), args);
-    if (!fd.started)
-        fd = runProcess(QStringLiteral("fdfind"), args);
-
-    if (fd.started) {
-        const auto lines = fd.out.split(QLatin1Char('\n'));
-        for (const QString &line : lines) {
-            const QString trimmed = line.trimmed();
-            if (!trimmed.isEmpty())
-                results.append(trimmed);
+        const ProcResult scan = runProcess(fd, args);
+        if (scan.success) {
+            const auto lines = scan.out.split(QLatin1Char('\n'));
+            for (const QString &line : lines) {
+                const QString trimmed = line.trimmed();
+                if (!trimmed.isEmpty())
+                    results.append(trimmed);
+            }
+            return results;
         }
-        return results;
     }
 
     QDir::Filters filters = QDir::Files | QDir::NoDotAndDotDot;
@@ -69,9 +65,9 @@ QStringList findFiles(const QString &pattern, const QString &path, bool includeH
 // Roots of pass stores: the parent directory of every .gpg-id found. A
 // narrower-scope .gpg-id inside a store already found is not a database of
 // its own — only the outermost root is kept.
-QStringList findPassStores(const QString &searchPath) {
+QStringList findPassStores(const QString &fd, const QString &searchPath) {
     QStringList roots;
-    const QStringList markers = findFiles(QStringLiteral("^\\.gpg-id$"), searchPath, true);
+    const QStringList markers = findFiles(fd, QStringLiteral("^\\.gpg-id$"), searchPath, true);
     for (const QString &marker : markers) {
         const QString parent = QFileInfo(marker).absolutePath();
         if (!roots.contains(parent))
@@ -139,15 +135,16 @@ QString Vault::displayName(const DbRef &ref) {
 
 QVector<DbRef> Vault::findLocalDatabases(const QString &searchPath) {
     QVector<DbRef> databases;
+    const QString fd = findFdExecutable();
 
-    QStringList kdbx = findFiles(QStringLiteral(".kdbx$"), searchPath, false);
-    kdbx += findFiles(QStringLiteral(".kdbx$"), keepassDatabaseDir(), false);
+    QStringList kdbx = findFiles(fd, QStringLiteral(".kdbx$"), searchPath, false);
+    kdbx += findFiles(fd, QStringLiteral(".kdbx$"), keepassDatabaseDir(), false);
     kdbx.sort();
     kdbx.removeDuplicates();
     for (const QString &path : kdbx)
         databases.append({path, VaultKind::Keepass});
 
-    QStringList stores = findPassStores(searchPath);
+    QStringList stores = findPassStores(fd, searchPath);
 
     // The conventional location is always considered, even when `path` was
     // customised to somewhere that does not contain it.

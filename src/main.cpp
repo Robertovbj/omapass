@@ -19,6 +19,7 @@
 #include "i18n.h"
 #include "kdbx2pass.h"
 #include "palette.h"
+#include "process.h"
 #include "sessionlock.h"
 #include "systemtheme.h"
 
@@ -62,7 +63,8 @@ void printDoctor(QTextStream &out) {
     const QString missing = I18n::t(QStringLiteral("cli.doctor_missing"));
     for (const Tool &tool : tools) {
         const QString program = QString::fromLatin1(tool.program);
-        const QString found = QStandardPaths::findExecutable(program);
+        const QString found = program == QLatin1String("fd")
+            ? findFdExecutable() : QStandardPaths::findExecutable(program);
         out << QStringLiteral("%1 %2 %3\n")
                    .arg(program, -14)
                    .arg(found.isEmpty() ? missing : found, -34)

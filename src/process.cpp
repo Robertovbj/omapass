@@ -1,5 +1,7 @@
 #include "process.h"
 
+#include <QDir>
+#include <QFileInfo>
 #include <QObject>
 #include <QProcess>
 #include <QStandardPaths>
@@ -46,6 +48,39 @@ ProcResult runProcess(const QString &program, const QStringList &args,
     result.out = QString::fromUtf8(process.readAllStandardOutput());
     result.err = QString::fromUtf8(process.readAllStandardError());
     return result;
+}
+
+QString findFdExecutable() {
+    // Debian and Ubuntu install fd under the name fdfind.
+    for (const QString &name : {QStringLiteral("fd"), QStringLiteral("fdfind")}) {
+        const QString executable = QStandardPaths::findExecutable(name);
+        if (!executable.isEmpty())
+            return executable;
+    }
+
+#ifdef Q_OS_UNIX
+    const QString home = QDir::homePath();
+    const QString name = QStringLiteral("mise");
+    QString mise = QStandardPaths::findExecutable(name);
+    if (mise.isEmpty()) {
+        // Desktop launches can inherit a PATH without the user or Homebrew bins.
+        QStringList directories{home + QStringLiteral("/.local/bin")};
+#ifdef Q_OS_MACOS
+        directories << QStringLiteral("/usr/local/bin") << QStringLiteral("/opt/homebrew/bin");
+#endif
+        mise = QStandardPaths::findExecutable(name, directories);
+    }
+    if (mise.isEmpty())
+        return {};
+
+    const ProcResult result = runProcess(
+        mise, {QStringLiteral("-C"), home, QStringLiteral("which"), QStringLiteral("fd")},
+        {}, {}, 5000);
+    const QFileInfo executable(result.out.trimmed());
+    if (result.success && executable.isAbsolute() && executable.isFile() && executable.isExecutable())
+        return executable.absoluteFilePath();
+#endif
+    return {};
 }
 
 bool utilLinuxScriptAvailable() {
