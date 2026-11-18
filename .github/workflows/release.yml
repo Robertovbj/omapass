@@ -1,8 +1,8 @@
 name: Release
 
-# Disparado à mão: um release é entrega, não algo para sair a cada push.
-# Compila o AppImage (Linux) e o zip (Windows) em paralelo e, só se os dois
-# saírem, publica os arquivos numa release com um SHA256SUMS.
+# Disparado manualmente para publicar uma versão.
+# Gera o AppImage, os pacotes do Windows e o DMG do macOS Intel em paralelo.
+# Publica os arquivos e o SHA256SUMS quando os três builds passarem.
 on:
   workflow_dispatch:
     inputs:
@@ -70,8 +70,84 @@ jobs:
   windows:
     uses: ./.github/workflows/windows.yml
 
+  macos:
+    runs-on: macos-15-intel
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Instala o Qt para Intel
+        run: |
+          python -m pip install aqtinstall==3.3.0
+          aqt install-qt mac desktop 6.10.3 clang_64 -O "$RUNNER_TEMP/qt"
+          qt="$RUNNER_TEMP/qt/6.10.3/macos"
+          echo "QT_PREFIX=$qt" >> "$GITHUB_ENV"
+          echo "QMAKE=$qt/bin/qmake" >> "$GITHUB_ENV"
+
+      - name: Compila o Botan estático
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "13.0"
+        run: |
+          if ! command -v pkg-config >/dev/null; then
+            brew install pkgconf
+          fi
+          cd "$RUNNER_TEMP"
+          curl -fL --retry 3 https://botan.randombit.net/releases/Botan-3.14.1.tar.xz -o botan.tar.xz
+          echo '5b85cba0f014d344eb8e9919aee0a3bdc31e16acb05816410025be9bee1e0930  botan.tar.xz' | shasum -a 256 -c
+          tar -xf botan.tar.xz
+          cd Botan-3.14.1
+          python configure.py --cc=clang --cpu=x86_64 --prefix="$RUNNER_TEMP/botan" \
+            --build-targets=static --no-install-python-module --with-pkg-config
+          make -j"$(getconf _NPROCESSORS_ONLN)"
+          make install
+          echo "PKG_CONFIG_PATH=$RUNNER_TEMP/botan/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "BOTAN_LICENSE=$PWD/license.txt" >> "$GITHUB_ENV"
+
+      - name: Gera o DMG
+        run: ./bin/dmg
+
+      - name: Confere que o app abre a partir do DMG
+        run: |
+          mv "$QT_PREFIX" "$RUNNER_TEMP/qt-para-compilar"
+          volume="$RUNNER_TEMP/omapass-dmg"
+          mkdir -p "$volume" "$RUNNER_TEMP/omapass-home"
+          hdiutil attach -readonly -nobrowse -mountpoint "$volume" dist/*-macos-x64.dmg
+          pid=""
+          trap 'if [ -n "$pid" ]; then kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; fi; hdiutil detach "$volume"' EXIT
+          app="$volume/Omapass.app"
+          binary="$app/Contents/MacOS/Omapass"
+          test "$(readlink "$volume/Applications")" = /Applications
+          codesign --verify --deep --strict "$app"
+          HOME="$RUNNER_TEMP/omapass-home" "$binary" --doctor | grep -F "$app/Contents/Resources/wordlists/"
+          log="$RUNNER_TEMP/omapass.log"
+          HOME="$RUNNER_TEMP/omapass-home" QT_QUICK_BACKEND=software QML_IMPORT_TRACE=1 \
+            "$binary" > "$log" 2>&1 &
+          pid=$!
+          for tentativa in {1..30}; do
+            kill -0 "$pid" 2>/dev/null || break
+            grep -q 'qrc:/Main.qml.*QtQuick.Controls.Basic/qmldir' "$log" && break
+            sleep 1
+          done
+          sleep 5
+          if ! kill -0 "$pid" || ! grep -q 'qrc:/Main.qml.*QtQuick.Controls.Basic/qmldir' "$log"; then
+            tail -100 "$log"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omapass-macos-x64
+          path: dist/*-macos-x64.dmg
+          if-no-files-found: error
+          retention-days: 7
+
   publicar:
-    needs: [linux, windows]
+    needs: [linux, windows, macos]
     runs-on: ubuntu-24.04
 
     steps:

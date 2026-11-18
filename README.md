@@ -164,14 +164,19 @@ claro/escuro e o idioma vêm do Windows (o `config.toml` ainda manda); a escala 
 desktop não é lida. A configuração fica em
 `%USERPROFILE%\.config\omapass`.
 
+### macOS (Intel)
+
+Baixe `omapass-<versão>-macos-x64.dmg` na release, abra a imagem e arraste
+**Omapass.app** para **Aplicativos**. O pacote inclui Qt, Botan e as listas de
+palavras. O app recebe assinatura ad hoc e é distribuído sem notarização da Apple.
+
 ### Releases
 
-Para publicar, o workflow **Release** (em Actions → Release → Run workflow) compila o
-AppImage e o zip do Windows em paralelo e, só se os dois saírem, anexa os arquivos, com um
-`SHA256SUMS`, a uma release. É disparado à mão de propósito: um release é entrega, não saída
-de cada push. Sem informar nada, ele usa a tag `v<versão do main.cpp>`, criada no commit que
-foi compilado; se a release já existir, os arquivos são substituídos, que é o caso de quem só
-está regerando os pacotes de uma versão.
+Para publicar, o workflow **Release** (em Actions → Release → Run workflow) gera o
+AppImage, os pacotes do Windows e o DMG do macOS Intel em paralelo. Quando os três
+builds passam, o workflow anexa os arquivos e o `SHA256SUMS` à release.
+Por padrão, ele usa a tag `v<versão do main.cpp>`, criada no commit compilado.
+Se a release já existir, o workflow substitui os arquivos.
 
 ### Empacotando para o Arch
 

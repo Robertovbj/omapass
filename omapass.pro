@@ -17,9 +17,16 @@ packagesExist(botan-3) {
 } else {
     PKGCONFIG += botan-2
 }
-PKGCONFIG += zlib
 TARGET = omapass
 TEMPLATE = app
+
+macx {
+    TARGET = Omapass
+    QMAKE_TARGET_BUNDLE_PREFIX = io.github.higorhgon
+    LIBS += -lz
+} else {
+    PKGCONFIG += zlib
+}
 
 HEADERS += \
     src/appcontroller.h \

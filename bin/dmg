@@ -1,0 +1,59 @@
+#!/bin/bash
+set -euo pipefail
+
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+cd "$ROOT"
+
+if [[ "$(uname -s)" != Darwin || "$(uname -m)" != x86_64 ]]; then
+    echo "Execute este script em um Mac Intel." >&2
+    exit 1
+fi
+
+qmake="${QMAKE:-qmake6}"
+qt_bin="$("$qmake" -query QT_INSTALL_BINS)"
+version="$(sed -n 's/.*applicationVersion = QStringLiteral("\([^"]*\)").*/\1/p' src/main.cpp)"
+[[ -n "$version" ]]
+
+mkdir -p build dist
+build="$(mktemp -d "$ROOT/build/macos.XXXXXXXX")"
+trap 'rm -rf "$build"' EXIT
+sips -s format icns icons/omapass-256.png --out "$build/omapass.icns"
+(
+    cd "$build"
+    "$qmake" "$ROOT/omapass.pro" QMAKE_APPLE_DEVICE_ARCHS=x86_64 \
+        QMAKE_MACOSX_DEPLOYMENT_TARGET=13.0 "VERSION=$version" "ICON=$build/omapass.icns"
+    make -j"$(getconf _NPROCESSORS_ONLN)"
+)
+
+stage="$build/dmg"
+mkdir "$stage"
+bundle="$stage/Omapass.app"
+ditto "$build/Omapass.app" "$bundle"
+binary="$bundle/Contents/MacOS/Omapass"
+resources="$bundle/Contents/Resources"
+ditto wordlists "$resources/wordlists"
+cp LICENSE "$resources/"
+cp "${BOTAN_LICENSE:?Informe o caminho para a licença do Botan em BOTAN_LICENSE}" "$resources/LICENSE-Botan"
+
+"$qt_bin/macdeployqt" "$bundle" "-qmldir=$ROOT/src" -no-strip -appstore-compliant -codesign=-
+# Descarta os drivers SQL que o macdeployqt inclui por padrão.
+rm -rf "$bundle/Contents/PlugIns/sqldrivers"
+
+while IFS= read -r rpath; do
+    install_name_tool -delete_rpath "$rpath" "$binary"
+done < <(otool -l "$binary" | awk '/cmd LC_RPATH$/ { r=1; next } r && /path / {
+    sub(/^ *path /, ""); sub(/ \(offset [0-9]+\)$/, ""); if ($0 ~ /^\//) print; r=0
+}' | sort -u)
+codesign --force --sign - "$bundle"
+codesign --verify --deep --strict "$bundle"
+
+[[ "$(lipo -archs "$binary")" = x86_64 ]]
+otool -L "$binary" | awk 'NR > 1 && $1 ~ /^\// && $1 !~ /^\/(System\/Library|usr\/lib)\// {
+    print "Dependência externa ao aplicativo: " $1 > "/dev/stderr"; erro=1
+} END { exit erro }'
+
+ln -s /Applications "$stage/Applications"
+image="omapass-$version-macos-x64.dmg"
+hdiutil create -format UDZO -volname Omapass -srcfolder "$stage" "$build/$image"
+hdiutil verify "$build/$image"
+mv -f "$build/$image" "$ROOT/dist/$image"

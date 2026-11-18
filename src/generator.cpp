@@ -4,6 +4,7 @@
 #include "i18n.h"
 
 #include <QCoreApplication>
+#include <QDir>
 #include <QFile>
 #include <QStandardPaths>
 
@@ -120,6 +121,9 @@ QStringList wordlistDirectories() {
     QStringList directories{
         // Lists the user brought in through the settings sheet.
         Config::configDir() + QStringLiteral("/wordlists"),
+#ifdef Q_OS_MACOS
+        QDir::cleanPath(appDir + QStringLiteral("/../Resources/wordlists")),
+#endif
         // Installed beside omapass (PREFIX/share/omapass/…), wherever that is.
         appDir + QStringLiteral("/../share/omapass/wordlists"),
         // Beside the executable (the Windows package, which has no
