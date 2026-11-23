@@ -18,6 +18,7 @@
 #include <QFutureWatcher>
 #include <QRect>
 #include <QFileInfo>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QUrl>
@@ -263,7 +264,8 @@ AppController::AppController(const AppConfig &config, QObject *parent)
             applyIcon(&row, path, meta.url);
             m_allRows[index] = row;
             m_entryHaystacks[index] = path + QLatin1Char(' ') + row.value(QStringLiteral("typeLabel")).toString()
-                                      + QLatin1Char(' ') + meta.username + QLatin1Char(' ') + meta.url;
+                                      + QLatin1Char(' ') + meta.username + QLatin1Char(' ') + meta.url
+                                      + QLatin1Char(' ') + meta.extraUrls.join(QLatin1Char(' '));
             m_rowsModel.replaceRow(index, row);
         }
     });
@@ -884,6 +886,7 @@ void AppController::rebuildRows() {
         QString group;
         QString username;
         QString url;
+        QStringList extraUrls;
 
         if (isEmptyGroup(path)) {
             type = QStringLiteral("group");
@@ -897,6 +900,7 @@ void AppController::rebuildRows() {
             name = path.section(QLatin1Char('/'), -1);
             username = entry.username;
             url = entry.url;
+            extraUrls = entry.extraUrls;
         }
 
         const QString typeLabel = type == QLatin1String("ssh") ? I18n::t(QStringLiteral("ui.type_ssh"))
@@ -916,7 +920,7 @@ void AppController::rebuildRows() {
         m_allRows.append(row);
         // The path carries name and group; the rest is what the columns add.
         m_entryHaystacks.append(path + QLatin1Char(' ') + typeLabel + QLatin1Char(' ') + username
-                                + QLatin1Char(' ') + url);
+                                + QLatin1Char(' ') + url + QLatin1Char(' ') + extraUrls.join(QLatin1Char(' ')));
     }
     applyEntryFilter();
 }
@@ -1157,18 +1161,21 @@ void AppController::openUrl(const QString &entry) {
         showMessage(I18n::t(QStringLiteral("app.no_url")), true);
         return;
     }
+    openAddress(data.url);
+}
 
+void AppController::openAddress(const QString &address) {
     // Saved without a scheme ("exemplo.com") is how people type addresses;
     // the browser needs one.
-    QUrl url = QUrl::fromUserInput(data.url);
-    if (!url.isValid() || url.scheme().isEmpty()) {
-        showMessage(I18n::t(QStringLiteral("app.open_url_error"), QStringLiteral("url"), data.url), true);
+    QUrl url = QUrl::fromUserInput(address.trimmed());
+    if (address.trimmed().isEmpty() || !url.isValid() || url.scheme().isEmpty()) {
+        showMessage(I18n::t(QStringLiteral("app.open_url_error"), QStringLiteral("url"), address), true);
         return;
     }
     if (QDesktopServices::openUrl(url))
         showMessage(I18n::t(QStringLiteral("app.opening_url"), QStringLiteral("url"), url.toString()), false);
     else
-        showMessage(I18n::t(QStringLiteral("app.open_url_error"), QStringLiteral("url"), data.url), true);
+        showMessage(I18n::t(QStringLiteral("app.open_url_error"), QStringLiteral("url"), address), true);
 }
 
 QVariantMap AppController::entryDetails(const QString &entry) {
@@ -1191,6 +1198,7 @@ QVariantMap AppController::entryDetails(const QString &entry) {
     return {{QStringLiteral("title"), m_vault->titleFor(entry, fallback)},
             {QStringLiteral("username"), data.username},
             {QStringLiteral("url"), data.url},
+            {QStringLiteral("extraUrls"), data.extraUrls},
             {QStringLiteral("notes"), data.notes},
             {QStringLiteral("hasOtp"), m_shownOtp.has_value()}};
 }
@@ -1238,6 +1246,7 @@ QVariantMap AppController::entryFields(const QString &entry) {
     fields.insert(QStringLiteral("username"), data.username);
     fields.insert(QStringLiteral("password"), data.password.toString());
     fields.insert(QStringLiteral("url"), data.url);
+    fields.insert(QStringLiteral("extraUrls"), data.extraUrls);
     fields.insert(QStringLiteral("notes"), data.notes);
     fields.insert(QStringLiteral("extra"), data.extra);
     fields.insert(QStringLiteral("otp"), data.otp.toString());
@@ -1265,6 +1274,18 @@ void AppController::saveEntry(const QVariantMap &fields) {
     data.username = fields.value(QStringLiteral("username")).toString().trimmed();
     data.password = Secret(fields.value(QStringLiteral("password")).toString());
     data.url = fields.value(QStringLiteral("url")).toString().trimmed();
+    // Typed as one line, separated by spaces (or one per line): an address
+    // has none of its own. The main URL is not repeated among them, and
+    // with no main URL the first one takes its place.
+    static const QRegularExpression separators(QStringLiteral("[\\s,]+"));
+    const QStringList typed = fields.value(QStringLiteral("extraUrls")).toString()
+                                  .split(separators, Qt::SkipEmptyParts);
+    for (const QString &url : typed) {
+        if (url != data.url && !data.extraUrls.contains(url))
+            data.extraUrls.append(url);
+    }
+    if (data.url.isEmpty() && !data.extraUrls.isEmpty())
+        data.url = data.extraUrls.takeFirst();
     data.notes = fields.value(QStringLiteral("notes")).toString();
     data.extra = fields.value(QStringLiteral("extra")).toStringList();
     // Named after the entry, as an authenticator app would show it.

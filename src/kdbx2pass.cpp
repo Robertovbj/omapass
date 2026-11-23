@@ -134,6 +134,9 @@ QString run(const QString &dbPath, const QStringList &recipients) {
             content.append(QStringLiteral("\nusername: %1").arg(username).toUtf8());
         if (!url.isEmpty())
             content.append(QStringLiteral("\nurl: %1").arg(url).toUtf8());
+        // The additional URLs as further url: lines, which pass keeps.
+        for (const QString &extra : entry.extraUrls)
+            content.append(QStringLiteral("\nurl: %1").arg(extra).toUtf8());
         // pass-otp's line, which it reads wherever it sits.
         if (!entry.otp.isEmpty())
             content.append("\n" + entry.otp.bytes());

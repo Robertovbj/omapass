@@ -209,6 +209,8 @@ public:
     Q_INVOKABLE void copyUsername(const QString &entry);
     Q_INVOKABLE void copyUrl(const QString &entry);
     Q_INVOKABLE void openUrl(const QString &entry);
+    // Any address in the browser, for the info sheet's additional URLs.
+    Q_INVOKABLE void openAddress(const QString &address);
     // The entry's current one-time password to the clipboard, cleared like
     // a password.
     Q_INVOKABLE void copyOtp(const QString &entry);

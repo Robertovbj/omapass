@@ -310,6 +310,50 @@ private slots:
 
     // Where KeePassXC keeps the browser integration's data: the database's
     // custom data and the entries'. Both survive a save, and an edit.
+    // KeePassXC's additional URLs: KP2A_URL, KP2A_URL_1, … read in order,
+    // written back renumbered only when the list changed.
+    void kdbxKeepsAdditionalUrls() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("t.kdbx"));
+        const Secret password(QStringLiteral("senha"));
+
+        auto db = KdbxDatabase::create(password, QStringLiteral("Teste"));
+        KdbxEntry entry;
+        entry.title = QStringLiteral("Sistema");
+        entry.password = Secret(QStringLiteral("p"));
+        entry.url = QStringLiteral("https://sistema.exemplo.com");
+        entry.extraUrls = {QStringLiteral("http://localhost:8080"), QStringLiteral("http://192.168.0.10"),
+                           QStringLiteral("https://homolog.exemplo.com")};
+        QVERIFY(db->addEntry(QString(), entry).isEmpty());
+        QVERIFY(db->save(path).isEmpty());
+
+        KdbxStatus status = KdbxStatus::Corrupt;
+        auto reopened = KdbxDatabase::open(path, password, &status);
+        QVERIFY(reopened);
+        KdbxEntry read;
+        QVERIFY(reopened->entry(QStringLiteral("Sistema"), &read));
+        QCOMPARE(read.extraUrls, entry.extraUrls);
+
+        // Unchanged: no edit goes to the history.
+        QVERIFY(reopened->editEntry(QStringLiteral("Sistema"), QString(), read).isEmpty());
+        QVERIFY(reopened->save(path).isEmpty());
+
+        // One out of the middle: the rest close up, in order.
+        read.extraUrls.removeAt(1);
+        QVERIFY(reopened->editEntry(QStringLiteral("Sistema"), QString(), read).isEmpty());
+        KdbxEntry after;
+        QVERIFY(reopened->entry(QStringLiteral("Sistema"), &after));
+        QCOMPARE(after.extraUrls, (QStringList{QStringLiteral("http://localhost:8080"),
+                                               QStringLiteral("https://homolog.exemplo.com")}));
+        QCOMPARE(after.url, QStringLiteral("https://sistema.exemplo.com"));
+
+        after.extraUrls.clear();
+        QVERIFY(reopened->editEntry(QStringLiteral("Sistema"), QString(), after).isEmpty());
+        QVERIFY(reopened->entry(QStringLiteral("Sistema"), &read));
+        QVERIFY(read.extraUrls.isEmpty());
+    }
+
     void kdbxKeepsCustomData() {
         QTemporaryDir dir;
         QVERIFY(dir.isValid());

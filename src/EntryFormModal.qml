@@ -26,6 +26,7 @@ Modal {
         usernameField.text = root.fields.username || "";
         passwordField.text = root.fields.password || "";
         urlField.text = root.fields.url || "";
+        extraUrlsField.text = (root.fields.extraUrls || []).join(" ");
         notesArea.text = root.fields.notes || "";
         otpField.text = root.fields.otp || "";
         refreshGroups();
@@ -66,6 +67,7 @@ Modal {
             "username": usernameField.text,
             "password": passwordField.text,
             "url": urlField.text,
+            "extraUrls": extraUrlsField.text,
             "notes": notesArea.text,
             "extra": root.fields.extra || [],
             // The controller keeps the original as it was when the field was
@@ -79,7 +81,7 @@ Modal {
     // moveFocus knows to skip them.
     readonly property var tabOrder: [
         groupField, titleField, usernameField, passwordField, revealPassword,
-        otpField, urlField, notesArea
+        otpField, urlField, extraUrlsField, notesArea
     ]
 
     function focusNext(from) { root.moveFocus(root.tabOrder, from, 1); }
@@ -176,6 +178,22 @@ Modal {
         onSubmitted: root.submit()
         onNextRequested: root.focusNext(urlField)
         onPreviousRequested: root.focusPrevious(urlField)
+    }
+
+    // Other addresses the same login is for, as KeePassXC's additional
+    // URLs: the browser offers the entry on any of them.
+    Field {
+        id: extraUrlsField
+        objectName: "extraUrlsField"
+        width: parent.width
+        visible: !root.passBackend
+        label: i18n.t("common.extra_urls_label")
+        placeholderText: "https://exemplo.com https://login.exemplo.com"
+
+        onCancelled: root.dismissed()
+        onSubmitted: root.submit()
+        onNextRequested: root.focusNext(extraUrlsField)
+        onPreviousRequested: root.focusPrevious(extraUrlsField)
     }
 
     Column {

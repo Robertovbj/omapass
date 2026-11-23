@@ -78,6 +78,8 @@ class FakeController : public QObject {
     Q_PROPERTY(bool hasMessage MEMBER m_hasMessage NOTIFY messageChanged)
     // What the last copy put on the clipboard, for the tests to read.
     Q_PROPERTY(QString lastCopied MEMBER m_lastCopied NOTIFY copied)
+    // What the last "open in the browser" was asked to open.
+    Q_PROPERTY(QString lastOpened MEMBER m_lastOpened NOTIFY copied)
     Q_PROPERTY(QObject *browser READ browser CONSTANT)
 
 public:
@@ -100,6 +102,10 @@ public:
     Q_INVOKABLE void selectDatabase(int) {}
     Q_INVOKABLE void copyText(const QString &text) {
         m_lastCopied = text;
+        emit copied();
+    }
+    Q_INVOKABLE void openAddress(const QString &address) {
+        m_lastOpened = address;
         emit copied();
     }
     Q_INVOKABLE bool isBitwardenDatabase(int) { return false; }
@@ -184,6 +190,7 @@ private:
     QString m_loginEmail;
     QString m_loginServer;
     QString m_lastCopied;
+    QString m_lastOpened;
     FakeBrowser m_browser;
     QVariantList m_loginMethods;
     bool m_onePasswordAvailable = true;

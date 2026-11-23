@@ -420,23 +420,24 @@ QJsonObject BwAccount::cipherRequest(const QJsonObject &encrypted, const QString
     login.insert(QStringLiteral("password"), encryptedField(password, key));
     password.fill(QChar(0));
 
-    // Only the first URI is the form's. Its checksum lets clients detect a
-    // URI swapped between items, so it is rewritten along with it.
-    QJsonArray uris = login.value(QStringLiteral("uris")).toArray();
-    if (data.url.isEmpty()) {
-        if (!uris.isEmpty())
-            uris.removeFirst();
-    } else {
-        QJsonObject first = uris.isEmpty() ? QJsonObject{{QStringLiteral("match"), QJsonValue::Null}}
-                                           : uris.first().toObject();
-        first.insert(QStringLiteral("uri"), encryptedField(data.url, key));
+    // The form's URL first, then the additional ones, by position: each
+    // keeps the match setting the URI in its place had. The checksum lets
+    // clients detect a URI swapped between items, so it is rewritten along
+    // with each.
+    QStringList wanted;
+    if (!data.url.isEmpty())
+        wanted.append(data.url);
+    wanted.append(data.extraUrls);
+    const QJsonArray before = login.value(QStringLiteral("uris")).toArray();
+    QJsonArray uris;
+    for (int i = 0; i < wanted.size(); ++i) {
+        QJsonObject uri = i < before.size() ? before.at(i).toObject()
+                                            : QJsonObject{{QStringLiteral("match"), QJsonValue::Null}};
+        uri.insert(QStringLiteral("uri"), encryptedField(wanted.at(i), key));
         const QByteArray checksum =
-            QCryptographicHash::hash(data.url.toUtf8(), QCryptographicHash::Sha256).toBase64();
-        first.insert(QStringLiteral("uriChecksum"), encryptedField(QString::fromLatin1(checksum), key));
-        if (uris.isEmpty())
-            uris.append(first);
-        else
-            uris.replace(0, first);
+            QCryptographicHash::hash(wanted.at(i).toUtf8(), QCryptographicHash::Sha256).toBase64();
+        uri.insert(QStringLiteral("uriChecksum"), encryptedField(QString::fromLatin1(checksum), key));
+        uris.append(uri);
     }
     login.insert(QStringLiteral("uris"), uris);
     request.insert(QStringLiteral("login"), login);

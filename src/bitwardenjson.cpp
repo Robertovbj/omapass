@@ -151,6 +151,11 @@ EntryData bwEntryData(const QJsonObject &item) {
     data.password = Secret(login.value(QStringLiteral("password")).toString());
     data.url = uris.isEmpty() ? QString()
                               : uris.first().toObject().value(QStringLiteral("uri")).toString();
+    for (int i = 1; i < uris.size(); ++i) {
+        const QString uri = uris.at(i).toObject().value(QStringLiteral("uri")).toString().trimmed();
+        if (!uri.isEmpty())
+            data.extraUrls.append(uri);
+    }
     data.notes = item.value(QStringLiteral("notes")).toString();
     data.otp = Secret(login.value(QStringLiteral("totp")).toString());
     return data;

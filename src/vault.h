@@ -28,6 +28,10 @@ struct EntryData {
     QString username;
     Secret password;
     QString url;
+    // More addresses the same login is for: KeePassXC's KP2A_URL attributes,
+    // Bitwarden's further URIs, 1Password's other URLs, pass's further
+    // `url:` lines.
+    QStringList extraUrls;
     QString notes;
     QStringList extra;
     // The one-time password as the backend stores it: usually an otpauth
@@ -43,6 +47,7 @@ struct EntryMeta {
     QString type = QStringLiteral("login");
     QString username;
     QString url;
+    QStringList extraUrls;
 };
 
 // Tags every group with no entries or subgroups below it, so it still shows

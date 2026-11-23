@@ -25,6 +25,9 @@ struct KdbxEntry {
     QString username;
     Secret password;
     QString url;
+    // KeePassXC's additional URLs: the attributes KP2A_URL, KP2A_URL_1, …
+    // in that order.
+    QStringList extraUrls;
     QString notes;
     // The one-time password as an otpauth URI: KeePassXC's `otp` attribute,
     // or KeePass 2's `TOTP Seed`/`TOTP Settings` pair converted to one.

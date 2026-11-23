@@ -356,6 +356,11 @@ EntryData opEntryData(const QJsonObject &item) {
     const int primary = primaryUrlIndex(urls);
     if (primary >= 0)
         data.url = urls.at(primary).toObject().value(QStringLiteral("href")).toString();
+    for (int i = 0; i < urls.size(); ++i) {
+        const QString href = urls.at(i).toObject().value(QStringLiteral("href")).toString().trimmed();
+        if (i != primary && !href.isEmpty())
+            data.extraUrls.append(href);
+    }
     return data;
 }
 
@@ -400,21 +405,29 @@ QByteArray applyOpEntryData(const QByteArray &itemJson, const QString &title,
     setOtpField(&fields, data.otp.toString());
     item.insert(QStringLiteral("fields"), fields);
 
-    QJsonArray urls = item.value(QStringLiteral("urls")).toArray();
-    const int primary = primaryUrlIndex(urls);
-    if (data.url.isEmpty()) {
-        if (primary >= 0)
-            urls.removeAt(primary);
-    } else if (primary < 0) {
-        QJsonObject url;
-        url.insert(QStringLiteral("label"), QStringLiteral("website"));
+    // The form's URL is the primary one; the additional ones take the
+    // places (and labels) of the item's other URLs, in order.
+    const QJsonArray before = item.value(QStringLiteral("urls")).toArray();
+    const int primary = primaryUrlIndex(before);
+    QList<QJsonObject> others;
+    for (int i = 0; i < before.size(); ++i) {
+        if (i != primary)
+            others.append(before.at(i).toObject());
+    }
+    QJsonArray urls;
+    if (!data.url.isEmpty()) {
+        QJsonObject url = primary >= 0 ? before.at(primary).toObject()
+                                       : QJsonObject{{QStringLiteral("label"), QStringLiteral("website")}};
         url.insert(QStringLiteral("primary"), true);
         url.insert(QStringLiteral("href"), data.url);
         urls.append(url);
-    } else {
-        QJsonObject url = urls.at(primary).toObject();
-        url.insert(QStringLiteral("href"), data.url);
-        urls.replace(primary, url);
+    }
+    for (int i = 0; i < data.extraUrls.size(); ++i) {
+        QJsonObject url = i < others.size() ? others.at(i)
+                                            : QJsonObject{{QStringLiteral("label"), QStringLiteral("website")}};
+        url.remove(QStringLiteral("primary"));
+        url.insert(QStringLiteral("href"), data.extraUrls.at(i));
+        urls.append(url);
     }
     item.insert(QStringLiteral("urls"), urls);
 

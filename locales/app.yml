@@ -830,8 +830,8 @@ ui.info_login:
   pt-BR: "Login"
   en: "Login"
 ui.info_footer_full:
-  pt-BR: "ENTER: Copiar campo | Arraste para selecionar e copiar | TAB: Alternar | ESC: Fechar"
-  en: "ENTER: Copy field | Drag to select and copy | TAB: Switch | ESC: Close"
+  pt-BR: "ENTER: Copiar campo | o: Abrir URL | Arraste para selecionar e copiar | TAB: Alternar | ESC: Fechar"
+  en: "ENTER: Copy field | o: Open URL | Drag to select and copy | TAB: Switch | ESC: Close"
 ui.info_footer_pass:
   pt-BR: "ENTER: Copiar | Arraste para selecionar e copiar | ESC: Fechar"
   en: "ENTER: Copy | Drag to select and copy | ESC: Close"
@@ -1110,3 +1110,9 @@ browser.conflict_title:
 browser.conflict_text:
   pt-BR: "%{browsers} já está configurado para outro programa (o KeePassXC?). Passar para o omapass?"
   en: "%{browsers} is already set up for another program (KeePassXC?). Hand it over to omapass?"
+common.extra_urls_label:
+  pt-BR: "URLs adicionais (separadas por espaço)"
+  en: "Additional URLs (separated by spaces)"
+ui.info_extra_url:
+  pt-BR: "URL adicional %{n}"
+  en: "Additional URL %{n}"

@@ -21,17 +21,21 @@ QString lastSegment(const QString &path) {
     return path.section(QLatin1Char('/'), -1);
 }
 
-// The URL to match an entry by. Without one known, an entry named like a
-// host ("Web/github.com") stands for that site: the convention pass users
-// follow (browserpass, passff), and pass cannot list URLs without decrypting
-// every entry.
-QString matchUrlOf(const QString &entry, const EntryMeta &meta) {
+// The URLs to match an entry by: its own and the additional ones. Without
+// any known, an entry named like a host ("Web/github.com") stands for that
+// site: the convention pass users follow (browserpass, passff), and pass
+// cannot list URLs without decrypting every entry.
+QStringList matchUrlsOf(const QString &entry, const EntryMeta &meta) {
+    QStringList urls;
     if (!meta.url.trimmed().isEmpty())
-        return meta.url;
+        urls.append(meta.url);
+    urls.append(meta.extraUrls);
+    if (!urls.isEmpty())
+        return urls;
     const QString name = lastSegment(entry);
     if (name.contains(QLatin1Char('.')) && !name.contains(QLatin1Char(' ')))
-        return name;
-    return QString();
+        urls.append(name);
+    return urls;
 }
 
 bool isVaultPrompt(const QVariantMap &prompt) {
@@ -311,8 +315,11 @@ void BrowserIntegration::findLogins(const BrowserLoginQuery &query,
     QStringList unknown;
     for (const QString &entry : m_app->browserEntries()) {
         const EntryMeta info = meta.value(entry);
-        if (info.type != QLatin1String("login")
-            || !BrowserProtocol::urlMatches(matchUrlOf(entry, info), query.url))
+        if (info.type != QLatin1String("login"))
+            continue;
+        const QStringList urls = matchUrlsOf(entry, info);
+        if (std::none_of(urls.cbegin(), urls.cend(),
+                         [&query](const QString &url) { return BrowserProtocol::urlMatches(url, query.url); }))
             continue;
         const BrowserStore::Access rules = access.value(entry);
         if (rules.deny.contains(site) || (!form.isEmpty() && rules.deny.contains(form)))

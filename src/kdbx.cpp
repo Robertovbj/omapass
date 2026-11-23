@@ -3,6 +3,8 @@
 #include <QDateTime>
 #include <QFile>
 #include <QFileInfo>
+#include <QMap>
+#include <QRegularExpression>
 #include <QSaveFile>
 #include <QUuid>
 #include <QXmlStreamReader>
@@ -513,6 +515,7 @@ public:
     static void setString(XNode &entry, const QString &key, const QString &value, bool isProtected);
     static void removeString(XNode &entry, const QString &key);
     static QString otpOf(const XNode &entry);
+    static QStringList extraUrlsOf(const XNode &entry);
     XNode *findGroup(const QString &path) const;
     XNode *ensureGroup(const QString &path);
     XNode *findEntry(const QString &path, XNode **parent = nullptr) const;
@@ -601,6 +604,23 @@ void KdbxDatabase::Impl::removeString(XNode &entry, const QString &key) {
             return;
         }
     }
+}
+
+// KP2A_URL, then KP2A_URL_1, KP2A_URL_2…: the names KeePassXC gives the
+// additional URLs (and KeePass2Android before it), in number order.
+QStringList KdbxDatabase::Impl::extraUrlsOf(const XNode &entry) {
+    static const QRegularExpression name(QStringLiteral("^KP2A_URL(?:_(\\d+))?$"));
+    QMap<int, QString> found;
+    for (const XNode *item : entry.childrenNamed(QStringLiteral("String"))) {
+        const QRegularExpressionMatch match = name.match(item->childText(QStringLiteral("Key")));
+        if (!match.hasMatch())
+            continue;
+        const int number = match.captured(1).isEmpty() ? 0 : match.captured(1).toInt() + 1;
+        const QString value = item->childText(QStringLiteral("Value")).trimmed();
+        if (!value.isEmpty())
+            found.insert(number, value);
+    }
+    return found.values();
 }
 
 QString KdbxDatabase::Impl::otpOf(const XNode &entry) {
@@ -829,6 +849,19 @@ void KdbxDatabase::Impl::fill(XNode &entry, const KdbxEntry &data) const {
     setString(entry, QStringLiteral("URL"), data.url, false);
     setString(entry, QStringLiteral("Notes"), data.notes, false);
 
+    // Rewritten only when the list changed, so an entry whose numbering has
+    // gaps (one removed in KeePassXC) keeps it until it is edited here.
+    if (extraUrlsOf(entry) != data.extraUrls) {
+        static const QRegularExpression name(QStringLiteral("^KP2A_URL(?:_\\d+)?$"));
+        for (XNode *item : entry.childrenNamed(QStringLiteral("String"))) {
+            if (name.match(item->childText(QStringLiteral("Key"))).hasMatch())
+                entry.detach(item);
+        }
+        for (int i = 0; i < data.extraUrls.size(); ++i)
+            setString(entry, i == 0 ? QStringLiteral("KP2A_URL") : QStringLiteral("KP2A_URL_%1").arg(i),
+                      data.extraUrls.at(i), false);
+    }
+
     // An unchanged one-time password is left in whatever form it was in, so
     // an entry that keeps KeePass 2's pair keeps it. A changed one is
     // written as KeePassXC writes it, and the older pair is dropped: left
@@ -886,6 +919,7 @@ KdbxEntry KdbxDatabase::Impl::read(const XNode &entry) {
     out.username = stringOf(entry, QStringLiteral("UserName"));
     out.password = Secret(stringOf(entry, QStringLiteral("Password")));
     out.url = stringOf(entry, QStringLiteral("URL"));
+    out.extraUrls = extraUrlsOf(entry);
     out.notes = stringOf(entry, QStringLiteral("Notes"));
     out.otp = Secret(otpOf(entry));
     return out;
@@ -1523,7 +1557,8 @@ QString KdbxDatabase::editEntry(const QString &oldPath, const QString &group, co
     const KdbxEntry before = Impl::read(*entry);
     const bool changed = before.title != data.title || before.username != data.username
         || before.password.bytes() != data.password.bytes() || before.url != data.url
-        || before.notes != data.notes || before.otp.bytes() != data.otp.bytes();
+        || before.notes != data.notes || before.otp.bytes() != data.otp.bytes()
+        || before.extraUrls != data.extraUrls;
     if (changed)
         d->pushHistory(*entry);
 

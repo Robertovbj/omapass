@@ -226,6 +226,7 @@ private slots:
         data.username = QStringLiteral("nova-pessoa");
         data.password = Secret(QStringLiteral("nova-senha"));
         data.url = QStringLiteral("https://novo.exemplo.com");
+        data.extraUrls = QStringList{QStringLiteral("https://espelho.exemplo.com")};
         data.notes = QStringLiteral("nota nova");
         // What the form sends back for an OTP it did not touch.
         data.otp = Secret(QStringLiteral("otpauth://totp/GitLab?secret=ABCDEF"));
@@ -262,6 +263,33 @@ private slots:
                  QStringLiteral("https://novo.exemplo.com"));
         QCOMPARE(urls.at(1).toObject().value(QStringLiteral("href")).toString(),
                  QStringLiteral("https://espelho.exemplo.com"));
+        // The additional URL keeps the label of the one in its place.
+        QCOMPARE(urls.at(1).toObject().value(QStringLiteral("label")).toString(), QStringLiteral("espelho"));
+        QVERIFY(!urls.at(1).toObject().value(QStringLiteral("primary")).toBool());
+    }
+
+    // The primary URL is the entry's; the others, in order, its additional
+    // ones. Taking one out of the form takes it out of the item.
+    void onePasswordReadsAndWritesAdditionalUrls() {
+        const QJsonObject item = QJsonDocument::fromJson(opFixture("item.json")).object();
+        EntryData data = opEntryData(item);
+        QCOMPARE(data.url, QStringLiteral("https://gitlab.exemplo.com"));
+        QCOMPARE(data.extraUrls, QStringList{QStringLiteral("https://espelho.exemplo.com")});
+
+        data.extraUrls.clear();
+        QJsonArray urls = QJsonDocument::fromJson(applyOpEntryData(opFixture("item.json"), QStringLiteral("GitLab"),
+                                                                   QString(), data))
+                              .object().value(QStringLiteral("urls")).toArray();
+        QCOMPARE(urls.size(), 1);
+        QVERIFY(urls.at(0).toObject().value(QStringLiteral("primary")).toBool());
+
+        data.extraUrls = QStringList{QStringLiteral("https://a.exemplo.com"), QStringLiteral("https://b.exemplo.com")};
+        urls = QJsonDocument::fromJson(applyOpEntryData(opFixture("item.json"), QStringLiteral("GitLab"),
+                                                        QString(), data))
+                   .object().value(QStringLiteral("urls")).toArray();
+        QCOMPARE(urls.size(), 3);
+        QCOMPARE(urls.at(2).toObject().value(QStringLiteral("href")).toString(), QStringLiteral("https://b.exemplo.com"));
+        QCOMPARE(opEntryData(QJsonObject{{QStringLiteral("urls"), urls}}).extraUrls, data.extraUrls);
     }
 
     void onePasswordEntryDataReadsTheOtp() {

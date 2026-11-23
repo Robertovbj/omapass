@@ -25,6 +25,8 @@ struct PassEntryData {
     Secret password;
     QString username;
     QString url;
+    // Further `url:` lines, the same login on other addresses.
+    QStringList extraUrls;
     Secret otp;
     QStringList extra;
 };

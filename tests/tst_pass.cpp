@@ -64,13 +64,16 @@ private slots:
         const PassEntryData data = parsePassEntry(content);
         QCOMPARE(data.username, QStringLiteral("ana"));
         QCOMPARE(data.url, QStringLiteral("https://a"));
+        // A further url: line is an additional URL of the entry.
+        QCOMPARE(data.extraUrls, QStringList{QStringLiteral("https://b")});
         QCOMPARE(data.extra, QStringList({QStringLiteral("nota 1"), QString(), QStringLiteral("nota 2"),
-                                          QStringLiteral("username: outra"), QStringLiteral("url: https://b")}));
+                                          QStringLiteral("username: outra")}));
 
-        // Written back, nothing but the trailing blank line is gone.
+        // Written back, the URLs together after the first, and nothing but
+        // the trailing blank line gone.
         QCOMPARE(QString::fromUtf8(buildPassEntryContent(data)),
-                 QStringLiteral("senha\nusername: ana\nurl: https://a\nnota 1\n\nnota 2\n"
-                                "username: outra\nurl: https://b\n"));
+                 QStringLiteral("senha\nusername: ana\nurl: https://a\nurl: https://b\nnota 1\n\nnota 2\n"
+                                "username: outra\n"));
     }
 
     void passRefusesAPasswordWithALineBreak() {

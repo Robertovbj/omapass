@@ -516,14 +516,13 @@ QHash<QString, EntryMeta> OnePasswordVault::entryMeta() const {
             const EntryData data = opEntryData(item);
             entry.username = data.username;
             entry.url = data.url;
+            entry.extraUrls = data.extraUrls;
         } else {
             entry.username = item.value(QStringLiteral("additional_information")).toString();
-            const QJsonArray urls = item.value(QStringLiteral("urls")).toArray();
-            for (const QJsonValue &value : urls) {
-                const QJsonObject url = value.toObject();
-                if (entry.url.isEmpty() || url.value(QStringLiteral("primary")).toBool())
-                    entry.url = url.value(QStringLiteral("href")).toString();
-            }
+            // The summary has the URLs in the same shape as the whole item.
+            const EntryData data = opEntryData(QJsonObject{{QStringLiteral("urls"), item.value(QStringLiteral("urls"))}});
+            entry.url = data.url;
+            entry.extraUrls = data.extraUrls;
         }
         meta.insert(it.key(), entry);
     }

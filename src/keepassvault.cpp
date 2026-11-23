@@ -126,6 +126,7 @@ QHash<QString, EntryMeta> KeepassVault::entryMeta() const {
         EntryMeta entry;
         entry.username = item.second.username;
         entry.url = item.second.url;
+        entry.extraUrls = item.second.extraUrls;
         meta.insert(item.first, entry);
     }
     return meta;
@@ -161,6 +162,7 @@ bool KeepassVault::fetchEntry(const QString &entryPath, EntryData *data, QString
     data->username = entry.username;
     data->password = entry.password;
     data->url = entry.url;
+    data->extraUrls = entry.extraUrls;
     data->notes = entry.notes;
     data->extra.clear();
     data->otp = entry.otp;
@@ -178,6 +180,7 @@ bool KeepassVault::addEntry(const QString &entryPath, const QString &group, cons
     entry.username = data.username;
     entry.password = data.password;
     entry.url = data.url;
+    entry.extraUrls = data.extraUrls;
     entry.notes = data.notes;
     entry.otp = data.otp;
 
@@ -195,6 +198,7 @@ bool KeepassVault::editEntry(const QString &oldPath, const QString &newPath, con
     entry.username = data.username;
     entry.password = data.password;
     entry.url = data.url;
+    entry.extraUrls = data.extraUrls;
     entry.notes = data.notes;
     entry.otp = data.otp;
 

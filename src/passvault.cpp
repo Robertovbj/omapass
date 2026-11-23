@@ -24,6 +24,7 @@ PassEntryData toPassData(const EntryData &data) {
     pd.password = data.password;
     pd.username = data.username;
     pd.url = data.url;
+    pd.extraUrls = data.extraUrls;
     pd.otp = data.otp;
     pd.extra = data.extra;
     return pd;
@@ -60,6 +61,7 @@ bool PassVault::fetchEntry(const QString &entryPath, EntryData *data, QString *e
     data->username = pd.username;
     data->password = pd.password;
     data->url = pd.url;
+    data->extraUrls = pd.extraUrls;
     data->otp = pd.otp;
     data->notes = pd.extra.join(QLatin1Char('\n'));
     data->extra = pd.extra;

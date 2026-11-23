@@ -88,6 +88,8 @@ private slots:
         QCOMPARE(data.username, QStringLiteral("u"));
         QCOMPARE(data.password.toString(), QStringLiteral("p"));
         QCOMPARE(data.url, QStringLiteral("https://a"));
+        // The other URIs are the entry's additional URLs.
+        QCOMPARE(data.extraUrls, QStringList{QStringLiteral("https://b")});
         QCOMPARE(data.notes, QStringLiteral("n"));
     }
 
@@ -527,6 +529,7 @@ private slots:
         data.username = QStringLiteral("novo-usuario");
         data.password = Secret(QStringLiteral("senha-nova"));
         data.url = QStringLiteral("https://c.example");
+        data.extraUrls = QStringList{QStringLiteral("https://segunda.example")};
         data.otp = Secret(QStringLiteral("otpauth://totp/Org?secret=JBSWY3DPEHPK3PXP"));
         const QJsonObject request = BwAccount::cipherRequest(original, QStringLiteral("senha-velha"),
                                                              QStringLiteral("Novo nome"), QStringLiteral("f1"),
@@ -554,7 +557,10 @@ private slots:
         QCOMPARE(decrypted(newUris.at(0).toObject().value("uri"), *key), QStringLiteral("https://c.example"));
         QCOMPARE(decrypted(newUris.at(0).toObject().value("uriChecksum"), *key),
                  QString::fromLatin1(QCryptographicHash::hash("https://c.example", QCryptographicHash::Sha256).toBase64()));
-        QCOMPARE(newUris.last().toObject().value("uri").toString(), QStringLiteral("2.second|uri|kept"));
+        // The second URI is the form's additional one now, in the place (and
+        // with the match setting) of the one that was there.
+        QCOMPARE(decrypted(newUris.last().toObject().value("uri"), *key), QStringLiteral("https://segunda.example"));
+        QCOMPARE(newUris.last().toObject().value("match").toInt(), 3);
 
         // The old password goes into the history, newest first.
         const QJsonArray history = request.value("passwordHistory").toArray();

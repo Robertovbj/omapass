@@ -398,6 +398,7 @@ QHash<QString, EntryMeta> BitwardenVault::entryMeta() const {
             const EntryData data = bwEntryData(item);
             entry.username = data.username;
             entry.url = data.url;
+            entry.extraUrls = data.extraUrls;
         }
         meta.insert(it.key(), entry);
     }

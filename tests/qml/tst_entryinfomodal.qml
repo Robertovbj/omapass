@@ -43,6 +43,38 @@ TestCase {
         compare(controller.lastCopied, "pessoa@exemplo.com");
     }
 
+    // Each additional URL is a field of its own after the main one: Tab
+    // reaches it, Enter copies it and o opens it, like the main URL.
+    function test_additional_urls_are_fields_of_their_own() {
+        modal.details = { "title": "Sistema", "username": "ana", "url": "https://sistema.exemplo.com",
+                          "extraUrls": ["http://localhost:8080", "http://192.168.0.10"], "notes": "" };
+        modal.visible = true;
+        tryVerify(function() { return modal.opened; }, 3000);
+
+        tryVerify(function() { return findChild(modal.contentItem, "extraUrlField1") !== null; }, 3000,
+                  "um campo por URL adicional");
+        const first = findChild(modal.contentItem, "extraUrlField0");
+        const second = findChild(modal.contentItem, "extraUrlField1");
+        compare(first.value, "http://localhost:8080");
+        compare(second.value, "http://192.168.0.10");
+
+        // Title, login, URL, then the additional ones.
+        keyClick(Qt.Key_Tab);
+        keyClick(Qt.Key_Tab);
+        keyClick(Qt.Key_O);
+        compare(controller.lastOpened, "https://sistema.exemplo.com");
+        keyClick(Qt.Key_Tab);
+        tryVerify(function() { return first.view.activeFocus; }, 3000);
+        keyClick(Qt.Key_Tab);
+        tryVerify(function() { return second.view.activeFocus; }, 3000);
+        keyClick(Qt.Key_Return);
+        compare(controller.lastCopied, "http://192.168.0.10");
+        keyClick(Qt.Key_O);
+        compare(controller.lastOpened, "http://192.168.0.10");
+        keyClick(Qt.Key_Backtab);
+        tryVerify(function() { return first.view.activeFocus; }, 3000);
+    }
+
     function test_enter_on_the_title_copies_the_title() {
         modal.visible = true;
         tryVerify(function() { return modal.opened; }, 3000);

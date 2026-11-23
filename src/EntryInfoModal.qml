@@ -14,6 +14,20 @@ Modal {
     property bool passBackend: false
     property var details: ({})
     readonly property bool hasOtp: !!root.details.hasOtp
+    readonly property bool hasExtraUrls: (root.details.extraUrls || []).length > 0
+
+    // The Tab chain through the additional URLs, which come and go with the
+    // entry shown.
+    function extraUrlView(index) {
+        const field = extraUrlViews.itemAt(index);
+        return field ? field.view : null;
+    }
+    function fieldAfterUrls() {
+        return root.hasOtp ? otpView.view : notesView.view;
+    }
+    function lastUrlView() {
+        return extraUrlViews.count > 0 ? root.extraUrlView(extraUrlViews.count - 1) : urlView.view;
+    }
     property var otp: ({})
 
     // Read from `details` itself: in onDetailsChanged the hasOtp binding may
@@ -63,6 +77,8 @@ Modal {
         // What Enter does instead of copying the text as it stands: the
         // one-time code goes through the clipboard clearing of a password.
         property var copyAction: null
+        // What `o` does on a field holding an address: open it.
+        property var openAction: null
         property bool selectable: true
 
         width: parent.width
@@ -105,6 +121,11 @@ Modal {
                     case Qt.Key_Escape:
                     case Qt.Key_Q:
                         root.dismissed();
+                        break;
+                    case Qt.Key_O:
+                        if (!fieldColumn.openAction)
+                            return;
+                        fieldColumn.openAction();
                         break;
                     case Qt.Key_Return:
                     case Qt.Key_Enter:
@@ -153,8 +174,28 @@ Modal {
         visible: !root.passBackend
         label: "URL"
         value: root.details.url || ""
-        nextField: root.hasOtp ? otpView.view : notesView.view
+        openAction: root.details.url ? function() { controller.openAddress(root.details.url); } : null
+        nextField: root.hasExtraUrls ? root.extraUrlView(0) : root.fieldAfterUrls()
         previousField: usernameView.view
+    }
+
+    // One field per additional URL, each copied with Enter and opened with o
+    // like the main one.
+    Repeater {
+        id: extraUrlViews
+        model: root.passBackend ? [] : (root.details.extraUrls || [])
+
+        InfoField {
+            required property string modelData
+            required property int index
+
+            objectName: "extraUrlField" + index
+            label: i18n.t("ui.info_extra_url", { "n": index + 1 })
+            value: modelData
+            openAction: function() { controller.openAddress(modelData); }
+            nextField: index + 1 < extraUrlViews.count ? root.extraUrlView(index + 1) : root.fieldAfterUrls()
+            previousField: index > 0 ? root.extraUrlView(index - 1) : urlView.view
+        }
     }
 
     Column {
@@ -171,7 +212,7 @@ Modal {
             selectable: false
             copyAction: controller.copyShownOtp
             nextField: root.passBackend ? titleView.view : notesView.view
-            previousField: root.passBackend ? titleView.view : urlView.view
+            previousField: root.passBackend ? titleView.view : root.lastUrlView()
         }
 
         // How much of the period is left, emptying towards the next code.
@@ -200,6 +241,6 @@ Modal {
         value: root.details.notes || ""
         rows: 5
         nextField: titleView.view
-        previousField: root.hasOtp ? otpView.view : urlView.view
+        previousField: root.hasOtp ? otpView.view : root.lastUrlView()
     }
 }

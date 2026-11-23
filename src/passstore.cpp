@@ -252,6 +252,8 @@ PassEntryData parsePassEntry(const QString &content) {
         } else if (lower.startsWith(QStringLiteral("url:")) && !haveUrl) {
             data.url = valueAfter(4);
             haveUrl = true;
+        } else if (lower.startsWith(QStringLiteral("url:")) && !valueAfter(4).isEmpty()) {
+            data.extraUrls.append(valueAfter(4));
         } else if (lower.trimmed().startsWith(QStringLiteral("otpauth://")) && data.otp.isEmpty()) {
             data.otp = Secret(line.trimmed());
         } else {
@@ -275,6 +277,8 @@ QByteArray buildPassEntryContent(const PassEntryData &data) {
         content.append(QStringLiteral("username: %1\n").arg(data.username).toUtf8());
     if (!data.url.isEmpty())
         content.append(QStringLiteral("url: %1\n").arg(data.url).toUtf8());
+    for (const QString &url : data.extraUrls)
+        content.append(QStringLiteral("url: %1\n").arg(url).toUtf8());
     if (!data.otp.isEmpty())
         content.append(data.otp.bytes()).append('\n');
     for (const QString &line : data.extra)

@@ -247,6 +247,9 @@ struct Fixture {
         entry.title = "Banco";
         entry.username = "123";
         entry.url = "https://banco.com.br";
+        // The same login on the bank's other address, as KeePassXC's
+        // additional URLs.
+        entry.extraUrls = {"https://internetbanking.exemplo.net"};
         db->addEntry(QString(), entry);
         db->save(path);
         QString error;
@@ -766,6 +769,25 @@ private slots:
         QTRY_COMPARE(code.size(), 6);
         integration.totp(f.app.vault->entryUuids().value("Banco"), [&](const QString &c) { code = c; });
         QCOMPARE(code, QString());
+    }
+
+    void browserFindsAnEntryByAnAdditionalUrl() {
+        Fixture f;
+        BrowserIntegration integration(&f.app, f.local.path());
+        bool answered = false;
+        QVector<BrowserLogin> got;
+        integration.findLogins({QStringLiteral("https://internetbanking.exemplo.net/login"), QString(), false},
+                               [&](const QVector<BrowserLogin> &logins) {
+                                   got = logins;
+                                   answered = true;
+                               });
+        const QVariantList entries = integration.prompt().value("entries").toList();
+        QCOMPARE(entries.size(), 1);
+        QCOMPARE(entries.first().toMap().value("path").toString(), QStringLiteral("Banco"));
+        integration.answerAccess({"Banco"}, false);
+        QTRY_VERIFY(answered);
+        QCOMPARE(got.size(), 1);
+        QCOMPARE(got.first().login, QStringLiteral("123"));
     }
 
     void browserForgetsWhatWasNotRemembered() {

@@ -25,6 +25,7 @@ A documentação completa está na [wiki](https://github.com/higorhgon/omapass/w
 - Adição, edição, exclusão e renomeação de grupos e entradas
 - [Códigos TOTP](https://github.com/higorhgon/omapass/wiki/TOTP) nos quatro backends, com `Ctrl+T` para copiar
 - [Ícones](https://github.com/higorhgon/omapass/wiki/%C3%8Dcones) dos sites na lista (opcional) ou escolhidos à mão para cada entrada
+- [URLs adicionais](https://github.com/higorhgon/omapass/wiki/URLs-adicionais): a mesma entrada em vários endereços, também na busca e no navegador
 - [Integração com o navegador](https://github.com/higorhgon/omapass/wiki/Navegador) pela extensão KeePassXC-Browser, que preenche e salva logins nos sites (Linux)
 - [Gerador de senhas e de frases](https://github.com/higorhgon/omapass/wiki/Gerador-de-senhas) (diceware, com lista em pt-BR e em inglês)
 - [Desbloqueio opcional por PIN](https://github.com/higorhgon/omapass/wiki/Desbloqueio-por-PIN), um PIN por banco
@@ -84,6 +85,7 @@ o Zen, só enxergam a mudança ao abrir de novo). Depois, com um banco desbloque
 - [TOTP](https://github.com/higorhgon/omapass/wiki/TOTP)
 - [Ícones](https://github.com/higorhgon/omapass/wiki/%C3%8Dcones)
 - [Navegador](https://github.com/higorhgon/omapass/wiki/Navegador)
+- [URLs adicionais](https://github.com/higorhgon/omapass/wiki/URLs-adicionais)
 - [Gerador de senhas](https://github.com/higorhgon/omapass/wiki/Gerador-de-senhas)
 - [Segurança](https://github.com/higorhgon/omapass/wiki/Seguran%C3%A7a)
 - [Releases](https://github.com/higorhgon/omapass/wiki/Releases)
