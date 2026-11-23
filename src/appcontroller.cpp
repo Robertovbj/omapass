@@ -18,6 +18,7 @@
 #include <QRect>
 #include <QFileInfo>
 #include <QSettings>
+#include <QStandardPaths>
 #include <QUrl>
 #include <QtConcurrent/QtConcurrentMap>
 #include <QtConcurrent/QtConcurrentRun>
@@ -66,7 +67,22 @@ QVariantMap describe(const DbRef &ref) {
 }
 
 AppController::AppController(const AppConfig &config, QObject *parent)
-    : QObject(parent), m_config(config), m_history(config.recencyEnabled) {
+    : QObject(parent), m_config(config), m_history(config.recencyEnabled),
+      m_siteIcons(QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation)
+                  + QStringLiteral("/omapass/icons")) {
+    m_siteIcons.setDuckDuckGo(m_config.siteIconsDuckDuckGo);
+    // An icon that arrives goes into every row of its site, wherever the
+    // list is filtered to.
+    connect(&m_siteIcons, &SiteIcons::iconReady, this, [this](const QString &origin) {
+        for (int index = 0; index < m_allRows.size(); ++index) {
+            QVariantMap row = m_allRows.at(index).toMap();
+            if (row.value(QStringLiteral("origin")).toString() != origin)
+                continue;
+            applySiteIcon(&row, row.value(QStringLiteral("url")).toString());
+            m_allRows[index] = row;
+            updateShownRow(index);
+        }
+    });
     m_messageTimer.setInterval(1000);
     connect(&m_messageTimer, &QTimer::timeout, this, [this]() {
         if (m_clipboardCountdown > 0) {
@@ -238,6 +254,7 @@ AppController::AppController(const AppConfig &config, QObject *parent)
             QVariantMap row = m_allRows.at(index).toMap();
             row.insert(QStringLiteral("username"), meta.username);
             row.insert(QStringLiteral("url"), meta.url);
+            applySiteIcon(&row, meta.url);
             m_allRows[index] = row;
             m_entryHaystacks[index] = path + QLatin1Char(' ') + row.value(QStringLiteral("typeLabel")).toString()
                                       + QLatin1Char(' ') + meta.username + QLatin1Char(' ') + meta.url;
@@ -878,6 +895,7 @@ void AppController::rebuildRows() {
         row.insert(QStringLiteral("typeLabel"), typeLabel);
         row.insert(QStringLiteral("username"), username);
         row.insert(QStringLiteral("url"), url);
+        applySiteIcon(&row, url);
 
         m_rowOf.insert(path, m_allRows.size());
         m_allRows.append(row);
@@ -886,6 +904,28 @@ void AppController::rebuildRows() {
                                 + QLatin1Char(' ') + url);
     }
     applyEntryFilter();
+}
+
+void AppController::applySiteIcon(QVariantMap *row, const QString &url) {
+    const QString origin = m_config.siteIcons ? SiteIcons::originOf(url) : QString();
+    row->insert(QStringLiteral("origin"), origin);
+    if (origin.isEmpty()) {
+        row->insert(QStringLiteral("icon"), QString());
+        return;
+    }
+    if (m_siteIcons.hasIcon(origin)) {
+        row->insert(QStringLiteral("icon"),
+                    QStringLiteral("image://siteicon/") + SiteIcons::keyOf(origin));
+    } else {
+        row->insert(QStringLiteral("icon"), QString());
+        m_siteIcons.request(origin);
+    }
+}
+
+void AppController::updateShownRow(int index) {
+    const int shown = m_shownRows.indexOf(index);
+    if (shown >= 0)
+        m_rowsModel.replaceRow(shown, m_allRows.at(index).toMap());
 }
 
 void AppController::applyEntryFilter() {
@@ -1728,6 +1768,8 @@ QVariantMap AppController::settings() const {
             {QStringLiteral("lockEnabled"), m_config.lockMinutes.has_value()},
             {QStringLiteral("lockMinutes"), m_config.lockMinutes.value_or(10)},
             {QStringLiteral("wordlist"), m_config.wordlist},
+            {QStringLiteral("siteIcons"), m_config.siteIcons},
+            {QStringLiteral("siteIconsDuckDuckGo"), m_config.siteIconsDuckDuckGo},
             {QStringLiteral("wordlistInUse"), Generator::wordlistPath()},
             {QStringLiteral("configPath"), Config::configDir() + QStringLiteral("/config.toml")}};
 }
@@ -1747,6 +1789,8 @@ void AppController::saveSettings(const QVariantMap &values) {
     QString wordlist = values.value(QStringLiteral("wordlist")).toString().trimmed();
     if (wordlist.isEmpty())
         wordlist = QStringLiteral("auto");
+    const bool siteIcons = values.value(QStringLiteral("siteIcons")).toBool();
+    const bool duckDuckGo = siteIcons && values.value(QStringLiteral("siteIconsDuckDuckGo")).toBool();
 
     QMap<QString, QString> toml;
     toml.insert(QStringLiteral("general.path"), Config::tomlString(path));
@@ -1754,6 +1798,8 @@ void AppController::saveSettings(const QVariantMap &values) {
     toml.insert(QStringLiteral("general.lock_minutes"),
                 lockEnabled ? QString::number(lockMinutes) : QStringLiteral("false"));
     toml.insert(QStringLiteral("generator.wordlist"), Config::tomlString(wordlist));
+    toml.insert(QStringLiteral("icons.download"), siteIcons ? QStringLiteral("true") : QStringLiteral("false"));
+    toml.insert(QStringLiteral("icons.duckduckgo"), duckDuckGo ? QStringLiteral("true") : QStringLiteral("false"));
 
     if (!Config::writeValues(toml)) {
         showMessage(I18n::t(QStringLiteral("settings.write_error")), true);
@@ -1767,6 +1813,12 @@ void AppController::saveSettings(const QVariantMap &values) {
     m_config.recencyEnabled = recency;
     m_config.lockMinutes = lockEnabled ? std::optional<int>(lockMinutes) : std::nullopt;
     m_config.wordlist = wordlist;
+    const bool iconsChanged = siteIcons != m_config.siteIcons;
+    m_config.siteIcons = siteIcons;
+    m_config.siteIconsDuckDuckGo = duckDuckGo;
+    m_siteIcons.setDuckDuckGo(duckDuckGo);
+    if (iconsChanged)
+        rebuildRows();
 
     Generator::configure(m_config.wordlist, m_config.language);
     applyLockSettings();

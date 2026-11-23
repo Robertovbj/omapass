@@ -27,6 +27,8 @@ Modal {
         recencyBox.checked = values.recency;
         lockBox.checked = values.lockEnabled;
         lockField.text = String(values.lockMinutes);
+        iconsBox.checked = values.siteIcons;
+        duckDuckGoBox.checked = values.siteIconsDuckDuckGo;
         root.wordlist = values.wordlist;
         root.wordlistInUse = values.wordlistInUse;
         root.configPath = values.configPath;
@@ -42,7 +44,8 @@ Modal {
 
     // The minutes field only shows while the lock is on; moveFocus skips it
     // otherwise.
-    readonly property var tabOrder: [pathField, recencyBox, lockBox, lockField, wordlistField]
+    readonly property var tabOrder: [pathField, recencyBox, lockBox, lockField, iconsBox,
+                                     duckDuckGoBox, wordlistField]
 
     function focusNext(from) { root.moveFocus(root.tabOrder, from, 1); }
     function focusPrevious(from) { root.moveFocus(root.tabOrder, from, -1); }
@@ -53,7 +56,9 @@ Modal {
             "recency": recencyBox.checked,
             "lockEnabled": lockBox.checked,
             "lockMinutes": parseInt(lockField.text) || 10,
-            "wordlist": wordlistField.text
+            "wordlist": wordlistField.text,
+            "siteIcons": iconsBox.checked,
+            "siteIconsDuckDuckGo": duckDuckGoBox.checked
         });
     }
 
@@ -132,6 +137,38 @@ Modal {
         onCancelled: root.dismissed()
         onNextRequested: root.focusNext(lockField)
         onPreviousRequested: root.focusPrevious(lockField)
+    }
+
+    CheckOption {
+        id: iconsBox
+        text: i18n.t("settings.site_icons")
+
+        onSubmitted: root.submit()
+        onCancelled: root.dismissed()
+        onNextRequested: root.focusNext(iconsBox)
+        onPreviousRequested: root.focusPrevious(iconsBox)
+    }
+
+    // Only once the icons are on: it is a fallback for them.
+    CheckOption {
+        id: duckDuckGoBox
+        visible: iconsBox.checked
+        text: i18n.t("settings.site_icons_duckduckgo")
+
+        onSubmitted: root.submit()
+        onCancelled: root.dismissed()
+        onNextRequested: root.focusNext(duckDuckGoBox)
+        onPreviousRequested: root.focusPrevious(duckDuckGoBox)
+    }
+
+    Text {
+        width: parent.width
+        visible: iconsBox.checked
+        text: duckDuckGoBox.checked ? i18n.t("settings.site_icons_privacy_duckduckgo")
+                                    : i18n.t("settings.site_icons_privacy")
+        color: theme.guidance
+        wrapMode: Text.WordWrap
+        font.pixelSize: Math.round(11 * root.s)
     }
 
     Field {

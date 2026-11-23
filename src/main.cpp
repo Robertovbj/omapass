@@ -7,6 +7,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQmlError>
+#include <QQuickImageProvider>
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QStandardPaths>
@@ -22,6 +23,7 @@
 #include "palette.h"
 #include "process.h"
 #include "sessionlock.h"
+#include "siteicons.h"
 #include "systemtheme.h"
 
 #ifdef Q_OS_WIN
@@ -230,6 +232,22 @@ int main(int argc, char *argv[]) {
     AppController controller(config);
     Strings strings;
 
+    // `image://siteicon/<key>`: the list's site icons, read from the cache.
+    class SiteIconProvider : public QQuickImageProvider {
+    public:
+        explicit SiteIconProvider(const SiteIcons *icons)
+            : QQuickImageProvider(QQuickImageProvider::Image), m_icons(icons) {}
+        QImage requestImage(const QString &id, QSize *size, const QSize &) override {
+            const QImage image = m_icons->image(id);
+            if (size)
+                *size = image.size();
+            return image;
+        }
+
+    private:
+        const SiteIcons *m_icons;
+    };
+
     QQmlApplicationEngine engine;
     QStringList loadProblems;
     QObject::connect(&engine, &QQmlApplicationEngine::warnings, &app,
@@ -247,6 +265,8 @@ int main(int argc, char *argv[]) {
     engine.rootContext()->setContextProperty(QStringLiteral("theme"), &palette);
     engine.rootContext()->setContextProperty(QStringLiteral("systemTheme"), &systemTheme);
     engine.rootContext()->setContextProperty(QStringLiteral("i18n"), &strings);
+    // The engine owns the provider and goes before the controller does.
+    engine.addImageProvider(QStringLiteral("siteicon"), new SiteIconProvider(controller.siteIcons()));
 
     engine.load(QUrl(QStringLiteral("qrc:/Main.qml")));
     if (engine.rootObjects().isEmpty()) {

@@ -23,6 +23,11 @@ struct AppConfig {
     // language, "pt-BR"/"en" pick one of the lists that ship with omapass,
     // and anything else is taken as a path to a wordlist file.
     QString wordlist = QStringLiteral("auto");
+    // Icons of the sites the entries point to, fetched from the sites
+    // themselves; off unless asked for, since it means asking each of them.
+    // DuckDuckGo's icon service is a further fallback, off on its own.
+    bool siteIcons = false;
+    bool siteIconsDuckDuckGo = false;
 };
 
 namespace Config {

@@ -361,13 +361,41 @@ FocusScope {
 
                         Repeater {
                             model: pane.columns
-                            Text {
-                                objectName: "cell_" + modelData.key
+                            Item {
+                                id: cellItem
                                 width: pane.columnWidth(index, row.width)
-                                text: row.cell(modelData.key)
-                                color: modelData.key === "name" ? theme.base : theme.guidance
-                                elide: Text.ElideRight
-                                font.pixelSize: Math.round(15 * pane.s)
+                                height: cellText.implicitHeight
+                                anchors.verticalCenter: parent ? parent.verticalCenter : undefined
+
+                                // The name leads with the site's icon, when
+                                // there is one; the type column stays as it
+                                // was for the rest.
+                                readonly property string icon: modelData.key === "name" ? row.cell("icon") : ""
+
+                                Image {
+                                    id: cellIcon
+                                    objectName: "rowIcon"
+                                    visible: cellItem.icon.length > 0 && status === Image.Ready
+                                    source: cellItem.icon
+                                    width: Math.round(16 * pane.s)
+                                    height: width
+                                    sourceSize: Qt.size(32, 32)
+                                    fillMode: Image.PreserveAspectFit
+                                    asynchronous: true
+                                    smooth: true
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+
+                                Text {
+                                    id: cellText
+                                    objectName: "cell_" + modelData.key
+                                    x: cellIcon.visible ? cellIcon.width + Math.round(6 * pane.s) : 0
+                                    width: parent.width - x
+                                    text: row.cell(modelData.key)
+                                    color: modelData.key === "name" ? theme.base : theme.guidance
+                                    elide: Text.ElideRight
+                                    font.pixelSize: Math.round(15 * pane.s)
+                                }
                             }
                         }
                     }

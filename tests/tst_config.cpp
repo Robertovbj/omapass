@@ -134,6 +134,24 @@ private slots:
         QCOMPARE(Config::parseLockMinutes(QStringLiteral("nunca")), tenMinutes);
     }
 
+    // Site icons are opt-in: off in a fresh config and when absent, on only
+    // when the file says so.
+    void siteIconsAreOffUnlessTurnedOn() {
+        const QString path = Config::configDir() + QStringLiteral("/config.toml");
+        QFile::remove(path);
+        Config::ensureConfigExists();
+        AppConfig config = Config::load();
+        QVERIFY(!config.siteIcons);
+        QVERIFY(!config.siteIconsDuckDuckGo);
+
+        QVERIFY(Config::writeValues({{QStringLiteral("icons.download"), QStringLiteral("true")},
+                                     {QStringLiteral("icons.duckduckgo"), QStringLiteral("true")}}));
+        config = Config::load();
+        QVERIFY(config.siteIcons);
+        QVERIFY(config.siteIconsDuckDuckGo);
+        QFile::remove(path);
+    }
+
     void translationsInterpolateArguments() {
         const QString text = I18n::t(QStringLiteral("cli.version"), QStringLiteral("version"),
                                      QStringLiteral("9.9.9"));

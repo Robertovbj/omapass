@@ -55,6 +55,45 @@ TestCase {
         ]
     }
 
+    // A site icon leads the name and pushes its text along; a row without
+    // one is drawn as before.
+    ListPane {
+        id: withIcons
+        width: 600
+        height: 200
+        model: [{ "path": "a", "name": "Com ícone", "icon": "qrc:/omapass.png" },
+                { "path": "b", "name": "Sem ícone", "icon": "" }]
+        columns: [{ "key": "name", "title": "Nome", "weight": 1 }]
+    }
+
+    function test_site_icon_leads_the_name() {
+        const icons = [];
+        const texts = [];
+        function collect(item) {
+            for (let i = 0; i < item.children.length; ++i) {
+                const child = item.children[i];
+                if (child.objectName === "rowIcon")
+                    icons.push(child);
+                else if (child.objectName === "cell_name")
+                    texts.push(child);
+                collect(child);
+            }
+        }
+        tryVerify(function() {
+            icons.length = 0;
+            texts.length = 0;
+            collect(withIcons);
+            return icons.length === 2 && icons.some(function(i) { return i.visible; });
+        }, 3000, "o ícone carregou");
+
+        for (let i = 0; i < texts.length; ++i) {
+            if (texts[i].text === "Com ícone")
+                verify(texts[i].x > 0, "o nome abre espaço para o ícone");
+            else
+                compare(texts[i].x, 0);
+        }
+    }
+
     function test_fit_column_gives_its_room_to_the_others() {
         const group = fitted.columnWidth(1, 800);
         const name = fitted.columnWidth(0, 800);

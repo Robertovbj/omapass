@@ -251,7 +251,16 @@ void ensureConfigExists() {
         << "# Wordlist for the passphrase generator: \"auto\" follows the\n"
         << "# interface language, or name one that ships with omapass\n"
         << "# (\"pt-BR\", \"en\"), or give a path to a file of your own.\n"
-        << "wordlist = \"auto\"\n";
+        << "wordlist = \"auto\"\n"
+        << "\n"
+        << "[icons]\n"
+        << "# Show the icons of the sites the entries point to. Each site is\n"
+        << "# asked for its own icon (only its address goes out), and the icons\n"
+        << "# are kept in ~/.cache/omapass/icons.\n"
+        << "download = false\n"
+        << "# When a site has none, ask DuckDuckGo's icon service, which is then\n"
+        << "# told the site's address.\n"
+        << "duckduckgo = false\n";
 }
 
 AppConfig load() {
@@ -286,6 +295,9 @@ AppConfig load() {
     config.language = resolveLanguage(raw.value(QStringLiteral("general.language")), langEnv, lcAllEnv);
 
     config.lockMinutes = parseLockMinutes(raw.value(QStringLiteral("general.lock_minutes")));
+
+    config.siteIcons = raw.value(QStringLiteral("icons.download")) == QLatin1String("true");
+    config.siteIconsDuckDuckGo = raw.value(QStringLiteral("icons.duckduckgo")) == QLatin1String("true");
 
     QString wordlist = raw.value(QStringLiteral("generator.wordlist"));
     if (!wordlist.isEmpty()) {

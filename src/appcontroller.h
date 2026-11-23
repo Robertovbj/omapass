@@ -17,6 +17,7 @@
 #include "generator.h"
 #include "history.h"
 #include "onepasswordlogin.h"
+#include "siteicons.h"
 #include "totp.h"
 #include "vault.h"
 
@@ -121,6 +122,8 @@ public:
 
     QStringList entries() const { return m_filteredEntries; }
     QObject *entryRows() { return &m_rowsModel; }
+    // For the image provider that hands the list its site icons.
+    SiteIcons *siteIcons() { return &m_siteIcons; }
     QString query() const { return m_query; }
     // The path of the row at `index` in the shown list, empty out of range.
     Q_INVOKABLE QString entryPathAt(int index) const { return m_rowsModel.pathAt(index); }
@@ -252,6 +255,11 @@ private:
     // Whether the open vault can take a change right now; says why not on the
     // status line when it cannot.
     bool vaultReadyForChanges();
+    // Sets a row's `origin` and `icon` from its URL, asking for the icon
+    // when it is not cached yet. Nothing when site icons are off.
+    void applySiteIcon(QVariantMap *row, const QString &url);
+    // A row of m_allRows changed: the shown copy, if it is shown, follows.
+    void updateShownRow(int index);
     // Puts a one-time code on the clipboard, cleared like a password.
     void copyOtpCode(const QString &code, const QString &entry);
     // Whether nothing else is running. Account actions used to return in
@@ -372,6 +380,7 @@ private:
     QList<int> m_shownRows;           // m_allEntries positions the filter kept
     QHash<QString, int> m_rowOf;      // entry path → position in m_allEntries
     EntryRowsModel m_rowsModel;
+    SiteIcons m_siteIcons;
 
     // Login and URL read one entry at a time for a backend that cannot list
     // them: filled in the background and kept while the vault stays open.

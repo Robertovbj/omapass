@@ -56,6 +56,7 @@ HEADERS += \
     src/process.h \
     src/secret.h \
     src/sessionlock.h \
+    src/siteicons.h \
     src/systemtheme.h \
     src/totp.h \
     src/vault.h
@@ -89,6 +90,7 @@ SOURCES += \
     src/process.cpp \
     src/secret.cpp \
     src/sessionlock.cpp \
+    src/siteicons.cpp \
     src/systemtheme.cpp \
     src/totp.cpp \
     src/vault.cpp

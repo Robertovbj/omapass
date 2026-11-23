@@ -987,3 +987,15 @@ ui.context_copy_otp:
 ui.help_copy_otp:
   pt-BR: "Copiar código OTP"
   en: "Copy OTP code"
+settings.site_icons:
+  pt-BR: "Mostrar ícones dos sites"
+  en: "Show site icons"
+settings.site_icons_duckduckgo:
+  pt-BR: "Se o site não tiver ícone, buscar no DuckDuckGo"
+  en: "When a site has no icon, ask DuckDuckGo"
+settings.site_icons_privacy:
+  pt-BR: "Cada site é consultado pelo próprio ícone: só o endereço dele sai do computador. Os ícones ficam em ~/.cache/omapass/icons."
+  en: "Each site is asked for its own icon: only its address leaves the computer. Icons are kept in ~/.cache/omapass/icons."
+settings.site_icons_privacy_duckduckgo:
+  pt-BR: "Cada site é consultado pelo próprio ícone, e o DuckDuckGo fica sabendo dos que não tiverem. Os ícones ficam em ~/.cache/omapass/icons."
+  en: "Each site is asked for its own icon, and DuckDuckGo is told about those that have none. Icons are kept in ~/.cache/omapass/icons."
