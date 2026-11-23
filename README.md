@@ -28,6 +28,7 @@ A documentação completa está na [wiki](https://github.com/higorhgon/omapass/w
 - [Ícones](https://github.com/higorhgon/omapass/wiki/%C3%8Dcones) dos sites na lista (opcional) ou escolhidos à mão para cada entrada
 - [URLs adicionais](https://github.com/higorhgon/omapass/wiki/URLs-adicionais): a mesma entrada em vários endereços, também na busca e no navegador
 - [Integração com o navegador](https://github.com/higorhgon/omapass/wiki/Navegador) pela extensão KeePassXC-Browser, que preenche e salva logins nos sites (Linux)
+- Integração com o agente SSH para chaves do Bitwarden e anexos configurados no KeePassXC
 - [Gerador de senhas e de frases](https://github.com/higorhgon/omapass/wiki/Gerador-de-senhas) (diceware, com lista em pt-BR e em inglês)
 - [Desbloqueio opcional por PIN](https://github.com/higorhgon/omapass/wiki/Desbloqueio-por-PIN), um PIN por banco
 - Clipboard marcado como sensível e limpo depois de 10 segundos
@@ -75,6 +76,23 @@ navegador" em `Ctrl+O`, instale a extensão e reinicie o navegador (o Firefox e 
 o Zen, só enxergam a mudança ao abrir de novo). Depois, com um banco desbloqueado, clique em
 "Conectar" na extensão e dê um nome à conexão. Por enquanto, só no Linux. O resto está em
 [Navegador](https://github.com/higorhgon/omapass/wiki/Navegador).
+
+### Agente SSH
+
+O omapass usa o agente indicado por `SSH_AUTH_SOCK`. No Linux, quando a variável está
+vazia, procura o socket do OpenSSH em `$XDG_RUNTIME_DIR/ssh-agent.socket`. Em sistemas
+que fornecem a unidade `ssh-agent.socket`, habilite-a uma vez com
+`systemctl --user enable --now ssh-agent.socket`. Para o terminal usar o mesmo agente,
+defina `export SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/ssh-agent.socket"` no ambiente da sessão.
+
+Com as ferramentas OpenSSH instaladas, abra o menu de uma chave SSH para adicioná-la ou removê-la do agente. Em **Opções do agente SSH**,
+você pode habilitar a inclusão no desbloqueio, definir o tempo de vida e pedir confirmação
+a cada uso. As opções são locais e passam a valer na próxima inclusão da chave.
+
+O omapass usa itens de chave SSH do Bitwarden e lê as opções de anexos `KeeAgent.settings`
+do KeePassXC. A chave privada precisa estar sem frase secreta e é enviada ao OpenSSH
+pela entrada padrão. Ao bloquear o banco ou fechar o aplicativo, o omapass remove
+do agente as chaves que adicionou.
 
 ## Documentação
 
