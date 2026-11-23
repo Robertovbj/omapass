@@ -90,15 +90,25 @@ void SiteIcons::request(const QString &origin) {
     if (origin.isEmpty() || m_pending.contains(origin) || hasIcon(origin))
         return;
 
-    // A site that had nothing is left alone for a while.
-    const QFileInfo none(pathFor(keyOf(origin), ".none"));
-    if (none.exists()
-        && none.lastModified().secsTo(QDateTime::currentDateTime()) < retryAfterSeconds)
-        return;
-
-    m_pending.insert(origin);
+    // A site that had nothing is left alone for a while. The mark says
+    // whether DuckDuckGo was asked too; when it was not and now may be, it
+    // is the only one asked — the site already said it has nothing.
     Job job;
     job.origin = origin;
+    const QFileInfo none(pathFor(keyOf(origin), ".none"));
+    if (none.exists()
+        && none.lastModified().secsTo(QDateTime::currentDateTime()) < retryAfterSeconds) {
+        QFile mark(none.filePath());
+        const bool askedDuckDuckGo = mark.open(QIODevice::ReadOnly)
+            && mark.readAll().trimmed() == "duckduckgo";
+        if (!m_duckDuckGo || askedDuckDuckGo)
+            return;
+        job.pageRead = true;
+        job.askedDuckDuckGo = true;
+        job.candidates.append(duckDuckGoFor(origin));
+    }
+
+    m_pending.insert(origin);
     m_queue.append(job);
     pump();
 }
@@ -121,7 +131,11 @@ void SiteIcons::next(Job job) {
         fetch(job, url, false);
         return;
     }
-    giveUp(job.origin);
+    giveUp(job);
+}
+
+QUrl SiteIcons::duckDuckGoFor(const QString &origin) const {
+    return QUrl(m_duckDuckGoUrl.arg(QUrl(origin).host()));
 }
 
 void SiteIcons::fetch(Job job, const QUrl &url, bool isPage) {
@@ -167,9 +181,10 @@ void SiteIcons::finished(Job job, QNetworkReply *reply, bool isPage) {
         if (ok && body.size() <= maxBytes)
             job.candidates = iconLinks(QString::fromUtf8(body), reply->url());
         job.candidates.append(QUrl(job.origin + QStringLiteral("/favicon.ico")));
-        if (m_duckDuckGo)
-            job.candidates.append(QUrl(QStringLiteral("https://icons.duckduckgo.com/ip3/%1.ico")
-                                           .arg(QUrl(job.origin).host())));
+        if (m_duckDuckGo) {
+            job.candidates.append(duckDuckGoFor(job.origin));
+            job.askedDuckDuckGo = true;
+        }
         next(job);
         return;
     }
@@ -191,11 +206,12 @@ bool SiteIcons::store(const QString &origin, const QImage &icon) {
     return true;
 }
 
-void SiteIcons::giveUp(const QString &origin) {
+void SiteIcons::giveUp(const Job &job) {
+    const QString &origin = job.origin;
     if (QDir().mkpath(m_cacheDir)) {
         QFile none(pathFor(keyOf(origin), ".none"));
         if (none.open(QIODevice::WriteOnly | QIODevice::Truncate))
-            none.close();
+            none.write(job.askedDuckDuckGo ? "duckduckgo" : "direct");
     }
     m_pending.remove(origin);
     --m_running;

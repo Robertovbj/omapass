@@ -180,6 +180,58 @@ private slots:
         QCOMPARE(site.asked.size(), asked);
     }
 
+    // DuckDuckGo allowed after a site had nothing: only DuckDuckGo is asked,
+    // not the site again; and once it too had nothing, nobody is.
+    void siteIconsAskDuckDuckGoOnceItIsAllowed() {
+        SiteServer site;      // the site itself: nothing
+        SiteServer service;   // stands in for DuckDuckGo
+        service.pages.insert("/ip3/127.0.0.1.ico", {"image/png", pngOf(16, 16)});
+        const QString serviceUrl = service.origin() + QStringLiteral("/ip3/%1.ico");
+
+        QTemporaryDir cache;
+        const QString mark = cache.filePath(SiteIcons::keyOf(site.origin()) + QStringLiteral(".none"));
+        {
+            SiteIcons icons(cache.path());
+            icons.setDuckDuckGoUrl(serviceUrl);
+            icons.request(site.origin());
+            QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(mark), 5000);
+        }
+        QCOMPARE(site.asked.size(), 2);
+        QVERIFY(service.asked.isEmpty());
+
+        SiteIcons icons(cache.path());
+        icons.setDuckDuckGoUrl(serviceUrl);
+        icons.setDuckDuckGo(true);
+        QSignalSpy ready(&icons, &SiteIcons::iconReady);
+        icons.request(site.origin());
+        QVERIFY(ready.wait(5000));
+        QCOMPARE(site.asked.size(), 2);
+        QCOMPARE(service.asked, QList<QByteArray>({"/ip3/127.0.0.1.ico"}));
+        QVERIFY(!QFileInfo::exists(mark));
+    }
+
+    void siteIconsDoNotAskDuckDuckGoTwice() {
+        SiteServer site;
+        SiteServer service;   // has nothing either
+        QTemporaryDir cache;
+        const QString mark = cache.filePath(SiteIcons::keyOf(site.origin()) + QStringLiteral(".none"));
+
+        SiteIcons icons(cache.path());
+        icons.setDuckDuckGoUrl(service.origin() + QStringLiteral("/ip3/%1.ico"));
+        icons.setDuckDuckGo(true);
+        icons.request(site.origin());
+        QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(mark), 5000);
+        QCOMPARE(service.asked.size(), 1);
+
+        SiteIcons again(cache.path());
+        again.setDuckDuckGoUrl(service.origin() + QStringLiteral("/ip3/%1.ico"));
+        again.setDuckDuckGo(true);
+        again.request(site.origin());
+        QTest::qWait(200);
+        QCOMPARE(service.asked.size(), 1);
+        QCOMPARE(site.asked.size(), 2);
+    }
+
     void siteIconsNeverReadOutsideTheCache() {
         QTemporaryDir cache;
         const SiteIcons icons(cache.path());

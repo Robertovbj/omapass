@@ -24,7 +24,8 @@ class QNetworkReply;
 // (`<link rel="icon">`), then /favicon.ico, then — only when the user also
 // allowed it — DuckDuckGo's icon service, which does get told the host.
 // The first that decodes wins; a site with none is not asked again for a
-// week.
+// week — unless DuckDuckGo was not allowed then and is now, in which case
+// only DuckDuckGo is asked, the site itself not again.
 class SiteIcons : public QObject {
     Q_OBJECT
 
@@ -32,6 +33,8 @@ public:
     explicit SiteIcons(const QString &cacheDir, QObject *parent = nullptr);
 
     void setDuckDuckGo(bool enabled) { m_duckDuckGo = enabled; }
+    // Where DuckDuckGo's service is, `%1` the host. Only the tests change it.
+    void setDuckDuckGoUrl(const QString &pattern) { m_duckDuckGoUrl = pattern; }
 
     // `scheme://host[:port]` of an entry's URL, lower case; "example.com"
     // and other scheme-less URLs are taken as https. Empty when there is no
@@ -71,7 +74,10 @@ private:
         QString origin;
         QList<QUrl> candidates;   // what is left to try
         bool pageRead = false;    // the home page has been asked for its links
+        bool askedDuckDuckGo = false;
     };
+
+    QUrl duckDuckGoFor(const QString &origin) const;
 
     void pump();
     void next(Job job);
@@ -80,12 +86,14 @@ private:
     // Caches `icon` as `origin`'s and ends its job; false (and nothing
     // ended) when the image is null or cannot be written.
     bool store(const QString &origin, const QImage &icon);
-    void giveUp(const QString &origin);
+    // Marks the site as having none (and whether DuckDuckGo was asked).
+    void giveUp(const Job &job);
     QString pathFor(const QString &key, const char *suffix) const;
 
     QString m_cacheDir;
     QNetworkAccessManager m_network;
     bool m_duckDuckGo = false;
+    QString m_duckDuckGoUrl = QStringLiteral("https://icons.duckduckgo.com/ip3/%1.ico");
     QList<Job> m_queue;
     QSet<QString> m_pending;      // queued or running
     int m_running = 0;

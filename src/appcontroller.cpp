@@ -1892,7 +1892,10 @@ void AppController::saveSettings(const QVariantMap &values) {
     m_config.recencyEnabled = recency;
     m_config.lockMinutes = lockEnabled ? std::optional<int>(lockMinutes) : std::nullopt;
     m_config.wordlist = wordlist;
-    const bool iconsChanged = siteIcons != m_config.siteIcons;
+    // Turning DuckDuckGo on is a reason to ask again for the sites that
+    // had nothing of their own.
+    const bool iconsChanged = siteIcons != m_config.siteIcons
+        || duckDuckGo != m_config.siteIconsDuckDuckGo;
     m_config.siteIcons = siteIcons;
     m_config.siteIconsDuckDuckGo = duckDuckGo;
     m_siteIcons.setDuckDuckGo(duckDuckGo);
