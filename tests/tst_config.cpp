@@ -136,20 +136,21 @@ private slots:
 
     // Site icons are opt-in: off in a fresh config and when absent, on only
     // when the file says so.
+    // In a file of the test's own: the real config.toml is never touched.
     void siteIconsAreOffUnlessTurnedOn() {
-        const QString path = Config::configDir() + QStringLiteral("/config.toml");
-        QFile::remove(path);
-        Config::ensureConfigExists();
-        AppConfig config = Config::load();
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("config.toml"));
+        Config::writeDefaultConfig(path);
+        AppConfig config = Config::load(path);
         QVERIFY(!config.siteIcons);
         QVERIFY(!config.siteIconsDuckDuckGo);
 
-        QVERIFY(Config::writeValues({{QStringLiteral("icons.download"), QStringLiteral("true")},
-                                     {QStringLiteral("icons.duckduckgo"), QStringLiteral("true")}}));
-        config = Config::load();
+        QVERIFY(Config::writeValues(path, {{QStringLiteral("icons.download"), QStringLiteral("true")},
+                                           {QStringLiteral("icons.duckduckgo"), QStringLiteral("true")}}));
+        config = Config::load(path);
         QVERIFY(config.siteIcons);
         QVERIFY(config.siteIconsDuckDuckGo);
-        QFile::remove(path);
     }
 
     void translationsInterpolateArguments() {

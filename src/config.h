@@ -37,6 +37,10 @@ QString themesDir();
 
 void ensureConfigExists();
 AppConfig load();
+// The same, from a file of the caller's choosing (the tests', say).
+AppConfig load(const QString &file);
+// The commented config.toml a first start writes.
+void writeDefaultConfig(const QString &path);
 
 // Exposed for testing: resolves the effective UI language from the config
 // value and the environment, in that order of priority.
@@ -54,6 +58,7 @@ std::optional<int> parseLockMinutes(const QString &raw);
 // numbers and booleans); `tomlString` quotes one. Everything else in the
 // file — comments, order, keys omapass knows nothing about — is left alone.
 bool writeValues(const QMap<QString, QString> &values);
+bool writeValues(const QString &path, const QMap<QString, QString> &values);
 
 // The editing behind writeValues, on the file's text. Exposed for testing.
 QString applyTomlEdits(const QString &content, const QMap<QString, QString> &values);

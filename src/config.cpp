@@ -178,8 +178,10 @@ QString applyTomlEdits(const QString &content, const QMap<QString, QString> &val
 }
 
 bool writeValues(const QMap<QString, QString> &values) {
-    const QString path = configDir() + QStringLiteral("/config.toml");
+    return writeValues(configDir() + QStringLiteral("/config.toml"), values);
+}
 
+bool writeValues(const QString &path, const QMap<QString, QString> &values) {
     QString content;
     QFile file(path);
     if (file.open(QIODevice::ReadOnly | QIODevice::Text))
@@ -230,9 +232,11 @@ void ensureConfigExists() {
     QDir().mkpath(themesDir());
 
     const QString path = configDir() + QStringLiteral("/config.toml");
-    if (QFile::exists(path))
-        return;
+    if (!QFile::exists(path))
+        writeDefaultConfig(path);
+}
 
+void writeDefaultConfig(const QString &path) {
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
         return;
@@ -264,10 +268,14 @@ void ensureConfigExists() {
 }
 
 AppConfig load() {
+    return load(configDir() + QStringLiteral("/config.toml"));
+}
+
+AppConfig load(const QString &file) {
     AppConfig config;
     config.searchPath = home();
 
-    const QHash<QString, QString> raw = readFlatToml(configDir() + QStringLiteral("/config.toml"));
+    const QHash<QString, QString> raw = readFlatToml(file);
 
     QString path = raw.value(QStringLiteral("general.path"));
     if (!path.isEmpty()) {

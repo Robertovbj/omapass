@@ -24,6 +24,10 @@ int main(int argc, char **argv) {
         qFatal("cannot create a temporary home for the tests");
     for (const char *variable : {"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"})
         qputenv(variable, QFile::encodeName(home.filePath(QString::fromLatin1(variable))));
+    // HOME too: config.toml and the history live under ~/.config/omapass
+    // whatever XDG says, and a test once removed the real one through it.
+    qputenv("HOME", QFile::encodeName(home.filePath(QStringLiteral("home"))));
+    QDir().mkpath(home.filePath(QStringLiteral("home")));
     QCoreApplication::setOrganizationName(QStringLiteral("omapass-tests"));
     QCoreApplication::setApplicationName(QStringLiteral("omapass-tests"));
 
