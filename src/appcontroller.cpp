@@ -69,7 +69,9 @@ QVariantMap describe(const DbRef &ref) {
 AppController::AppController(const AppConfig &config, QObject *parent)
     : QObject(parent), m_config(config), m_history(config.recencyEnabled),
       m_siteIcons(QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation)
-                  + QStringLiteral("/omapass/icons")) {
+                  + QStringLiteral("/omapass/icons")),
+      m_entryIcons(QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation)
+                   + QStringLiteral("/omapass/icons")) {
     m_siteIcons.setDuckDuckGo(m_config.siteIconsDuckDuckGo);
     // An icon that arrives goes into every row of its site, wherever the
     // list is filtered to.
@@ -78,7 +80,8 @@ AppController::AppController(const AppConfig &config, QObject *parent)
             QVariantMap row = m_allRows.at(index).toMap();
             if (row.value(QStringLiteral("origin")).toString() != origin)
                 continue;
-            applySiteIcon(&row, row.value(QStringLiteral("url")).toString());
+            applyIcon(&row, row.value(QStringLiteral("path")).toString(),
+                      row.value(QStringLiteral("url")).toString());
             m_allRows[index] = row;
             updateShownRow(index);
         }
@@ -254,7 +257,7 @@ AppController::AppController(const AppConfig &config, QObject *parent)
             QVariantMap row = m_allRows.at(index).toMap();
             row.insert(QStringLiteral("username"), meta.username);
             row.insert(QStringLiteral("url"), meta.url);
-            applySiteIcon(&row, meta.url);
+            applyIcon(&row, path, meta.url);
             m_allRows[index] = row;
             m_entryHaystacks[index] = path + QLatin1Char(' ') + row.value(QStringLiteral("typeLabel")).toString()
                                       + QLatin1Char(' ') + meta.username + QLatin1Char(' ') + meta.url;
@@ -845,7 +848,9 @@ void AppController::refreshEntries() {
     if (!m_vault.isNull()) {
         m_vault->list(&m_allEntries, &m_groups);
         m_listedMeta = m_vault->entryMeta();
+        m_entryIcons.load(m_vault.data(), m_allEntries);
     } else {
+        m_entryIcons.load(nullptr, {});
         stopMetaLoad();
         m_lazyMeta.clear();
     }
@@ -895,7 +900,7 @@ void AppController::rebuildRows() {
         row.insert(QStringLiteral("typeLabel"), typeLabel);
         row.insert(QStringLiteral("username"), username);
         row.insert(QStringLiteral("url"), url);
-        applySiteIcon(&row, url);
+        applyIcon(&row, path, url);
 
         m_rowOf.insert(path, m_allRows.size());
         m_allRows.append(row);
@@ -906,7 +911,15 @@ void AppController::rebuildRows() {
     applyEntryFilter();
 }
 
-void AppController::applySiteIcon(QVariantMap *row, const QString &url) {
+void AppController::applyIcon(QVariantMap *row, const QString &path, const QString &url) {
+    // The user's choice wins, and shows whether or not site icons are on.
+    const QString chosen = m_entryIcons.urlFor(path);
+    if (!chosen.isEmpty()) {
+        row->insert(QStringLiteral("origin"), QString());
+        row->insert(QStringLiteral("icon"), chosen);
+        return;
+    }
+
     const QString origin = m_config.siteIcons ? SiteIcons::originOf(url) : QString();
     row->insert(QStringLiteral("origin"), origin);
     if (origin.isEmpty()) {
@@ -1263,6 +1276,10 @@ void AppController::saveEntry(const QVariantMap &fields) {
             // Whatever was read for these two is stale after a save.
             m_lazyMeta.remove(path);
             m_lazyMeta.remove(originalPath);
+            // An icon kept on this computer follows the entry to its new
+            // path; one in the database moved along with it.
+            if (result.ok && isEdit && !m_vault.isNull() && !m_vault->storesIcons())
+                m_entryIcons.moveLocal(m_vault.data(), originalPath, path);
             if (result.ok) {
                 if (!isEdit)
                     m_history.recordUse(path);
@@ -1294,6 +1311,8 @@ void AppController::deleteEntry(const QString &entry) {
         },
         [this, emptyGroup, entry](const TaskResult &result) {
             m_lazyMeta.remove(entry);
+            if (result.ok && !emptyGroup && !m_vault.isNull() && !m_vault->storesIcons())
+                m_entryIcons.setLocal(m_vault.data(), entry, QByteArray());
             if (result.ok) {
                 showMessage(I18n::t(emptyGroup ? QStringLiteral("app.group_deleted")
                                                : QStringLiteral("app.entry_deleted")),
@@ -1304,6 +1323,66 @@ void AppController::deleteEntry(const QString &entry) {
                                     result.error),
                             true);
             }
+        });
+}
+
+void AppController::chooseEntryIcon(const QString &entry, const QString &fileUrl) {
+    const QUrl url(fileUrl);
+    const QByteArray png = EntryIcons::fromFile(url.isLocalFile() ? url.toLocalFile() : fileUrl);
+    if (png.isEmpty()) {
+        showMessage(I18n::t(QStringLiteral("app.icon_unreadable")), true);
+        return;
+    }
+    storeEntryIcon(entry, png);
+}
+
+void AppController::clearEntryIcon(const QString &entry) {
+    if (!m_entryIcons.has(entry)) {
+        showMessage(I18n::t(QStringLiteral("app.no_icon")), true);
+        return;
+    }
+    storeEntryIcon(entry, QByteArray());
+}
+
+void AppController::storeEntryIcon(const QString &entry, const QByteArray &png) {
+    if (!vaultReadyForChanges())
+        return;
+    if (isEmptyGroup(entry)) {
+        showMessage(I18n::t(QStringLiteral("app.empty_group")), true);
+        return;
+    }
+
+    const QString done = I18n::t(png.isEmpty() ? QStringLiteral("app.icon_cleared")
+                                               : QStringLiteral("app.icon_set"),
+                                 QStringLiteral("entry"), entry);
+    if (!m_vault->storesIcons()) {
+        if (m_entryIcons.setLocal(m_vault.data(), entry, png)) {
+            showMessage(done, false);
+            rebuildRows();
+        } else {
+            showMessage(I18n::t(QStringLiteral("app.icon_error"), QStringLiteral("err"),
+                                QDir::toNativeSeparators(QStandardPaths::writableLocation(
+                                    QStandardPaths::GenericDataLocation) + QStringLiteral("/omapass/icons"))),
+                        true);
+        }
+        return;
+    }
+
+    // In the database: written and saved like any edit.
+    const Vault *vault = m_vault.data();
+    runInBackground(
+        [vault, entry, png]() {
+            TaskResult result;
+            result.ok = vault->setEntryIcon(entry, png, &result.error);
+            return result;
+        },
+        [this, done](const TaskResult &result) {
+            if (result.ok)
+                showMessage(done, false);
+            else
+                showMessage(I18n::t(QStringLiteral("app.icon_error"), QStringLiteral("err"), result.error),
+                            true);
+            refreshEntries();
         });
 }
 

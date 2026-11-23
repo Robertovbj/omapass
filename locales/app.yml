@@ -999,3 +999,30 @@ settings.site_icons_privacy:
 settings.site_icons_privacy_duckduckgo:
   pt-BR: "Cada site é consultado pelo próprio ícone, e o DuckDuckGo fica sabendo dos que não tiverem. Os ícones ficam em ~/.cache/omapass/icons."
   en: "Each site is asked for its own icon, and DuckDuckGo is told about those that have none. Icons are kept in ~/.cache/omapass/icons."
+app.icon_set:
+  pt-BR: "Ícone de %{entry} definido"
+  en: "Icon of %{entry} set"
+app.icon_cleared:
+  pt-BR: "Ícone de %{entry} removido"
+  en: "Icon of %{entry} removed"
+app.icon_unreadable:
+  pt-BR: "O arquivo escolhido não é uma imagem que o omapass consiga ler."
+  en: "The chosen file is not an image omapass can read."
+app.icon_error:
+  pt-BR: "Não foi possível salvar o ícone: %{err}"
+  en: "Could not save the icon: %{err}"
+app.no_icon:
+  pt-BR: "A entrada não tem um ícone escolhido."
+  en: "The entry has no chosen icon."
+ui.context_choose_icon:
+  pt-BR: "Escolher ícone…"
+  en: "Choose icon…"
+ui.context_clear_icon:
+  pt-BR: "Remover ícone"
+  en: "Remove icon"
+ui.icon_pick_title:
+  pt-BR: "Escolher o ícone da entrada"
+  en: "Choose the entry's icon"
+ui.icon_filter:
+  pt-BR: "Imagens (*.png *.jpg *.jpeg *.ico *.gif *.bmp *.webp)"
+  en: "Images (*.png *.jpg *.jpeg *.ico *.gif *.bmp *.webp)"

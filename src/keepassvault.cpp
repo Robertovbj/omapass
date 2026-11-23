@@ -215,6 +215,21 @@ bool KeepassVault::renameGroup(const QString &oldGroup, const QString &newName, 
     return finish(m_db->renameGroup(oldGroup, newName), error);
 }
 
+QHash<QString, QByteArray> KeepassVault::entryIcons() const {
+    const QMutexLocker locker(&m_mutex);
+    QString error;
+    if (!refresh(&error))
+        return {};
+    return m_db->entryIcons();
+}
+
+bool KeepassVault::setEntryIcon(const QString &entryPath, const QByteArray &png, QString *error) const {
+    const QMutexLocker locker(&m_mutex);
+    if (!refresh(error))
+        return false;
+    return finish(m_db->setEntryIcon(entryPath, png), error);
+}
+
 bool KeepassVault::removeGroup(const QString &group, QString *error) const {
     const QMutexLocker locker(&m_mutex);
     if (!refresh(error))

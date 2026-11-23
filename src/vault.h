@@ -141,6 +141,15 @@ public:
                              QString *error) const = 0;
     virtual bool removeGroup(const QString &group, QString *error) const = 0;
 
+    // Icons the user chose for entries, kept in the database itself
+    // (KeePass's custom icons). A backend without a place for them keeps
+    // none, and the app stores them on this computer instead.
+    virtual bool storesIcons() const { return false; }
+    // Entry path → PNG, for the entries that have one.
+    virtual QHash<QString, QByteArray> entryIcons() const { return {}; }
+    // Sets one (an empty `png` removes it) and saves the database.
+    virtual bool setEntryIcon(const QString &, const QByteArray &, QString *) const { return false; }
+
     // Something the user should hear about what was opened — entries that
     // could not be read, say — or empty when all is well.
     virtual QString warning() const { return {}; }

@@ -23,6 +23,7 @@ SOURCES += \
     tst_bitwarden.cpp \
     tst_clipboard.cpp \
     tst_config.cpp \
+    tst_entryicons.cpp \
     tst_filter.cpp \
     tst_generator.cpp \
     tst_history.cpp \
@@ -41,6 +42,7 @@ SOURCES += \
     ../src/bwapi.cpp \
     ../src/clipboard.cpp \
     ../src/config.cpp \
+    ../src/entryicons.cpp \
     ../src/filter.cpp \
     ../src/generator.cpp \
     ../src/history.cpp \
@@ -70,6 +72,7 @@ HEADERS += \
     ../src/clipboard.h \
     ../src/bwcrypto.h \
     ../src/config.h \
+    ../src/entryicons.h \
     ../src/filter.h \
     ../src/generator.h \
     ../src/history.h \

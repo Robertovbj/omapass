@@ -248,6 +248,22 @@ int main(int argc, char *argv[]) {
         const SiteIcons *m_icons;
     };
 
+    // `image://entryicon/<key>`: the icons the user chose, from memory.
+    class EntryIconProvider : public QQuickImageProvider {
+    public:
+        explicit EntryIconProvider(const EntryIcons *icons)
+            : QQuickImageProvider(QQuickImageProvider::Image), m_icons(icons) {}
+        QImage requestImage(const QString &id, QSize *size, const QSize &) override {
+            const QImage image = m_icons->image(id);
+            if (size)
+                *size = image.size();
+            return image;
+        }
+
+    private:
+        const EntryIcons *m_icons;
+    };
+
     QQmlApplicationEngine engine;
     QStringList loadProblems;
     QObject::connect(&engine, &QQmlApplicationEngine::warnings, &app,
@@ -267,6 +283,7 @@ int main(int argc, char *argv[]) {
     engine.rootContext()->setContextProperty(QStringLiteral("i18n"), &strings);
     // The engine owns the provider and goes before the controller does.
     engine.addImageProvider(QStringLiteral("siteicon"), new SiteIconProvider(controller.siteIcons()));
+    engine.addImageProvider(QStringLiteral("entryicon"), new EntryIconProvider(controller.entryIcons()));
 
     engine.load(QUrl(QStringLiteral("qrc:/Main.qml")));
     if (engine.rootObjects().isEmpty()) {

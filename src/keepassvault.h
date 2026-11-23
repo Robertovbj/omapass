@@ -34,6 +34,10 @@ public:
     bool renameGroup(const QString &oldGroup, const QString &newName, QString *error) const override;
     bool removeGroup(const QString &group, QString *error) const override;
 
+    bool storesIcons() const override { return true; }
+    QHash<QString, QByteArray> entryIcons() const override;
+    bool setEntryIcon(const QString &entryPath, const QByteArray &png, QString *error) const override;
+
     // The message for a database that would not open.
     static QString openError(KdbxStatus status, const QString &detail);
 

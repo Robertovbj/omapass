@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QByteArray>
+#include <QHash>
 #include <QList>
 #include <QString>
 #include <QStringList>
@@ -75,6 +76,15 @@ public:
     // To the recycle bin when the database has one on, deleted otherwise.
     QString removeEntry(const QString &path);
     QString renameGroup(const QString &oldPath, const QString &newName);
+
+    // Custom icons, as KeePassXC keeps them: PNGs in the database's icon
+    // pool, each entry pointing at one. Every entry that has one, by path.
+    QHash<QString, QByteArray> entryIcons() const;
+    // Points the entry at `png` (an identical icon already in the pool is
+    // reused), or at none when `png` is empty. An icon no longer used by
+    // anything — entry, group or history — leaves the pool. The entry
+    // before the change goes to its history, as with any edit.
+    QString setEntryIcon(const QString &path, const QByteArray &png);
     QString removeGroup(const QString &path);
 
 private:

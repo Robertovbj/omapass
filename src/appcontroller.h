@@ -13,6 +13,7 @@
 
 #include "bitwardenlogin.h"
 #include "config.h"
+#include "entryicons.h"
 #include "entryrowsmodel.h"
 #include "generator.h"
 #include "history.h"
@@ -124,6 +125,7 @@ public:
     QObject *entryRows() { return &m_rowsModel; }
     // For the image provider that hands the list its site icons.
     SiteIcons *siteIcons() { return &m_siteIcons; }
+    EntryIcons *entryIcons() { return &m_entryIcons; }
     QString query() const { return m_query; }
     // The path of the row at `index` in the shown list, empty out of range.
     Q_INVOKABLE QString entryPathAt(int index) const { return m_rowsModel.pathAt(index); }
@@ -206,6 +208,11 @@ public:
     Q_INVOKABLE QVariantMap entryFields(const QString &entry);
     Q_INVOKABLE void saveEntry(const QVariantMap &fields);
     Q_INVOKABLE void deleteEntry(const QString &entry);
+    // An icon of the user's choosing for the entry, from an image file (a
+    // file:// URL, as the file dialog gives it), or none. In the database for
+    // KeePass, on this computer for the rest.
+    Q_INVOKABLE void chooseEntryIcon(const QString &entry, const QString &fileUrl);
+    Q_INVOKABLE void clearEntryIcon(const QString &entry);
     Q_INVOKABLE void renameGroup(const QString &entry, const QString &newName);
     Q_INVOKABLE QStringList matchingGroups(const QString &prefix) const;
 
@@ -255,9 +262,11 @@ private:
     // Whether the open vault can take a change right now; says why not on the
     // status line when it cannot.
     bool vaultReadyForChanges();
-    // Sets a row's `origin` and `icon` from its URL, asking for the icon
-    // when it is not cached yet. Nothing when site icons are off.
-    void applySiteIcon(QVariantMap *row, const QString &url);
+    // Sets a row's `icon`: the one the user chose, or else its site's
+    // (`origin` set, and the icon asked for when it is not cached yet, when
+    // site icons are on).
+    void applyIcon(QVariantMap *row, const QString &path, const QString &url);
+    void storeEntryIcon(const QString &entry, const QByteArray &png);
     // A row of m_allRows changed: the shown copy, if it is shown, follows.
     void updateShownRow(int index);
     // Puts a one-time code on the clipboard, cleared like a password.
@@ -381,6 +390,7 @@ private:
     QHash<QString, int> m_rowOf;      // entry path → position in m_allEntries
     EntryRowsModel m_rowsModel;
     SiteIcons m_siteIcons;
+    EntryIcons m_entryIcons;
 
     // Login and URL read one entry at a time for a backend that cannot list
     // them: filled in the background and kept while the vault stays open.

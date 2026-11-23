@@ -264,6 +264,50 @@ private slots:
         QVERIFY(read.otp.isEmpty());
     }
 
+    // Custom icons as KeePassXC keeps them: a pool in Meta, entries pointing
+    // into it by UUID.
+    void kdbxKeepsCustomIcons() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("t.kdbx"));
+        const Secret password(QStringLiteral("senha"));
+
+        auto db = KdbxDatabase::create(password, QStringLiteral("Teste"));
+        QVERIFY(db);
+        KdbxEntry entry;
+        entry.password = Secret(QStringLiteral("p"));
+        entry.title = QStringLiteral("A");
+        QVERIFY(db->addEntry(QString(), entry).isEmpty());
+        entry.title = QStringLiteral("B");
+        QVERIFY(db->addEntry(QStringLiteral("G"), entry).isEmpty());
+        QVERIFY(db->entryIcons().isEmpty());
+
+        const QByteArray red("png-vermelho"), blue("png-azul");
+        QVERIFY(db->setEntryIcon(QStringLiteral("A"), red).isEmpty());
+        QVERIFY(db->setEntryIcon(QStringLiteral("G/B"), red).isEmpty());
+        QVERIFY(db->save(path).isEmpty());
+
+        KdbxStatus status = KdbxStatus::Corrupt;
+        auto reopened = KdbxDatabase::open(path, password, &status);
+        QVERIFY(reopened);
+        QHash<QString, QByteArray> icons = reopened->entryIcons();
+        QCOMPARE(icons.value(QStringLiteral("A")), red);
+        QCOMPARE(icons.value(QStringLiteral("G/B")), red);
+
+        // The icon is still B's, and the entry's other fields are untouched.
+        QVERIFY(reopened->setEntryIcon(QStringLiteral("A"), blue).isEmpty());
+        icons = reopened->entryIcons();
+        QCOMPARE(icons.value(QStringLiteral("A")), blue);
+        QCOMPARE(icons.value(QStringLiteral("G/B")), red);
+        KdbxEntry read;
+        QVERIFY(reopened->entry(QStringLiteral("A"), &read));
+        QCOMPARE(read.password.toString(), QStringLiteral("p"));
+
+        QVERIFY(reopened->setEntryIcon(QStringLiteral("G/B"), QByteArray()).isEmpty());
+        QVERIFY(!reopened->entryIcons().contains(QStringLiteral("G/B")));
+        QVERIFY(!reopened->setEntryIcon(QStringLiteral("nao-existe"), red).isEmpty());
+    }
+
     void kdbxLegacyFormatRoundTrips() {
         QTemporaryDir dir;
         QVERIFY(dir.isValid());

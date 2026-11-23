@@ -21,6 +21,7 @@
 #include <zlib.h>
 
 #include <cstring>
+#include <functional>
 #include <vector>
 
 #include "i18n.h"
@@ -523,6 +524,10 @@ public:
     void touch(XNode &node, const QString &field) const;
     void recordDeleted(const QString &uuid);
     void fill(XNode &entry, const KdbxEntry &data) const;
+    // The entry as it is now, into its own history, trimmed to the
+    // database's limit.
+    void pushHistory(XNode &entry) const;
+    bool iconInUse(const QString &uuid) const;
     void walk(const XNode &group, const QString &prefix, QStringList *entries, QStringList *groups,
               QList<QPair<QString, KdbxEntry>> *all, const XNode *skip = nullptr) const;
     static KdbxEntry read(const XNode &entry);
@@ -1519,26 +1524,8 @@ QString KdbxDatabase::editEntry(const QString &oldPath, const QString &group, co
     const bool changed = before.title != data.title || before.username != data.username
         || before.password.bytes() != data.password.bytes() || before.url != data.url
         || before.notes != data.notes || before.otp.bytes() != data.otp.bytes();
-    if (changed) {
-        std::unique_ptr<XNode> snapshot = entry->clone();
-        snapshot->detach(snapshot->child(QStringLiteral("History")));
-        XNode *history = entry->child(QStringLiteral("History"));
-        if (!history)
-            history = entry->add(QStringLiteral("History"));
-        history->children.push_back(std::move(snapshot));
-
-        int limit = 10;
-        if (const XNode *meta = d->meta()) {
-            bool ok = false;
-            const int configured = meta->childText(QStringLiteral("HistoryMaxItems")).toInt(&ok);
-            if (ok)
-                limit = configured;
-        }
-        if (limit >= 0) {
-            while (int(history->children.size()) > limit)
-                history->children.erase(history->children.begin());
-        }
-    }
+    if (changed)
+        d->pushHistory(*entry);
 
     d->fill(*entry, data);
     if (changed)
@@ -1548,6 +1535,135 @@ QString KdbxDatabase::editEntry(const QString &oldPath, const QString &group, co
         std::unique_ptr<XNode> moved = parent->detach(entry);
         destination->children.push_back(std::move(moved));
         d->touch(*destination->children.back(), QStringLiteral("LocationChanged"));
+    }
+    return QString();
+}
+
+void KdbxDatabase::Impl::pushHistory(XNode &entry) const {
+    std::unique_ptr<XNode> snapshot = entry.clone();
+    snapshot->detach(snapshot->child(QStringLiteral("History")));
+    XNode *history = entry.child(QStringLiteral("History"));
+    if (!history)
+        history = entry.add(QStringLiteral("History"));
+    history->children.push_back(std::move(snapshot));
+
+    int limit = 10;
+    if (const XNode *metaNode = meta()) {
+        bool ok = false;
+        const int configured = metaNode->childText(QStringLiteral("HistoryMaxItems")).toInt(&ok);
+        if (ok)
+            limit = configured;
+    }
+    if (limit >= 0) {
+        while (int(history->children.size()) > limit)
+            history->children.erase(history->children.begin());
+    }
+}
+
+bool KdbxDatabase::Impl::iconInUse(const QString &uuid) const {
+    // Anywhere in the tree: entries, groups and the entries in histories.
+    const std::function<bool(const XNode &)> uses = [&](const XNode &node) {
+        if (node.name == QLatin1String("CustomIconUUID") && node.text == uuid)
+            return true;
+        for (const auto &child : node.children) {
+            if (uses(*child))
+                return true;
+        }
+        return false;
+    };
+    const XNode *root = xml ? xml->child(QStringLiteral("Root")) : nullptr;
+    return root && uses(*root);
+}
+
+QHash<QString, QByteArray> KdbxDatabase::entryIcons() const {
+    QHash<QString, QByteArray> pool;
+    if (const XNode *meta = d->meta()) {
+        if (const XNode *icons = meta->child(QStringLiteral("CustomIcons"))) {
+            for (const XNode *icon : icons->childrenNamed(QStringLiteral("Icon")))
+                pool.insert(icon->childText(QStringLiteral("UUID")),
+                            QByteArray::fromBase64(icon->childText(QStringLiteral("Data")).toLatin1()));
+        }
+    }
+
+    QHash<QString, QByteArray> out;
+    if (pool.isEmpty())
+        return out;
+    const std::function<void(const XNode &, const QString &)> walkIcons =
+        [&](const XNode &group, const QString &prefix) {
+        for (const XNode *entry : group.childrenNamed(QStringLiteral("Entry"))) {
+            const QString uuid = entry->childText(QStringLiteral("CustomIconUUID"));
+            if (!uuid.isEmpty() && pool.contains(uuid))
+                out.insert(prefix + Impl::stringOf(*entry, QStringLiteral("Title")), pool.value(uuid));
+        }
+        for (const XNode *sub : group.childrenNamed(QStringLiteral("Group")))
+            walkIcons(*sub, prefix + sub->childText(QStringLiteral("Name")) + QLatin1Char('/'));
+    };
+    if (const XNode *root = d->rootGroup())
+        walkIcons(*root, QString());
+    return out;
+}
+
+QString KdbxDatabase::setEntryIcon(const QString &path, const QByteArray &png) {
+    XNode *entry = d->findEntry(path);
+    if (!entry)
+        return I18n::t(QStringLiteral("keepass.entry_not_found"), QStringLiteral("entry"), path);
+    XNode *meta = d->meta();
+    if (!meta)
+        return I18n::t(QStringLiteral("keepass.corrupt"));
+
+    const QString before = entry->childText(QStringLiteral("CustomIconUUID"));
+    QString uuid;
+    if (!png.isEmpty()) {
+        XNode *icons = meta->child(QStringLiteral("CustomIcons"));
+        if (!icons)
+            icons = meta->add(QStringLiteral("CustomIcons"));
+        const QString data = QString::fromLatin1(png.toBase64());
+        for (const XNode *icon : icons->childrenNamed(QStringLiteral("Icon"))) {
+            if (icon->childText(QStringLiteral("Data")) == data) {
+                uuid = icon->childText(QStringLiteral("UUID"));
+                break;
+            }
+        }
+        if (uuid.isEmpty()) {
+            uuid = newUuid();
+            XNode *icon = icons->add(QStringLiteral("Icon"));
+            icon->add(QStringLiteral("UUID"), uuid);
+            icon->add(QStringLiteral("Data"), data);
+        }
+    }
+    if (uuid == before)
+        return QString();
+
+    d->pushHistory(*entry);
+    if (uuid.isEmpty()) {
+        entry->detach(entry->child(QStringLiteral("CustomIconUUID")));
+    } else if (XNode *node = entry->child(QStringLiteral("CustomIconUUID"))) {
+        node->text = uuid;
+    } else {
+        // Where the KeePass schema has it: right after IconID.
+        auto created = std::make_unique<XNode>();
+        created->name = QStringLiteral("CustomIconUUID");
+        created->text = uuid;
+        size_t at = entry->children.size();
+        for (size_t i = 0; i < entry->children.size(); ++i) {
+            if (entry->children[i]->name == QLatin1String("IconID")) {
+                at = i + 1;
+                break;
+            }
+        }
+        entry->children.insert(entry->children.begin() + qsizetype(at), std::move(created));
+    }
+    d->touch(*entry, QStringLiteral("LastModificationTime"));
+
+    if (!before.isEmpty() && !d->iconInUse(before)) {
+        if (XNode *icons = meta->child(QStringLiteral("CustomIcons"))) {
+            for (XNode *icon : icons->childrenNamed(QStringLiteral("Icon"))) {
+                if (icon->childText(QStringLiteral("UUID")) == before) {
+                    icons->detach(icon);
+                    break;
+                }
+            }
+        }
     }
     return QString();
 }

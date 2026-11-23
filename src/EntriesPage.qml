@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Dialogs
 
 // Second stage: the entries of the open vault, with everything that can be
 // done to them.
@@ -32,6 +33,24 @@ FocusScope {
         page.selectedEntry = entry;
         infoModal.details = details;
         page.mode = "info";
+    }
+
+    // The file dialog answers later; the entry is the one selected now.
+    function chooseIcon() {
+        const entry = currentEntry();
+        if (entry.length === 0) {
+            controller.showMessage(i18n.t("app.no_entry_selected"), true);
+            return;
+        }
+        page.selectedEntry = entry;
+        iconDialog.open();
+    }
+
+    FileDialog {
+        id: iconDialog
+        title: i18n.t("ui.icon_pick_title")
+        nameFilters: [i18n.t("ui.icon_filter"), i18n.t("settings.all_files")]
+        onAccepted: controller.chooseEntryIcon(page.selectedEntry, selectedFile)
     }
 
     function openAddForm() {
@@ -155,9 +174,10 @@ FocusScope {
         // pass entries have no login or URL of their own to offer. The first
         // group acts on the selected entry; the second is not about it.
         readonly property var groups: controller.passBackend
-            ? [["copyPassword", "copyOtp", "edit", "delete", "info"], ["add", "generate"]]
+            ? [["copyPassword", "copyOtp", "edit", "delete", "info"], ["chooseIcon", "clearIcon"],
+               ["add", "generate"]]
             : [["copyPassword", "copyUsername", "copyUrl", "openUrl", "copyOtp", "edit", "delete",
-                "info"],
+                "info"], ["chooseIcon", "clearIcon"],
                ["add", "generate"]]
         readonly property var actions: [].concat.apply([], groups)
         readonly property var labels: ({
@@ -166,6 +186,8 @@ FocusScope {
             "copyUrl": i18n.t("ui.context_copy_url"),
             "openUrl": i18n.t("ui.context_open_url"),
             "copyOtp": i18n.t("ui.context_copy_otp"),
+            "chooseIcon": i18n.t("ui.context_choose_icon"),
+            "clearIcon": i18n.t("ui.context_clear_icon"),
             "info": i18n.t("ui.context_info"),
             "add": i18n.t("ui.context_add_new"),
             "edit": i18n.t("ui.context_edit"),
@@ -196,6 +218,10 @@ FocusScope {
                 page.withEntry(controller.openUrl);
             else if (action === "copyOtp")
                 page.withEntry(controller.copyOtp);
+            else if (action === "chooseIcon")
+                page.chooseIcon();
+            else if (action === "clearIcon")
+                page.withEntry(controller.clearEntryIcon);
             else if (action === "info")
                 page.openInfo();
             else if (action === "add")
