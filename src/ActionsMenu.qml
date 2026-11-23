@@ -38,20 +38,16 @@ Popup {
     width: Math.min(Math.max(Math.round(200 * s), optionsWidth + (itemMargin + padding) * 2),
                     parent ? parent.width - Math.round(40 * s) : Math.round(420 * s))
     padding: Math.round(6 * s)
+    implicitHeight: menuItems.implicitHeight + topPadding + bottomPadding
+    height: parent ? Math.min(implicitHeight, parent.height) : implicitHeight
     modal: true
     focus: true
-    closePolicy: Popup.NoAutoClose
+    closePolicy: Popup.CloseOnPressOutside
 
     x: anchorX >= 0 ? Math.min(anchorX, parent.width - width) : (parent.width - width) / 2
     y: anchorY >= 0 ? Math.min(anchorY, parent.height - height) : (parent.height - height) / 2
 
-    Overlay.modal: Rectangle {
-        color: "transparent"
-
-        TapHandler {
-            onTapped: root.close()
-        }
-    }
+    onActiveFocusChanged: if (opened && !activeFocus) close()
 
     // Hype's menus: the panel colour, a border, the window's corners.
     background: Rectangle {
@@ -61,8 +57,28 @@ Popup {
         radius: theme.radius
     }
 
-    contentItem: Column {
-        spacing: Math.round(2 * root.s)
+    onAboutToShow: menuView.contentY = 0
+
+    function moveSelection(step) {
+        selected = (selected + step + options.length) % options.length;
+        const item = menuRows.itemAt(selected);
+        if (!item)
+            return;
+        if (item.y < menuView.contentY)
+            menuView.contentY = item.y;
+        else if (item.y + item.height > menuView.contentY + menuView.height)
+            menuView.contentY = item.y + item.height - menuView.height;
+    }
+
+    contentItem: Flickable {
+        id: menuView
+        clip: true
+        contentWidth: width
+        contentHeight: menuItems.implicitHeight
+        boundsBehavior: Flickable.StopAtBounds
+        flickableDirection: Flickable.VerticalFlick
+
+        ScrollBar.vertical: AppScrollBar { view: menuView }
 
         Item {
             width: 0
@@ -76,11 +92,11 @@ Popup {
                     break;
                 case Qt.Key_Down:
                 case Qt.Key_J:
-                    root.selected = (root.selected + 1) % root.options.length;
+                    root.moveSelection(1);
                     break;
                 case Qt.Key_Up:
                 case Qt.Key_K:
-                    root.selected = (root.selected + root.options.length - 1) % root.options.length;
+                    root.moveSelection(-1);
                     break;
                 case Qt.Key_Return:
                 case Qt.Key_Enter:
@@ -93,54 +109,60 @@ Popup {
             }
         }
 
-        Repeater {
-            model: root.options
+        Column {
+            id: menuItems
+            spacing: Math.round(2 * root.s)
 
-            Column {
-                id: slot
-                required property int index
-                required property var modelData
-                readonly property bool startsGroup: root.groupStarts.indexOf(index) >= 0
+            Repeater {
+                id: menuRows
+                model: root.options
 
-                spacing: Math.round(2 * root.s)
+                Column {
+                    id: slot
+                    required property int index
+                    required property var modelData
+                    readonly property bool startsGroup: root.groupStarts.indexOf(index) >= 0
 
-                Item {
-                    visible: slot.startsGroup
-                    width: root.availableWidth
-                    height: Math.round(9 * root.s)
+                    spacing: Math.round(2 * root.s)
+
+                    Item {
+                        visible: slot.startsGroup
+                        width: root.availableWidth
+                        height: Math.round(9 * root.s)
+
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width
+                            height: 1
+                            color: theme.border
+                        }
+                    }
 
                     Rectangle {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width
-                        height: 1
-                        color: theme.border
-                    }
-                }
+                        width: root.availableWidth
+                        height: Math.round(32 * root.s)
+                        radius: Math.min(4, theme.radius)
+                        color: root.selected === slot.index ? theme.hover : "transparent"
 
-                Rectangle {
-                    width: root.availableWidth
-                    height: Math.round(32 * root.s)
-                    radius: Math.min(4, theme.radius)
-                    color: root.selected === slot.index ? theme.hover : "transparent"
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.leftMargin: root.itemMargin
+                            anchors.rightMargin: root.itemMargin
+                            text: slot.modelData
+                            color: theme.foreground
+                            elide: Text.ElideRight
+                            font.pixelSize: root.fontSize
+                        }
 
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.leftMargin: root.itemMargin
-                        anchors.rightMargin: root.itemMargin
-                        text: slot.modelData
-                        color: theme.foreground
-                        elide: Text.ElideRight
-                        font.pixelSize: root.fontSize
-                    }
+                        HoverHandler {
+                            onHoveredChanged: if (hovered) root.selected = slot.index
+                        }
 
-                    HoverHandler {
-                        onHoveredChanged: if (hovered) root.selected = slot.index
-                    }
-
-                    TapHandler {
-                        onTapped: root.chosen(slot.index)
+                        TapHandler {
+                            onTapped: root.chosen(slot.index)
+                        }
                     }
                 }
             }

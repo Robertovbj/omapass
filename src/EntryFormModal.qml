@@ -7,6 +7,9 @@ import QtQuick.Controls
 Modal {
     id: root
 
+    property bool sshSupported: false
+    readonly property bool sshEntry: !isEdit && sshSupported && kinds.currentIndex === 1
+    property bool resumeDraft: false
     property bool isEdit: false
     property bool passBackend: false
     property var fields: ({})
@@ -18,11 +21,22 @@ Modal {
     acceptText: i18n.t("common.save")
     cardWidth: Math.round(560 * s)
 
+    acceptEnabled: !sshEntry || privateKey.text.trim().length > 0
+
     onAcceptRequested: root.submit()
 
     capturesKeys: false
 
+    onClosed: privateKey.clear()
+
     onShown: {
+        if (resumeDraft) {
+            resumeDraft = false;
+            passwordField.field.forceActiveFocus();
+            return;
+        }
+        kinds.currentIndex = 0;
+        privateKey.text = "";
         groupField.text = root.fields.group || "";
         titleField.text = root.fields.title || "";
         usernameField.text = root.fields.username || "";
@@ -61,20 +75,23 @@ Modal {
     }
 
     function submit() {
+        if (!root.acceptEnabled)
+            return;
         root.submitted({
+            "type": root.sshEntry ? "ssh" : "login",
             "isEdit": root.isEdit,
             "originalPath": root.fields.originalPath || "",
             "group": groupField.text,
             "title": titleField.text,
-            "username": usernameField.text,
-            "password": passwordField.text,
-            "url": urlField.text,
-            "extraUrls": extraUrlsField.text,
+            "username": root.sshEntry ? "" : usernameField.text,
+            "password": root.sshEntry ? privateKey.text : passwordField.text,
+            "url": root.sshEntry ? "" : urlField.text,
+            "extraUrls": root.sshEntry ? "" : extraUrlsField.text,
             "notes": notesArea.text,
             "extra": root.fields.extra || [],
             // The controller keeps the original as it was when the field was
             // not touched, and checks and normalises it when it was.
-            "otp": otpField.text,
+            "otp": root.sshEntry ? "" : otpField.text,
             "originalOtp": root.fields.otp || ""
         });
     }
@@ -82,12 +99,23 @@ Modal {
     // The fields the pass backend does not show are hidden, which is how
     // moveFocus knows to skip them.
     readonly property var tabOrder: [
-        groupField, titleField, usernameField, passwordField, revealPassword,
+        kinds, groupField, titleField, privateKey, usernameField, passwordField, revealPassword,
         otpField, urlField, extraUrlsField, notesArea
     ]
 
     function focusNext(from) { root.moveFocus(root.tabOrder, from, 1); }
     function focusPrevious(from) { root.moveFocus(root.tabOrder, from, -1); }
+
+    Segmented {
+        id: kinds
+        objectName: "entryKinds"
+        visible: !root.isEdit && root.sshSupported
+        options: [i18n.t("common.password_label"), i18n.t("ui.type_ssh")]
+        onNextRequested: root.focusNext(kinds)
+        onPreviousRequested: root.focusPrevious(kinds)
+        onSubmitted: root.submit()
+        onCancelled: root.dismissed()
+    }
 
     Field {
         id: groupField
@@ -123,7 +151,7 @@ Modal {
     Field {
         id: usernameField
         width: parent.width
-        visible: !root.passBackend
+        visible: !root.passBackend && !root.sshEntry
         label: i18n.t("common.username_label")
 
         onCancelled: root.dismissed()
@@ -134,6 +162,7 @@ Modal {
 
     Field {
         id: passwordField
+        visible: !root.sshEntry
         width: parent.width
         label: i18n.t("common.password_label")
         echoMode: revealPassword.checked ? TextInput.Normal : TextInput.Password
@@ -148,6 +177,7 @@ Modal {
 
     CheckOption {
         id: revealPassword
+        visible: passwordField.visible
         text: i18n.t("ui.show_password")
 
         onSubmitted: root.submit()
@@ -161,6 +191,7 @@ Modal {
     // code, both go in as they are.
     Field {
         id: otpField
+        visible: !root.sshEntry
         objectName: "otpField"
         width: parent.width
         label: i18n.t("common.otp_label")
@@ -175,7 +206,7 @@ Modal {
     Field {
         id: urlField
         width: parent.width
-        visible: !root.passBackend
+        visible: !root.passBackend && !root.sshEntry
         label: i18n.t("common.url_label")
 
         onCancelled: root.dismissed()
@@ -190,7 +221,7 @@ Modal {
         id: extraUrlsField
         objectName: "extraUrlsField"
         width: parent.width
-        visible: !root.passBackend
+        visible: !root.passBackend && !root.sshEntry
         label: i18n.t("common.extra_urls_label")
         placeholderText: "https://exemplo.com https://login.exemplo.com"
 
@@ -198,6 +229,24 @@ Modal {
         onSubmitted: root.submit()
         onNextRequested: root.focusNext(extraUrlsField)
         onPreviousRequested: root.focusPrevious(extraUrlsField)
+    }
+
+    ScrollView {
+        visible: root.sshEntry
+        width: parent.width
+        height: Math.round(110 * root.s)
+        contentWidth: availableWidth
+        TextArea {
+            id: privateKey
+            objectName: "sshPrivateKey"
+            placeholderText: i18n.t("ssh.private_key")
+            wrapMode: TextArea.WrapAnywhere
+            font.family: systemTheme.monoFamily
+            color: theme.foreground
+            Keys.onEscapePressed: root.dismissed()
+            Keys.onTabPressed: root.focusNext(privateKey)
+            Keys.onBacktabPressed: root.focusPrevious(privateKey)
+        }
     }
 
     Column {
@@ -212,6 +261,8 @@ Modal {
         }
 
         ScrollView {
+            objectName: "formNotesBox"
+            contentWidth: availableWidth
             width: parent.width
             height: Math.round(90 * root.s)
             Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds

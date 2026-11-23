@@ -55,10 +55,6 @@ Item {
 
         ScrollBar.vertical: AppScrollBar { view: list }
 
-        SmoothWheel {
-            view: list
-        }
-
         delegate: Rectangle {
             required property int index
             required property var modelData

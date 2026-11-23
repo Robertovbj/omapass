@@ -205,12 +205,6 @@ Popup {
             }
         }
 
-        // The wheel and the touchpad move the body as they move Omajim's
-        // lists: a notch goes a good way, and further when turned fast.
-        SmoothWheel {
-            view: bodyArea.contentItem
-        }
-
         Column {
             id: footer
             anchors.bottom: parent.bottom

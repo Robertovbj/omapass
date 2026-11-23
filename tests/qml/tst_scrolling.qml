@@ -73,6 +73,47 @@ TestCase {
         verify(list.contentY <= end + 0.5, "não passa do fim");
     }
 
+    SignalSpy { id: submitted; target: form; signalName: "submitted" }
+
+    function test_new_entry_tabs_submit_only_the_selected_type() {
+        form.sshSupported = true;
+        form.open();
+        tryCompare(form, "opened", true);
+        const kinds = findChild(form, "entryKinds");
+        compare(kinds.options.length, 2);
+        const otp = findChild(form, "otpField");
+        otp.text = "JBSWY3DPEHPK3PXP";
+        submitted.clear();
+        form.submit();
+        compare(submitted.signalArguments[0][0].type, "login");
+        compare(submitted.signalArguments[0][0].otp, otp.text);
+        kinds.currentIndex = 1;
+        findChild(form, "sshPrivateKey").text = "private key";
+        form.submit();
+        const payload = submitted.signalArguments[1][0];
+        compare(payload.type, "ssh");
+        compare(payload.password, "private key");
+        compare(payload.otp, "");
+        form.sshSupported = false;
+    }
+
+    function test_wrapped_notes_scroll_inside_the_form() {
+        form.fields = { notes: "texto longo ".repeat(500) };
+        form.open();
+        tryCompare(form, "opened", true);
+        const box = findChild(form, "formNotesBox");
+        const body = findChild(form, "modalBody").contentItem;
+        tryVerify(function() { return box.contentItem.contentHeight > box.height; });
+        tryVerify(function() { return body.contentHeight > body.height + 15; });
+        body.contentY = body.contentHeight - body.height - 15;
+        tryVerify(function() { return body.contains(body.mapFromItem(box, box.width / 2, box.height / 2)); });
+        const before = body.contentY;
+        mouseWheel(box, box.width / 2, box.height / 2, 0, -120);
+        tryVerify(function() { return box.contentItem.contentY > 0; });
+        compare(body.contentY, before);
+        form.fields = {};
+    }
+
     function test_a_sheet_stops_at_the_end_of_its_body() {
         form.visible = true;
         tryVerify(function() { return form.opened; }, 3000);

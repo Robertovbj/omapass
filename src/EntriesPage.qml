@@ -80,8 +80,7 @@ FocusScope {
 
     // Editing an ordinary entry opens the form; editing an empty group opens
     // the rename sheet instead.
-    function editSelected() {
-        const entry = currentEntry();
+    function editEntry(entry) {
         if (entry.length === 0) {
             controller.showMessage(i18n.t("app.no_entry_selected"), true);
             return;
@@ -129,6 +128,7 @@ FocusScope {
 
     ListPane {
         id: pane
+        objectName: "entriesPane"
         anchors.fill: parent
         focus: page.mode === "list" && !page.menuOpen
         acceptsKeys: page.mode === "list" && !page.menuOpen
@@ -175,7 +175,7 @@ FocusScope {
         }
         onDetailsRequested: page.openInfo()
         onAddRequested: page.openAddForm()
-        onEditRequested: page.editSelected()
+        onEditRequested: page.editEntry(page.currentEntry())
         onDeleteRequested: page.confirmDelete()
         onGenerateRequested: page.mode = "generate"
         onPinToggleRequested: page.togglePin()
@@ -192,23 +192,36 @@ FocusScope {
             actionsMenu.anchorX = menuX;
             actionsMenu.anchorY = menuY;
             actionsMenu.selected = 0;
+            actionsMenu.entry = page.currentEntry();
+            actionsMenu.fields = controller.entryMenuFields(actionsMenu.entry);
+            actionsMenu.sshOptions = controller.sshKeyOptions(actionsMenu.entry);
             actionsMenu.open();
         }
     }
 
     ActionsMenu {
         id: actionsMenu
+        objectName: "entryActions"
         parent: page
-        // Built rather than fixed so the handler goes by the action it
-        // picked, not by an index that shifts.
-        // pass entries have no login or URL of their own to offer. The first
-        // group acts on the selected entry; the second is not about it.
-        readonly property var groups: controller.passBackend
-            ? [["copyPassword", "copyOtp", "edit", "delete", "info"], ["chooseIcon", "clearIcon"],
-               ["add", "generate"]]
-            : [["copyPassword", "copyUsername", "copyUrl", "openUrl", "copyOtp", "edit", "delete",
-                "info"], ["chooseIcon", "clearIcon"],
-               ["add", "generate"]]
+        property string entry: ""
+        property var fields: ({})
+        property var sshOptions: ({})
+        readonly property var groups: {
+            const entryActions = [];
+            if (fields.hasPassword)
+                entryActions.push("copyPassword");
+            if (fields.hasUsername)
+                entryActions.push("copyUsername");
+            if (fields.hasUrl)
+                entryActions.push("copyUrl", "openUrl");
+            if (fields.hasOtp)
+                entryActions.push("copyOtp");
+            const result = [entryActions.concat(["edit", "delete", "info"])];
+            if (Object.keys(sshOptions).length > 0)
+                result.push(["addSsh", "removeSsh", "configureSsh"]);
+            result.push(["chooseIcon", "clearIcon"]);
+            return result;
+        }
         readonly property var actions: [].concat.apply([], groups)
         readonly property var labels: ({
             "copyPassword": i18n.t("ui.context_copy_password"),
@@ -219,10 +232,11 @@ FocusScope {
             "chooseIcon": i18n.t("ui.context_choose_icon"),
             "clearIcon": i18n.t("ui.context_clear_icon"),
             "info": i18n.t("ui.context_info"),
-            "add": i18n.t("ui.context_add_new"),
             "edit": i18n.t("ui.context_edit"),
             "delete": i18n.t("ui.context_delete"),
-            "generate": i18n.t("generator.context_generate")
+            "addSsh": i18n.t("ssh.add"),
+            "removeSsh": i18n.t("ssh.remove"),
+            "configureSsh": i18n.t("ssh.options")
         })
         options: actions.map(function(action) { return labels[action]; })
         groupStarts: {
@@ -239,31 +253,96 @@ FocusScope {
             close();
             const action = actions[index];
             if (action === "copyPassword")
-                page.withEntry(controller.copyPassword);
+                controller.copyPassword(entry);
             else if (action === "copyUsername")
-                page.withEntry(controller.copyUsername);
+                controller.copyUsername(entry);
             else if (action === "copyUrl")
-                page.withEntry(controller.copyUrl);
+                controller.copyUrl(entry);
             else if (action === "openUrl")
-                page.withEntry(controller.openUrl);
+                controller.openUrl(entry);
             else if (action === "copyOtp")
-                page.withEntry(controller.copyOtp);
+                controller.copyOtp(entry);
+            else if (action === "addSsh")
+                controller.addSshKey(entry);
+            else if (action === "removeSsh")
+                controller.removeSshKey(entry);
+            else if (action === "configureSsh") {
+                page.selectedEntry = entry;
+                sshModal.options = sshOptions;
+                page.mode = "ssh";
+            }
             else if (action === "chooseIcon")
                 page.chooseIcon();
             else if (action === "clearIcon")
                 page.withEntry(controller.clearEntryIcon);
             else if (action === "info")
                 page.openInfo();
-            else if (action === "add")
-                page.openAddForm();
             else if (action === "edit")
-                page.editSelected();
+                page.editEntry(entry);
             else if (action === "delete")
                 page.confirmDelete();
-            else
-                page.mode = "generate";
         }
         onClosed: pane.claimKeyboard()
+    }
+
+    Modal {
+        id: sshModal
+        visible: page.mode === "ssh"
+        capturesKeys: false
+        heading: i18n.t("ssh.options")
+        subtitle: page.selectedEntry
+        acceptText: i18n.t("common.save")
+        acceptEnabled: lifetime.field.acceptableInput && Number(lifetime.text) <= 2147483647
+        status: controller.hasMessage && controller.messageIsError ? controller.message : ""
+        statusIsError: true
+
+        property var options: ({})
+        readonly property var tabOrder: [onUnlock, confirmation, lifetime]
+
+        function save() {
+            if (acceptEnabled && controller.saveSshKeyOptions(page.selectedEntry, onUnlock.checked,
+                                                              confirmation.checked, Number(lifetime.text)))
+                page.mode = "list";
+        }
+
+        onShown: {
+            onUnlock.checked = options.addOnUnlock;
+            confirmation.checked = options.confirm;
+            lifetime.text = String(options.lifetimeSeconds);
+            onUnlock.forceActiveFocus();
+        }
+        onAcceptRequested: save()
+        onDismissed: page.mode = "list"
+
+        CheckOption {
+            id: onUnlock
+            text: i18n.t("ssh.on_unlock")
+            onSubmitted: sshModal.save()
+            onCancelled: sshModal.dismissed()
+            onNextRequested: sshModal.moveFocus(sshModal.tabOrder, onUnlock, 1)
+            onPreviousRequested: sshModal.moveFocus(sshModal.tabOrder, onUnlock, -1)
+        }
+
+        CheckOption {
+            id: confirmation
+            text: i18n.t("ssh.confirm")
+            onSubmitted: sshModal.save()
+            onCancelled: sshModal.dismissed()
+            onNextRequested: sshModal.moveFocus(sshModal.tabOrder, confirmation, 1)
+            onPreviousRequested: sshModal.moveFocus(sshModal.tabOrder, confirmation, -1)
+        }
+
+        Field {
+            id: lifetime
+            width: parent.width
+            label: i18n.t("ssh.lifetime")
+            field.inputMethodHints: Qt.ImhDigitsOnly
+            field.validator: RegularExpressionValidator { regularExpression: /[0-9]+/ }
+            onSubmitted: sshModal.save()
+            onCancelled: sshModal.dismissed()
+            onNextRequested: sshModal.moveFocus(sshModal.tabOrder, lifetime, 1)
+            onPreviousRequested: sshModal.moveFocus(sshModal.tabOrder, lifetime, -1)
+        }
     }
 
     // Turning the PIN off asks first: it is quick to undo, but undoing it
@@ -296,14 +375,21 @@ FocusScope {
 
     EntryFormModal {
         id: formModal
+        objectName: "entryFormModal"
+        sshSupported: !controller.passBackend && !controller.onePasswordBackend && Qt.platform.os !== "windows"
+        status: controller.messageIsError ? controller.message : ""
+        statusIsError: true
         visible: page.mode === "form"
         passBackend: controller.passBackend
 
         onSubmitted: function(payload) {
-            controller.saveEntry(payload);
-            page.mode = "list";
+            if (controller.saveEntry(payload))
+                page.mode = "list";
         }
-        onGenerateRequested: page.mode = "generateForForm"
+        onGenerateRequested: {
+            resumeDraft = true;
+            page.mode = "generateForForm";
+        }
         onDismissed: page.mode = "list"
     }
 
@@ -327,10 +413,12 @@ FocusScope {
 
     EntryInfoModal {
         id: infoModal
+        objectName: "entryInfoModal"
         visible: page.mode === "info"
         passBackend: controller.passBackend
 
         onVisibleChanged: if (!visible) controller.forgetShownOtp()
+        onAcceptRequested: page.editEntry(page.selectedEntry)
         onDismissed: page.mode = "list"
     }
 

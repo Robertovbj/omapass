@@ -81,12 +81,47 @@ class FakeController : public QObject {
     // What the last "open in the browser" was asked to open.
     Q_PROPERTY(QString lastOpened MEMBER m_lastOpened NOTIFY copied)
     Q_PROPERTY(QObject *browser READ browser CONSTANT)
+    Q_PROPERTY(QVariantList entryRows READ entryRows CONSTANT)
+    Q_PROPERTY(QString query MEMBER m_query NOTIFY queryChanged)
+    Q_PROPERTY(QString vaultLabel READ vaultLabel CONSTANT)
+    Q_PROPERTY(bool passBackend MEMBER m_passBackend CONSTANT)
+    Q_PROPERTY(bool pinConfigured MEMBER m_pinConfigured CONSTANT)
+    Q_PROPERTY(bool syncing MEMBER m_syncing CONSTANT)
 
 public:
     using QObject::QObject;
 
     QObject *browser() { return &m_browser; }
     bool anyDatabaseFound() const { return !m_databases.isEmpty(); }
+    QString vaultLabel() const { return QStringLiteral("Cofre"); }
+
+    QVariantList entryRows() const {
+        return {QVariantMap{{QStringLiteral("path"), QStringLiteral("Trabalho/Gmail")},
+                            {QStringLiteral("name"), QStringLiteral("Gmail")}},
+                QVariantMap{{QStringLiteral("path"), QStringLiteral("Outlook")},
+                            {QStringLiteral("name"), QStringLiteral("Outlook")}}};
+    }
+
+    Q_INVOKABLE QString entryPathAt(int index) const {
+        return entryRows().value(index).toMap().value(QStringLiteral("path")).toString();
+    }
+    Q_INVOKABLE bool isEmptyGroup(const QString &) const { return false; }
+    Q_INVOKABLE QVariantMap entryMenuFields(const QString &entry) const {
+        return {{QStringLiteral("hasPassword"), entry == entryPathAt(0)},
+                {QStringLiteral("hasUsername"), entry == entryPathAt(1)},
+                {QStringLiteral("hasUrl"), entry == entryPathAt(0)},
+                {QStringLiteral("hasOtp"), entry == entryPathAt(1)}};
+    }
+    Q_INVOKABLE QVariantMap sshKeyOptions(const QString &) const { return {}; }
+    Q_INVOKABLE QVariantMap entryDetails(const QString &entry) const {
+        return {{QStringLiteral("title"), entry.section(QLatin1Char('/'), -1)},
+                {QStringLiteral("notes"), QStringLiteral("segunda conta")}};
+    }
+    Q_INVOKABLE QVariantMap entryFields(const QString &entry) const {
+        auto fields = entryDetails(entry);
+        fields.insert(QStringLiteral("originalPath"), entry);
+        return fields;
+    }
 
     // The two halves of a finished scan, so a test can deliver them in
     // either order.
@@ -170,6 +205,7 @@ public:
     }
 
 signals:
+    void queryChanged();
     void copied();
     void scanningChanged();
     void databasesChanged();
@@ -181,6 +217,10 @@ signals:
     void databaseCreated();
 
 private:
+    QString m_query;
+    bool m_passBackend = false;
+    bool m_pinConfigured = false;
+    bool m_syncing = false;
     bool m_scanning = true;
     QVariantList m_databases;
     QString m_databaseQuery;

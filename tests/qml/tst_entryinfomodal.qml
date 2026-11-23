@@ -20,6 +20,11 @@ TestCase {
                     "url": "https://mail.google.com", "notes": "segunda conta" })
     }
 
+    Component {
+        id: shortInfo
+        EntryInfoModal { height: 360 }
+    }
+
     function cleanup() {
         modal.visible = false;
         tryVerify(function() { return !modal.opened; }, 3000);
@@ -86,6 +91,50 @@ TestCase {
         modal.visible = true;
         tryVerify(function() { return modal.opened; }, 3000);
         verify(!findChild(modal, "otpField").visible);
+    }
+
+    function test_wheel_over_notes_scrolls_the_text() {
+        const info = createTemporaryObject(shortInfo, testCase, {
+            details: { "title": "Gmail", "notes": "Linha de notas\n".repeat(30),
+                       "extraUrls": ["https://example.com", "https://example.org"] }
+        });
+        info.open();
+        tryCompare(info, "opened", true);
+
+        const box = findChild(info, "notesField").scrollBox;
+        const area = box.contentItem;
+        const body = findChild(info, "modalBody").contentItem;
+        verify(area.contentHeight > area.height);
+        tryVerify(function() { return body.contentHeight > body.height + 24; });
+        body.contentY = body.contentHeight - body.height - 24;
+        const bodyY = body.contentY;
+        mouseWheel(area, area.width / 2, area.height / 2, 0, -120);
+        tryVerify(function() { return area.contentY > 0; });
+        compare(body.contentY, bodyY);
+    }
+
+    function test_edit_button_opens_form_for_the_entry_shown() {
+        const component = Qt.createComponent("qrc:/EntriesPage.qml");
+        const page = createTemporaryObject(component, testCase, {width: 700, height: 600});
+        verify(page);
+
+        const list = findChild(page, "entryList");
+        tryCompare(list, "count", 2);
+        list.currentIndex = 0;
+        page.openInfo();
+        const info = findChild(page, "entryInfoModal");
+        tryCompare(info, "opened", true);
+        list.currentIndex = 1;
+
+        const button = findChild(info, "modalAccept");
+        compare(button.text, "Editar");
+        mouseClick(button);
+        tryCompare(info, "opened", false);
+        const form = findChild(page, "entryFormModal");
+        tryCompare(form, "opened", true);
+        verify(form.isEdit);
+        compare(form.fields.originalPath, "Trabalho/Gmail");
+        compare(form.fields.notes, "segunda conta");
     }
 
     // The code sits between the URL and the notes in the Tab order, shows

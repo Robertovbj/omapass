@@ -49,7 +49,7 @@ Modal {
 
     heading: root.details.title || i18n.t("common.entry_info_title")
     subtitle: i18n.t("common.entry_info_title")
-    cancelOnly: true
+    acceptText: i18n.t("ui.context_edit")
     cancelText: i18n.t("common.close")
     cardWidth: Math.round(600 * s)
 
@@ -76,6 +76,7 @@ Modal {
         property Item nextField: null
         property Item previousField: null
         property alias view: text
+        property alias scrollBox: valueBox
         // What Enter does instead of copying the text as it stands: the
         // one-time code goes through the clipboard clearing of a password.
         property var copyAction: null
@@ -98,6 +99,9 @@ Modal {
         // plain to see.
         ScrollView {
             id: valueBox
+            contentWidth: availableWidth
+            contentHeight: text.contentHeight
+            clip: true
             width: parent.width
             height: Math.round((fieldColumn.monospace ? 26 : 22) * root.s) * fieldColumn.rows
                     + topPadding + bottomPadding
@@ -258,6 +262,7 @@ Modal {
 
     InfoField {
         id: notesView
+        objectName: "notesField"
         visible: !root.passBackend
         label: i18n.t("common.notes_label")
         value: root.details.notes || ""
