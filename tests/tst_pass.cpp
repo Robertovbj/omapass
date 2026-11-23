@@ -139,6 +139,26 @@ private slots:
         QCOMPARE(entries, QStringList{QStringLiteral("Email/gmail")});
     }
 
+    // pass-otp's line is the one-time password wherever it sits; only the
+    // first is, and it goes back after the url.
+    void passEntryReadsAndWritesTheOtpLine() {
+        const PassEntryData data = parsePassEntry(QStringLiteral(
+            "s3nh4\nnota\notpauth://totp/x?secret=JBSWY3DPEHPK3PXP\nusername: ana\n"
+            "otpauth://totp/y?secret=MZXW6YTBOI\n"));
+        QCOMPARE(data.otp.toString(), QStringLiteral("otpauth://totp/x?secret=JBSWY3DPEHPK3PXP"));
+        QCOMPARE(data.username, QStringLiteral("ana"));
+        QCOMPARE(data.extra, QStringList({QStringLiteral("nota"),
+                                          QStringLiteral("otpauth://totp/y?secret=MZXW6YTBOI")}));
+
+        QCOMPARE(buildPassEntryContent(data),
+                 QByteArray("s3nh4\nusername: ana\notpauth://totp/x?secret=JBSWY3DPEHPK3PXP\n"
+                            "nota\notpauth://totp/y?secret=MZXW6YTBOI\n"));
+
+        PassEntryData none = data;
+        none.otp = Secret();
+        QVERIFY(!buildPassEntryContent(none).contains("secret=JBSWY3DPEHPK3PXP"));
+    }
+
     void passEntryParsesEveryModelledField() {
         const PassEntryData data = parsePassEntry(
             QStringLiteral("s3cr3t\nusername: fulano\nurl: https://exemplo.com.br\nnotes: vip\n"));

@@ -114,10 +114,10 @@ QString opUniqueShorthand(const QString &wanted, const QStringList &taken);
 EntryData opEntryData(const QJsonObject &item);
 
 // Returns `itemJson` (from `op item get`) with only the fields omapass edits
-// replaced — title, placing tag, username, password, first URL and notes.
-// Everything else (sections, custom fields, one-time passwords, other tags,
-// further URLs) is carried over as it was, because `op item edit` with a
-// template replaces the whole item.
+// replaced — title, placing tag, username, password, first URL, notes and
+// the first one-time password. Everything else (sections, custom fields,
+// other tags, further URLs) is carried over as it was, because
+// `op item edit` with a template replaces the whole item.
 QByteArray applyOpEntryData(const QByteArray &itemJson, const QString &title,
                             const QString &tagPath, const EntryData &data);
 

@@ -88,9 +88,9 @@ std::optional<QJsonObject> decryptCipher(const QJsonObject &cipher, const BwKeys
 QString decryptFolder(const QJsonObject &folder, const BwKey &user);
 
 // The body of a create (`encrypted` empty) or edit (`encrypted` the cipher
-// as the server has it) of a login: name, folder, username, password, first
-// URI and notes set from `data`, encrypted with `key`; everything else —
-// TOTP, custom fields, further URIs, passkeys, attachments — carried over
+// as the server has it) of a login: name, folder, username, password, TOTP,
+// first URI and notes set from `data`, encrypted with `key`; everything
+// else — custom fields, further URIs, passkeys, attachments — carried over
 // encrypted as it was, so nothing omapass does not show is lost. A changed
 // password goes into the item's password history, as the official clients
 // do. `previousPassword` is the decrypted password before the edit.

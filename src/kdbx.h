@@ -25,6 +25,9 @@ struct KdbxEntry {
     Secret password;
     QString url;
     QString notes;
+    // The one-time password as an otpauth URI: KeePassXC's `otp` attribute,
+    // or KeePass 2's `TOTP Seed`/`TOTP Settings` pair converted to one.
+    Secret otp;
 };
 
 enum class KdbxStatus {

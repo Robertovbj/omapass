@@ -152,6 +152,7 @@ EntryData bwEntryData(const QJsonObject &item) {
     data.url = uris.isEmpty() ? QString()
                               : uris.first().toObject().value(QStringLiteral("uri")).toString();
     data.notes = item.value(QStringLiteral("notes")).toString();
+    data.otp = Secret(login.value(QStringLiteral("totp")).toString());
     return data;
 }
 

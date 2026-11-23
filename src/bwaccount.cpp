@@ -400,6 +400,9 @@ QJsonObject BwAccount::cipherRequest(const QJsonObject &encrypted, const QString
 
     QJsonObject login = request.value(QStringLiteral("login")).toObject();
     login.insert(QStringLiteral("username"), encryptedField(data.username, key));
+    // Written as given: Bitwarden reads an otpauth URI, a bare secret and
+    // steam:// alike, so one that came from another client goes back as it was.
+    login.insert(QStringLiteral("totp"), encryptedField(data.otp.toString(), key));
 
     QString password = data.password.toString();
     if (!encrypted.isEmpty() && password != previousPassword) {

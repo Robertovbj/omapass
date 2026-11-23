@@ -66,7 +66,9 @@ Modal {
             "password": passwordField.text,
             "url": urlField.text,
             "notes": notesArea.text,
-            "extra": root.fields.extra || []
+            "extra": root.fields.extra || [],
+            // Carried through as read, so an edit keeps the entry's OTP.
+            "otp": root.fields.otp || ""
         });
     }
 

@@ -18,11 +18,14 @@
 // it are "key: value" metadata. Lines we do not model are kept verbatim in
 // `extra` so another tool's data (an OTP seed, say) survives an edit here.
 // An entry of the store: the password on the first line, then `username:`
-// and `url:` lines, then anything else, kept verbatim in `extra`.
+// and `url:` lines, then anything else, kept verbatim in `extra`. The first
+// `otpauth://` line is pass-otp's one-time password: read from wherever it
+// sits and written back after the url.
 struct PassEntryData {
     Secret password;
     QString username;
     QString url;
+    Secret otp;
     QStringList extra;
 };
 

@@ -40,6 +40,46 @@ QString fieldValue(const QJsonObject &item, const QString &purpose) {
     return QString();
 }
 
+// The item's one-time password field: the first of type OTP, wherever it
+// sits (1Password puts the one it makes in a section of its own). -1 when
+// there is none.
+int otpFieldIndex(const QJsonArray &fields) {
+    for (int i = 0; i < fields.size(); ++i) {
+        if (fields.at(i).toObject().value(QStringLiteral("type")).toString() == QLatin1String("OTP"))
+            return i;
+    }
+    return -1;
+}
+
+// Writes the one-time password into the item's OTP field, keeping its id,
+// section and label; the code `op` computed for the old secret goes. An
+// empty value removes the field.
+void setOtpField(QJsonArray *fields, const QString &value) {
+    const int index = otpFieldIndex(*fields);
+    if (index >= 0) {
+        if (value.isEmpty()) {
+            fields->removeAt(index);
+            return;
+        }
+        QJsonObject field = fields->at(index).toObject();
+        if (field.value(QStringLiteral("value")).toString() == value)
+            return;
+        field.insert(QStringLiteral("value"), value);
+        field.remove(QStringLiteral("totp"));
+        fields->replace(index, field);
+        return;
+    }
+
+    if (value.isEmpty())
+        return;
+    QJsonObject field;
+    field.insert(QStringLiteral("id"), QStringLiteral("onetimepassword"));
+    field.insert(QStringLiteral("type"), QStringLiteral("OTP"));
+    field.insert(QStringLiteral("label"), QStringLiteral("one-time password"));
+    field.insert(QStringLiteral("value"), value);
+    fields->append(field);
+}
+
 // Writes a built-in field, keeping the object `op` gave us (its id, section
 // and label) when the item already has it. A field that is not there and has
 // nothing to say is not created.
@@ -307,6 +347,11 @@ EntryData opEntryData(const QJsonObject &item) {
     data.password = Secret(fieldValue(item, QStringLiteral("PASSWORD")));
     data.notes = fieldValue(item, QStringLiteral("NOTES"));
 
+    const QJsonArray fields = item.value(QStringLiteral("fields")).toArray();
+    const int otp = otpFieldIndex(fields);
+    if (otp >= 0)
+        data.otp = Secret(fields.at(otp).toObject().value(QStringLiteral("value")).toString());
+
     const QJsonArray urls = item.value(QStringLiteral("urls")).toArray();
     const int primary = primaryUrlIndex(urls);
     if (primary >= 0)
@@ -352,6 +397,7 @@ QByteArray applyOpEntryData(const QByteArray &itemJson, const QString &title,
                   QStringLiteral("CONCEALED"), data.password.toString());
     setFieldValue(&fields, QStringLiteral("NOTES"), QStringLiteral("notesPlain"),
                   QStringLiteral("STRING"), data.notes);
+    setOtpField(&fields, data.otp.toString());
     item.insert(QStringLiteral("fields"), fields);
 
     QJsonArray urls = item.value(QStringLiteral("urls")).toArray();

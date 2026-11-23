@@ -163,6 +163,7 @@ bool KeepassVault::fetchEntry(const QString &entryPath, EntryData *data, QString
     data->url = entry.url;
     data->notes = entry.notes;
     data->extra.clear();
+    data->otp = entry.otp;
     return true;
 }
 
@@ -178,6 +179,7 @@ bool KeepassVault::addEntry(const QString &entryPath, const QString &group, cons
     entry.password = data.password;
     entry.url = data.url;
     entry.notes = data.notes;
+    entry.otp = data.otp;
 
     return finish(m_db->addEntry(group, entry), error);
 }
@@ -194,6 +196,7 @@ bool KeepassVault::editEntry(const QString &oldPath, const QString &newPath, con
     entry.password = data.password;
     entry.url = data.url;
     entry.notes = data.notes;
+    entry.otp = data.otp;
 
     return finish(m_db->editEntry(oldPath, group, entry), error);
 }

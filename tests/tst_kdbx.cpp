@@ -226,6 +226,44 @@ private slots:
         QCOMPARE(read.password.toString(), QStringLiteral("novo"));
     }
 
+    void kdbxKeepsTheOneTimePassword() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("t.kdbx"));
+        const Secret password(QStringLiteral("senha"));
+        const QString uri = QStringLiteral("otpauth://totp/Gmail?secret=JBSWY3DPEHPK3PXP&period=30&digits=6");
+
+        auto db = KdbxDatabase::create(password, QStringLiteral("Teste"));
+        QVERIFY(db);
+        KdbxEntry entry;
+        entry.title = QStringLiteral("Gmail");
+        entry.password = Secret(QStringLiteral("p"));
+        entry.otp = Secret(uri);
+        QVERIFY(db->addEntry(QString(), entry).isEmpty());
+        QVERIFY(db->save(path).isEmpty());
+
+        KdbxStatus status = KdbxStatus::Corrupt;
+        auto reopened = KdbxDatabase::open(path, password, &status);
+        QVERIFY(reopened);
+        KdbxEntry read;
+        QVERIFY(reopened->entry(QStringLiteral("Gmail"), &read));
+        QCOMPARE(read.otp.toString(), uri);
+
+        // Changed, then removed.
+        read.otp = Secret(QStringLiteral("otpauth://totp/Gmail?secret=MZXW6YTBOI"));
+        QVERIFY(reopened->editEntry(QStringLiteral("Gmail"), QString(), read).isEmpty());
+        QVERIFY(reopened->entry(QStringLiteral("Gmail"), &read));
+        QCOMPARE(read.otp.toString(), QStringLiteral("otpauth://totp/Gmail?secret=MZXW6YTBOI"));
+
+        read.otp = Secret();
+        QVERIFY(reopened->editEntry(QStringLiteral("Gmail"), QString(), read).isEmpty());
+        QVERIFY(reopened->save(path).isEmpty());
+        auto again = KdbxDatabase::open(path, password, &status);
+        QVERIFY(again);
+        QVERIFY(again->entry(QStringLiteral("Gmail"), &read));
+        QVERIFY(read.otp.isEmpty());
+    }
+
     void kdbxLegacyFormatRoundTrips() {
         QTemporaryDir dir;
         QVERIFY(dir.isValid());

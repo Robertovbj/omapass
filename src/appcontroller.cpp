@@ -1113,6 +1113,7 @@ QVariantMap AppController::entryFields(const QString &entry) {
     fields.insert(QStringLiteral("url"), data.url);
     fields.insert(QStringLiteral("notes"), data.notes);
     fields.insert(QStringLiteral("extra"), data.extra);
+    fields.insert(QStringLiteral("otp"), data.otp.toString());
     return fields;
 }
 
@@ -1139,6 +1140,7 @@ void AppController::saveEntry(const QVariantMap &fields) {
     data.url = fields.value(QStringLiteral("url")).toString().trimmed();
     data.notes = fields.value(QStringLiteral("notes")).toString();
     data.extra = fields.value(QStringLiteral("extra")).toStringList();
+    data.otp = Secret(fields.value(QStringLiteral("otp")).toString());
 
     // Locking waits while busy, so the vault outlives the task.
     const Vault *vault = m_vault.data();

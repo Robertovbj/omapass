@@ -8,7 +8,11 @@ namespace {
 // The password is the first line of the file, so a line break in it would
 // turn the rest into notes.
 bool singleLine(const EntryData &data, QString *error) {
-    if (!data.password.bytes().contains('\n') && !data.password.bytes().contains('\r'))
+    const auto oneLine = [](const Secret &value) {
+        return !value.bytes().contains('\n') && !value.bytes().contains('\r');
+    };
+    // The one-time password is a line of its own too.
+    if (oneLine(data.password) && oneLine(data.otp))
         return true;
     if (error)
         *error = I18n::t(QStringLiteral("pass.multiline_password"));
@@ -20,6 +24,7 @@ PassEntryData toPassData(const EntryData &data) {
     pd.password = data.password;
     pd.username = data.username;
     pd.url = data.url;
+    pd.otp = data.otp;
     pd.extra = data.extra;
     return pd;
 }
@@ -55,6 +60,7 @@ bool PassVault::fetchEntry(const QString &entryPath, EntryData *data, QString *e
     data->username = pd.username;
     data->password = pd.password;
     data->url = pd.url;
+    data->otp = pd.otp;
     data->notes = pd.extra.join(QLatin1Char('\n'));
     data->extra = pd.extra;
     return true;

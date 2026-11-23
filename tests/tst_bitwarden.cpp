@@ -527,6 +527,7 @@ private slots:
         data.username = QStringLiteral("novo-usuario");
         data.password = Secret(QStringLiteral("senha-nova"));
         data.url = QStringLiteral("https://c.example");
+        data.otp = Secret(QStringLiteral("otpauth://totp/Org?secret=JBSWY3DPEHPK3PXP"));
         const QJsonObject request = BwAccount::cipherRequest(original, QStringLiteral("senha-velha"),
                                                              QStringLiteral("Novo nome"), QStringLiteral("f1"),
                                                              data, *key, QStringLiteral("user-1"));
@@ -543,7 +544,9 @@ private slots:
         const QJsonObject newLogin = request.value("login").toObject();
         QCOMPARE(decrypted(newLogin.value("username"), *key), QStringLiteral("novo-usuario"));
         QCOMPARE(decrypted(newLogin.value("password"), *key), QStringLiteral("senha-nova"));
-        QCOMPARE(newLogin.value("totp").toString(), QStringLiteral("2.totp|kept|asis"));
+        // The form carries the TOTP now, so it is what was given, encrypted.
+        QCOMPARE(decrypted(newLogin.value("totp"), *key),
+                 QStringLiteral("otpauth://totp/Org?secret=JBSWY3DPEHPK3PXP"));
         QVERIFY(!newLogin.value("passwordRevisionDate").toString().isEmpty());
 
         const QJsonArray newUris = newLogin.value("uris").toArray();
@@ -565,6 +568,21 @@ private slots:
                                                                QStringLiteral("user-1"));
         QVERIFY(unchanged.value("passwordHistory").toArray().isEmpty());
         QVERIFY(unchanged.value("folderId").isNull());
+
+        // And an emptied TOTP is removed.
+        data.otp = Secret();
+        const QJsonObject cleared = BwAccount::cipherRequest(original, QStringLiteral("senha-velha"),
+                                                             QStringLiteral("x"), QString(), data, *key,
+                                                             QStringLiteral("user-1"));
+        QVERIFY(cleared.value("login").toObject().value("totp").isNull());
+    }
+
+    void bitwardenEntryDataReadsTheTotp() {
+        QJsonObject item{{"type", 1},
+                         {"login", QJsonObject{{"username", "a"}, {"totp", "steam://JBSWY3DPEHPK3PXP"}}}};
+        QCOMPARE(bwEntryData(item).otp.toString(), QStringLiteral("steam://JBSWY3DPEHPK3PXP"));
+        item.insert("login", QJsonObject{{"username", "a"}, {"totp", QJsonValue::Null}});
+        QVERIFY(bwEntryData(item).otp.isEmpty());
     }
 
     void bitwardenNewItemStartsFromABlankLogin() {

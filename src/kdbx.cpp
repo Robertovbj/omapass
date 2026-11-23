@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "i18n.h"
+#include "totp.h"
 
 namespace {
 
@@ -509,6 +510,8 @@ public:
     // -- tree
     static QString stringOf(const XNode &entry, const QString &key);
     static void setString(XNode &entry, const QString &key, const QString &value, bool isProtected);
+    static void removeString(XNode &entry, const QString &key);
+    static QString otpOf(const XNode &entry);
     XNode *findGroup(const QString &path) const;
     XNode *ensureGroup(const QString &path);
     XNode *findEntry(const QString &path, XNode **parent = nullptr) const;
@@ -584,6 +587,28 @@ QString KdbxDatabase::Impl::stringOf(const XNode &entry, const QString &key) {
             return item->childText(QStringLiteral("Value"));
     }
     return QString();
+}
+
+void KdbxDatabase::Impl::removeString(XNode &entry, const QString &key) {
+    for (XNode *item : entry.childrenNamed(QStringLiteral("String"))) {
+        if (item->childText(QStringLiteral("Key")) == key) {
+            entry.detach(item);
+            return;
+        }
+    }
+}
+
+QString KdbxDatabase::Impl::otpOf(const XNode &entry) {
+    const QString otp = stringOf(entry, QStringLiteral("otp"));
+    if (!otp.isEmpty())
+        return otp;
+
+    const QString seed = stringOf(entry, QStringLiteral("TOTP Seed"));
+    if (seed.isEmpty())
+        return QString();
+    const std::optional<TotpParams> legacy =
+        Totp::fromKeepassLegacy(seed, stringOf(entry, QStringLiteral("TOTP Settings")));
+    return legacy ? Totp::toUri(*legacy, stringOf(entry, QStringLiteral("Title"))) : QString();
 }
 
 void KdbxDatabase::Impl::setString(XNode &entry, const QString &key, const QString &value, bool isProtected) {
@@ -790,16 +815,34 @@ void KdbxDatabase::Impl::recordDeleted(const QString &uuid) {
 }
 
 void KdbxDatabase::Impl::fill(XNode &entry, const KdbxEntry &data) const {
+    // Read before the title changes: a KeePass 2 pair is labelled with it.
+    const bool otpChanged = otpOf(entry) != data.otp.toString();
+
     setString(entry, QStringLiteral("Title"), data.title, false);
     setString(entry, QStringLiteral("UserName"), data.username, false);
     setString(entry, QStringLiteral("Password"), data.password.toString(), true);
     setString(entry, QStringLiteral("URL"), data.url, false);
     setString(entry, QStringLiteral("Notes"), data.notes, false);
 
-    // A password that was written before may sit in a node without the flag
-    // (another client's choice); the protection setting of the database says.
+    // An unchanged one-time password is left in whatever form it was in, so
+    // an entry that keeps KeePass 2's pair keeps it. A changed one is
+    // written as KeePassXC writes it, and the older pair is dropped: left
+    // behind, it would give KeePass 2 a different code.
+    if (otpChanged) {
+        removeString(entry, QStringLiteral("TOTP Seed"));
+        removeString(entry, QStringLiteral("TOTP Settings"));
+        if (data.otp.isEmpty())
+            removeString(entry, QStringLiteral("otp"));
+        else
+            setString(entry, QStringLiteral("otp"), data.otp.toString(), true);
+    }
+
+    // A password (or a one-time password) that was written before may sit
+    // in a node without the flag, another client's choice; they are
+    // protected, as KeePassXC does.
     for (XNode *item : entry.childrenNamed(QStringLiteral("String"))) {
-        if (item->childText(QStringLiteral("Key")) == QLatin1String("Password")) {
+        const QString key = item->childText(QStringLiteral("Key"));
+        if (key == QLatin1String("Password") || (otpChanged && key == QLatin1String("otp"))) {
             if (XNode *value = item->child(QStringLiteral("Value")))
                 value->setAttr(QStringLiteral("Protected"), QStringLiteral("True"));
         }
@@ -839,6 +882,7 @@ KdbxEntry KdbxDatabase::Impl::read(const XNode &entry) {
     out.password = Secret(stringOf(entry, QStringLiteral("Password")));
     out.url = stringOf(entry, QStringLiteral("URL"));
     out.notes = stringOf(entry, QStringLiteral("Notes"));
+    out.otp = Secret(otpOf(entry));
     return out;
 }
 
@@ -1474,7 +1518,7 @@ QString KdbxDatabase::editEntry(const QString &oldPath, const QString &group, co
     const KdbxEntry before = Impl::read(*entry);
     const bool changed = before.title != data.title || before.username != data.username
         || before.password.bytes() != data.password.bytes() || before.url != data.url
-        || before.notes != data.notes;
+        || before.notes != data.notes || before.otp.bytes() != data.otp.bytes();
     if (changed) {
         std::unique_ptr<XNode> snapshot = entry->clone();
         snapshot->detach(snapshot->child(QStringLiteral("History")));

@@ -21,15 +21,19 @@ struct DbRef {
     VaultKind kind = VaultKind::Keepass;
 };
 
-// An entry's fields, as the union of what the two formats carry. `extra` is
-// only used by the pass backend, to preserve lines it does not model (an OTP
-// seed, say) when an entry that already had them is edited.
+// An entry's fields, as the union of what the formats carry. `extra` is only
+// used by the pass backend, to preserve lines it does not model when an
+// entry that already had them is edited.
 struct EntryData {
     QString username;
     Secret password;
     QString url;
     QString notes;
     QStringList extra;
+    // The one-time password as the backend stores it: usually an otpauth
+    // URI, but a bare base32 secret or `steam://` from Bitwarden and
+    // 1Password; Totp::parse reads all of them. Empty when there is none.
+    Secret otp;
 };
 
 // What the entry list shows next to a path without reading each entry. `type`

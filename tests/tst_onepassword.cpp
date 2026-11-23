@@ -227,6 +227,8 @@ private slots:
         data.password = Secret(QStringLiteral("nova-senha"));
         data.url = QStringLiteral("https://novo.exemplo.com");
         data.notes = QStringLiteral("nota nova");
+        // What the form sends back for an OTP it did not touch.
+        data.otp = Secret(QStringLiteral("otpauth://totp/GitLab?secret=ABCDEF"));
 
         const QJsonObject item = QJsonDocument::fromJson(
             applyOpEntryData(opFixture("item.json"), QStringLiteral("GitLab"),
@@ -248,6 +250,9 @@ private slots:
         QVERIFY(fields.at(1).toObject().contains(QStringLiteral("password_details")));
         QCOMPARE(fields.at(3).toObject().value(QStringLiteral("type")).toString(),
                  QStringLiteral("OTP"));
+        // Untouched, so exactly as `op` gave it, computed code included.
+        QCOMPARE(fields.at(3).toObject().value(QStringLiteral("totp")).toString(),
+                 QStringLiteral("123456"));
         QCOMPARE(fields.at(4).toObject().value(QStringLiteral("value")).toString(),
                  QStringLiteral("producao"));
 
@@ -257,6 +262,43 @@ private slots:
                  QStringLiteral("https://novo.exemplo.com"));
         QCOMPARE(urls.at(1).toObject().value(QStringLiteral("href")).toString(),
                  QStringLiteral("https://espelho.exemplo.com"));
+    }
+
+    void onePasswordEntryDataReadsTheOtp() {
+        const QJsonObject item = QJsonDocument::fromJson(opFixture("item.json")).object();
+        QCOMPARE(opEntryData(item).otp.toString(), QStringLiteral("otpauth://totp/GitLab?secret=ABCDEF"));
+    }
+
+    void onePasswordEditWritesTheOtpField() {
+        const auto otpField = [](const QByteArray &json) {
+            const QJsonArray fields = QJsonDocument::fromJson(json).object()
+                                          .value(QStringLiteral("fields")).toArray();
+            for (const QJsonValue &value : fields) {
+                if (value.toObject().value(QStringLiteral("type")).toString() == QLatin1String("OTP"))
+                    return value.toObject();
+            }
+            return QJsonObject();
+        };
+
+        EntryData data;
+        data.otp = Secret(QStringLiteral("otpauth://totp/GitLab?secret=JBSWY3DPEHPK3PXP"));
+        const QJsonObject changed = otpField(
+            applyOpEntryData(opFixture("item.json"), QStringLiteral("GitLab"), QString(), data));
+        // Same field, same section; the code for the old secret is gone.
+        QCOMPARE(changed.value(QStringLiteral("id")).toString(), QStringLiteral("otp1"));
+        QCOMPARE(changed.value(QStringLiteral("section")).toObject().value(QStringLiteral("id")).toString(),
+                 QStringLiteral("sec1"));
+        QCOMPARE(changed.value(QStringLiteral("value")).toString(), data.otp.toString());
+        QVERIFY(!changed.contains(QStringLiteral("totp")));
+
+        data.otp = Secret();
+        QVERIFY(otpField(applyOpEntryData(opFixture("item.json"), QStringLiteral("GitLab"),
+                                          QString(), data)).isEmpty());
+
+        data.otp = Secret(QStringLiteral("JBSWY3DPEHPK3PXP"));
+        const QJsonObject added = otpField(opNewItemJson(QStringLiteral("Site"), QStringLiteral("v1"),
+                                                         QString(), data));
+        QCOMPARE(added.value(QStringLiteral("value")).toString(), QStringLiteral("JBSWY3DPEHPK3PXP"));
     }
 
     void onePasswordNewItemCarriesTheVaultAndTheTag() {
