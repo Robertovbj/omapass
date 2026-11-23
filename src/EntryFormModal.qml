@@ -70,30 +70,15 @@ Modal {
         });
     }
 
-    // Tab order skips the fields the pass backend does not show.
-    function focusNext(from) {
-        const order = root.passBackend
-            ? [groupField, titleField, passwordField]
-            : [groupField, titleField, usernameField, passwordField, urlField, notesArea];
-        const index = order.indexOf(from);
-        const target = order[(index + 1) % order.length];
-        if (target === notesArea)
-            notesArea.forceActiveFocus();
-        else
-            target.field.forceActiveFocus();
-    }
+    // The fields the pass backend does not show are hidden, which is how
+    // moveFocus knows to skip them.
+    readonly property var tabOrder: [
+        groupField, titleField, usernameField, passwordField, revealPassword,
+        urlField, notesArea
+    ]
 
-    function focusPrevious(from) {
-        const order = root.passBackend
-            ? [groupField, titleField, passwordField]
-            : [groupField, titleField, usernameField, passwordField, urlField, notesArea];
-        const index = order.indexOf(from);
-        const target = order[(index + order.length - 1) % order.length];
-        if (target === notesArea)
-            notesArea.forceActiveFocus();
-        else
-            target.field.forceActiveFocus();
-    }
+    function focusNext(from) { root.moveFocus(root.tabOrder, from, 1); }
+    function focusPrevious(from) { root.moveFocus(root.tabOrder, from, -1); }
 
     Field {
         id: groupField
@@ -154,6 +139,11 @@ Modal {
     CheckOption {
         id: revealPassword
         text: i18n.t("ui.show_password")
+
+        onSubmitted: root.submit()
+        onCancelled: root.dismissed()
+        onNextRequested: root.focusNext(revealPassword)
+        onPreviousRequested: root.focusPrevious(revealPassword)
     }
 
     Field {

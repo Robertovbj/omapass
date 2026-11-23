@@ -78,6 +78,28 @@ public:
     Q_INVOKABLE void cancelOnePasswordLogin() {}
     Q_INVOKABLE void logoutOnePassword(int) {}
 
+    // What GeneratorModal reads on opening and calls on every change. The
+    // password is not the point there, only that the sheet can be walked.
+    Q_INVOKABLE QVariantMap generatorOptions() const {
+        return {
+            {QStringLiteral("passphrase"), false},
+            {QStringLiteral("passphraseAvailable"), true},
+            {QStringLiteral("length"), 20},
+            {QStringLiteral("lower"), true},
+            {QStringLiteral("upper"), true},
+            {QStringLiteral("numbers"), true},
+            {QStringLiteral("special"), false},
+            {QStringLiteral("excludeSimilar"), false},
+            {QStringLiteral("exclude"), QString()},
+            {QStringLiteral("custom"), QString()},
+            {QStringLiteral("words"), 6},
+            {QStringLiteral("separator"), QStringLiteral("-")},
+        };
+    }
+    Q_INVOKABLE QVariantMap generate(const QVariantMap &) const {
+        return {{QStringLiteral("password"), QStringLiteral("senha-de-teste")}};
+    }
+
 signals:
     void copied();
     void scanningChanged();

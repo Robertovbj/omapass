@@ -1,0 +1,99 @@
+import QtQuick
+import QtTest
+import "qrc:/"
+
+// The generator's options are tick boxes between text fields. Tab has to
+// stop on each of them, Space has to tick the one that has the focus, and
+// the boxes the current mode hides have to be skipped — otherwise the
+// sheet cannot be used without a mouse.
+TestCase {
+    id: testCase
+    name: "GeneratorModal"
+    when: windowShown
+    visible: true
+    width: 700
+    height: 700
+
+    GeneratorModal {
+        id: modal
+        visible: false
+    }
+
+    function open() {
+        modal.visible = true;
+        tryVerify(function() { return modal.opened; }, 3000);
+    }
+
+    function cleanup() {
+        modal.visible = false;
+        tryVerify(function() { return !modal.opened; }, 3000);
+    }
+
+    function focused() {
+        const order = modal.tabOrder;
+        for (let i = 0; i < order.length; ++i) {
+            const item = order[i].field || order[i];
+            if (item.activeFocus)
+                return order[i];
+        }
+        return null;
+    }
+
+    function test_tab_walks_through_every_option() {
+        open();
+        tryVerify(function() { return focused() === modal.tabOrder[1]; }, 3000,
+                  "o teclado começa no comprimento");
+
+        // length → five boxes → exclude → custom → passphrase toggle
+        const expected = [2, 3, 4, 5, 6, 7, 8, 0, 1];
+        for (let i = 0; i < expected.length; ++i) {
+            keyClick(Qt.Key_Tab);
+            compare(focused(), modal.tabOrder[expected[i]], "Tab nº " + (i + 1));
+        }
+    }
+
+    function test_backtab_walks_back() {
+        open();
+        tryVerify(function() { return focused() === modal.tabOrder[1]; }, 3000);
+
+        keyClick(Qt.Key_Backtab);
+        compare(focused(), modal.tabOrder[0], "volta para o modo frase-senha");
+        keyClick(Qt.Key_Backtab);
+        compare(focused(), modal.tabOrder[8], "e dá a volta até o último campo");
+    }
+
+    function test_space_ticks_the_focused_box() {
+        open();
+        tryVerify(function() { return focused() === modal.tabOrder[1]; }, 3000);
+
+        keyClick(Qt.Key_Tab);
+        const lower = modal.tabOrder[2];
+        compare(focused(), lower);
+        verify(lower.checked);
+
+        keyClick(Qt.Key_Space);
+        verify(!lower.checked, "Espaço desmarca");
+        keyClick(Qt.Key_Space);
+        verify(lower.checked, "e marca de novo");
+        compare(focused(), lower, "sem perder o foco");
+    }
+
+    function test_passphrase_mode_skips_the_password_options() {
+        open();
+        tryVerify(function() { return focused() === modal.tabOrder[1]; }, 3000);
+
+        keyClick(Qt.Key_Backtab);
+        const passphrase = modal.tabOrder[0];
+        compare(focused(), passphrase);
+        keyClick(Qt.Key_Space);
+        verify(passphrase.checked);
+
+        // passphrase toggle → words → separator → passphrase toggle
+        keyClick(Qt.Key_Tab);
+        compare(focused(), modal.tabOrder[9]);
+        keyClick(Qt.Key_Tab);
+        compare(focused(), modal.tabOrder[10]);
+        keyClick(Qt.Key_Tab);
+        compare(focused(), passphrase);
+    }
+}

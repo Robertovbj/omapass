@@ -46,6 +46,22 @@ Popup {
         shown();
     }
 
+    // The Tab chain of a sheet with fields: moves the keyboard `step` places
+    // along `order` from `from`, wrapping around and skipping whatever is
+    // hidden or disabled at the moment. A Field is focused through its
+    // inner text field; anything else (a CheckOption, a TextArea) directly.
+    function moveFocus(order, from, step) {
+        const live = order.filter(function(item) { return item.visible && item.enabled; });
+        if (live.length === 0)
+            return;
+
+        let index = live.indexOf(from);
+        if (index < 0)
+            index = step > 0 ? -1 : 0;
+        const target = live[(index + step + live.length) % live.length];
+        (target.field || target).forceActiveFocus();
+    }
+
     default property alias body: bodyColumn.data
 
     readonly property real s: systemTheme.textScale

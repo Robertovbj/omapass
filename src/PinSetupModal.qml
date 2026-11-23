@@ -31,6 +31,13 @@ Modal {
         passwordField.field.forceActiveFocus();
     }
 
+    readonly property var tabOrder: [
+        passwordField, revealPassword, pinField, confirmField, revealPin, allowText
+    ]
+
+    function focusNext(from) { root.moveFocus(root.tabOrder, from, 1); }
+    function focusPrevious(from) { root.moveFocus(root.tabOrder, from, -1); }
+
     function submit() {
         if (passwordField.text.length === 0) {
             passwordField.field.forceActiveFocus();
@@ -54,14 +61,20 @@ Modal {
         enabled: !root.busy
 
         onSubmitted: pinField.field.forceActiveFocus()
-        onNextRequested: pinField.field.forceActiveFocus()
-        onPreviousRequested: confirmField.field.forceActiveFocus()
+        onNextRequested: root.focusNext(passwordField)
+        onPreviousRequested: root.focusPrevious(passwordField)
         onCancelled: root.dismissed()
     }
 
     CheckOption {
         id: revealPassword
         text: i18n.t("ui.show_password")
+        enabled: !root.busy
+
+        onSubmitted: root.submit()
+        onCancelled: root.dismissed()
+        onNextRequested: root.focusNext(revealPassword)
+        onPreviousRequested: root.focusPrevious(revealPassword)
     }
 
     Field {
@@ -73,8 +86,8 @@ Modal {
         enabled: !root.busy
 
         onSubmitted: confirmField.field.forceActiveFocus()
-        onNextRequested: confirmField.field.forceActiveFocus()
-        onPreviousRequested: passwordField.field.forceActiveFocus()
+        onNextRequested: root.focusNext(pinField)
+        onPreviousRequested: root.focusPrevious(pinField)
         onCancelled: root.dismissed()
     }
 
@@ -87,19 +100,31 @@ Modal {
         enabled: !root.busy
 
         onSubmitted: root.submit()
-        onNextRequested: passwordField.field.forceActiveFocus()
-        onPreviousRequested: pinField.field.forceActiveFocus()
+        onNextRequested: root.focusNext(confirmField)
+        onPreviousRequested: root.focusPrevious(confirmField)
         onCancelled: root.dismissed()
     }
 
     CheckOption {
         id: revealPin
         text: i18n.t("pin.show")
+        enabled: !root.busy
+
+        onSubmitted: root.submit()
+        onCancelled: root.dismissed()
+        onNextRequested: root.focusNext(revealPin)
+        onPreviousRequested: root.focusPrevious(revealPin)
     }
 
     CheckOption {
         id: allowText
         text: i18n.t("pin.allow_text")
+        enabled: !root.busy
+
+        onSubmitted: root.submit()
+        onCancelled: root.dismissed()
+        onNextRequested: root.focusNext(allowText)
+        onPreviousRequested: root.focusPrevious(allowText)
     }
 
     Text {

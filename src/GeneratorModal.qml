@@ -63,6 +63,17 @@ Modal {
         };
     }
 
+    // Tab walks every option in reading order; the ones the current mode
+    // hides (and the passphrase toggle when there is no wordlist) are
+    // skipped by moveFocus.
+    readonly property var tabOrder: [
+        passphraseBox, lengthField, lowerBox, upperBox, numbersBox, specialBox,
+        similarBox, excludeField, customField, wordsField, separatorField
+    ]
+
+    function focusNext(from) { root.moveFocus(root.tabOrder, from, 1); }
+    function focusPrevious(from) { root.moveFocus(root.tabOrder, from, -1); }
+
     function regenerate() {
         if (root.loading)
             return;
@@ -92,6 +103,10 @@ Modal {
         visible: root.passphraseAvailable
         text: i18n.t("generator.mode_passphrase")
         onCheckedChanged: root.regenerate()
+        onSubmitted: root.accepted(root.password)
+        onCancelled: root.dismissed()
+        onNextRequested: root.focusNext(passphraseBox)
+        onPreviousRequested: root.focusPrevious(passphraseBox)
     }
 
     Field {
@@ -103,8 +118,8 @@ Modal {
 
         onTextChanged: root.regenerate()
         onSubmitted: root.accepted(root.password)
-        onNextRequested: excludeField.field.forceActiveFocus()
-        onPreviousRequested: customField.field.forceActiveFocus()
+        onNextRequested: root.focusNext(lengthField)
+        onPreviousRequested: root.focusPrevious(lengthField)
         onCancelled: root.dismissed()
     }
 
@@ -117,30 +132,50 @@ Modal {
             id: lowerBox
             text: i18n.t("generator.lower")
             onCheckedChanged: root.regenerate()
+            onSubmitted: root.accepted(root.password)
+            onCancelled: root.dismissed()
+            onNextRequested: root.focusNext(lowerBox)
+            onPreviousRequested: root.focusPrevious(lowerBox)
         }
 
         CheckOption {
             id: upperBox
             text: i18n.t("generator.upper")
             onCheckedChanged: root.regenerate()
+            onSubmitted: root.accepted(root.password)
+            onCancelled: root.dismissed()
+            onNextRequested: root.focusNext(upperBox)
+            onPreviousRequested: root.focusPrevious(upperBox)
         }
 
         CheckOption {
             id: numbersBox
             text: i18n.t("generator.numbers")
             onCheckedChanged: root.regenerate()
+            onSubmitted: root.accepted(root.password)
+            onCancelled: root.dismissed()
+            onNextRequested: root.focusNext(numbersBox)
+            onPreviousRequested: root.focusPrevious(numbersBox)
         }
 
         CheckOption {
             id: specialBox
             text: i18n.t("generator.special")
             onCheckedChanged: root.regenerate()
+            onSubmitted: root.accepted(root.password)
+            onCancelled: root.dismissed()
+            onNextRequested: root.focusNext(specialBox)
+            onPreviousRequested: root.focusPrevious(specialBox)
         }
 
         CheckOption {
             id: similarBox
             text: i18n.t("generator.exclude_similar")
             onCheckedChanged: root.regenerate()
+            onSubmitted: root.accepted(root.password)
+            onCancelled: root.dismissed()
+            onNextRequested: root.focusNext(similarBox)
+            onPreviousRequested: root.focusPrevious(similarBox)
         }
     }
 
@@ -152,8 +187,8 @@ Modal {
 
         onTextChanged: root.regenerate()
         onSubmitted: root.accepted(root.password)
-        onNextRequested: customField.field.forceActiveFocus()
-        onPreviousRequested: lengthField.field.forceActiveFocus()
+        onNextRequested: root.focusNext(excludeField)
+        onPreviousRequested: root.focusPrevious(excludeField)
         onCancelled: root.dismissed()
     }
 
@@ -165,8 +200,8 @@ Modal {
 
         onTextChanged: root.regenerate()
         onSubmitted: root.accepted(root.password)
-        onNextRequested: lengthField.field.forceActiveFocus()
-        onPreviousRequested: excludeField.field.forceActiveFocus()
+        onNextRequested: root.focusNext(customField)
+        onPreviousRequested: root.focusPrevious(customField)
         onCancelled: root.dismissed()
     }
 
@@ -179,8 +214,8 @@ Modal {
 
         onTextChanged: root.regenerate()
         onSubmitted: root.accepted(root.password)
-        onNextRequested: separatorField.field.forceActiveFocus()
-        onPreviousRequested: separatorField.field.forceActiveFocus()
+        onNextRequested: root.focusNext(wordsField)
+        onPreviousRequested: root.focusPrevious(wordsField)
         onCancelled: root.dismissed()
     }
 
@@ -194,8 +229,8 @@ Modal {
 
         onTextChanged: root.regenerate()
         onSubmitted: root.accepted(root.password)
-        onNextRequested: wordsField.field.forceActiveFocus()
-        onPreviousRequested: wordsField.field.forceActiveFocus()
+        onNextRequested: root.focusNext(separatorField)
+        onPreviousRequested: root.focusPrevious(separatorField)
         onCancelled: root.dismissed()
     }
 }

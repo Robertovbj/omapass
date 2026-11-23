@@ -40,6 +40,13 @@ Modal {
         pathSuggestions.currentIndex = 0;
     }
 
+    // The minutes field only shows while the lock is on; moveFocus skips it
+    // otherwise.
+    readonly property var tabOrder: [pathField, recencyBox, lockBox, lockField, wordlistField]
+
+    function focusNext(from) { root.moveFocus(root.tabOrder, from, 1); }
+    function focusPrevious(from) { root.moveFocus(root.tabOrder, from, -1); }
+
     function submit() {
         root.submitted({
             "path": pathField.text,
@@ -78,8 +85,8 @@ Modal {
         onTextChanged: root.refreshPaths()
         onSubmitted: root.submit()
         onCancelled: root.dismissed()
-        onNextRequested: lockField.field.forceActiveFocus()
-        onPreviousRequested: wordlistField.field.forceActiveFocus()
+        onNextRequested: root.focusNext(pathField)
+        onPreviousRequested: root.focusPrevious(pathField)
         onListNext: pathSuggestions.next()
         onListPrevious: pathSuggestions.previous()
     }
@@ -97,11 +104,21 @@ Modal {
     CheckOption {
         id: recencyBox
         text: i18n.t("settings.recency")
+
+        onSubmitted: root.submit()
+        onCancelled: root.dismissed()
+        onNextRequested: root.focusNext(recencyBox)
+        onPreviousRequested: root.focusPrevious(recencyBox)
     }
 
     CheckOption {
         id: lockBox
         text: i18n.t("settings.lock_enabled")
+
+        onSubmitted: root.submit()
+        onCancelled: root.dismissed()
+        onNextRequested: root.focusNext(lockBox)
+        onPreviousRequested: root.focusPrevious(lockBox)
     }
 
     Field {
@@ -113,8 +130,8 @@ Modal {
 
         onSubmitted: root.submit()
         onCancelled: root.dismissed()
-        onNextRequested: wordlistField.field.forceActiveFocus()
-        onPreviousRequested: pathField.field.forceActiveFocus()
+        onNextRequested: root.focusNext(lockField)
+        onPreviousRequested: root.focusPrevious(lockField)
     }
 
     Field {
@@ -124,9 +141,8 @@ Modal {
 
         onSubmitted: root.submit()
         onCancelled: root.dismissed()
-        onNextRequested: pathField.field.forceActiveFocus()
-        onPreviousRequested: lockBox.checked ? lockField.field.forceActiveFocus()
-                                             : pathField.field.forceActiveFocus()
+        onNextRequested: root.focusNext(wordlistField)
+        onPreviousRequested: root.focusPrevious(wordlistField)
     }
 
     Text {
