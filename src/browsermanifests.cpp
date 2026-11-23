@@ -31,6 +31,14 @@ QString pathIn(const QString &manifest) {
     return QJsonDocument::fromJson(file.readAll()).object().value(QStringLiteral("path")).toString();
 }
 
+// Whether a manifest's program is an omapass, if not this one: a build
+// tree's, the package's, an AppImage. Handing the browser from one to
+// another is no one else's business, and turning the option off clears
+// what any of them wrote.
+bool isOmapass(const QString &program) {
+    return QFileInfo(program).fileName().startsWith(QLatin1String("omapass"), Qt::CaseInsensitive);
+}
+
 }
 
 QVector<Browser> knownBrowsers(const QString &home) {
@@ -84,7 +92,8 @@ Result install(const QString &home, const QString &proxy, bool replace) {
             continue;
 
         const QString current = pathIn(browser.manifest);
-        if (!current.isEmpty() && current != proxy && QFileInfo::exists(current) && !replace) {
+        if (!current.isEmpty() && current != proxy && !isOmapass(current) && QFileInfo::exists(current)
+            && !replace) {
             result.conflicts.append(browser.name);
             continue;
         }
@@ -110,7 +119,8 @@ Result install(const QString &home, const QString &proxy, bool replace) {
 
 void uninstall(const QString &home, const QString &proxy) {
     for (const Browser &browser : knownBrowsers(home)) {
-        if (pathIn(browser.manifest) == proxy)
+        const QString current = pathIn(browser.manifest);
+        if (!current.isEmpty() && (current == proxy || isOmapass(current)))
             QFile::remove(browser.manifest);
     }
 }

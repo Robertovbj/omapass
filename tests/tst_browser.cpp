@@ -1084,6 +1084,27 @@ private slots:
         }
         QVERIFY(BrowserManifests::install(home.path(), proxy, false).conflicts.isEmpty());
 
+        // Another omapass's (the package's, while this is a build tree's) is
+        // taken over without asking, and cleared when turning it off.
+        const QString packaged = home.filePath("usr/bin/omapass");
+        QDir().mkpath(home.filePath("usr/bin"));
+        QVERIFY(QFile(packaged).open(QIODevice::WriteOnly));
+        {
+            QFile file(brave);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write(QJsonDocument(QJsonObject{{"path", packaged}}).toJson());
+        }
+        result = BrowserManifests::install(home.path(), proxy, false);
+        QVERIFY(result.conflicts.isEmpty());
+        QCOMPARE(read(brave).value("path").toString(), proxy);
+        {
+            QFile file(brave);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write(QJsonDocument(QJsonObject{{"path", home.filePath("Omapass-x86_64.AppImage")}}).toJson());
+        }
+        BrowserManifests::uninstall(home.path(), proxy);
+        QVERIFY(!QFile::exists(brave));
+
         // Uninstalling leaves another program's manifest alone.
         {
             QVERIFY(QFile(keepassxc).open(QIODevice::WriteOnly));

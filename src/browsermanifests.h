@@ -34,14 +34,16 @@ QByteArray manifestFor(const Browser &browser, const QString &proxy);
 struct Result {
     QStringList installed;   // browser names
     // Browsers whose manifest starts some other program (KeePassXC's own
-    // proxy), left alone unless `replace` was set.
+    // proxy), left alone unless `replace` was set. Another omapass (a build
+    // tree's, the package's) is not another program: it is replaced.
     QStringList conflicts;
     QStringList failed;
 };
 
 // Writes the manifest of every browser present under `home`.
 Result install(const QString &home, const QString &proxy, bool replace);
-// Removes the manifests that start `proxy`, and only those.
+// Removes the manifests that start `proxy` or another omapass, and only
+// those.
 void uninstall(const QString &home, const QString &proxy);
 
 }
