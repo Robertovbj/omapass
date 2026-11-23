@@ -42,6 +42,9 @@ sha256sums=('SKIP'
 # So os algoritmos que o omapass pede ao Botan, mais as variantes x86 de
 # cada um: o Botan escolhe a melhor em tempo de execucao pela CPU, e o
 # AES-KDF e o Argon2 dos bancos KeePass dependem delas para abrir rapido.
+# O sodium e a API compativel com o libsodium, para o crypto_box da
+# integracao com o navegador; o configure traz o que ele exige (x25519,
+# poly1305...).
 _botan_modules=(
     aes aes_hwaes aes_vaes aes_vperm cbc
     chacha chacha_simd32 chacha_simd8x32 chacha_avx512
@@ -53,6 +56,7 @@ _botan_modules=(
     hmac hkdf pbkdf2
     argon2 argon2_simd64 argon2_simd4x64 argon2_avx512
     rsa eme_oaep system_rng
+    sodium
 )
 
 pkgver() {

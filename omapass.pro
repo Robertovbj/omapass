@@ -36,6 +36,7 @@ HEADERS += \
     src/bwaccount.h \
     src/bwapi.h \
     src/bwcrypto.h \
+    src/browsercrypto.h \
     src/clipboard.h \
     src/config.h \
     src/entryicons.h \
@@ -71,6 +72,7 @@ SOURCES += \
     src/bwaccount.cpp \
     src/bwapi.cpp \
     src/bwcrypto.cpp \
+    src/browsercrypto.cpp \
     src/clipboard.cpp \
     src/config.cpp \
     src/entryicons.cpp \

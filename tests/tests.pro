@@ -21,6 +21,7 @@ INCLUDEPATH += ../src
 SOURCES += \
     main.cpp \
     tst_bitwarden.cpp \
+    tst_browsercrypto.cpp \
     tst_clipboard.cpp \
     tst_config.cpp \
     tst_entryicons.cpp \
@@ -40,6 +41,7 @@ SOURCES += \
     ../src/bwcrypto.cpp \
     ../src/bwaccount.cpp \
     ../src/bwapi.cpp \
+    ../src/browsercrypto.cpp \
     ../src/clipboard.cpp \
     ../src/config.cpp \
     ../src/entryicons.cpp \
@@ -69,6 +71,7 @@ HEADERS += \
     ../src/bitwardenvault.h \
     ../src/bwaccount.h \
     ../src/bwapi.h \
+    ../src/browsercrypto.h \
     ../src/clipboard.h \
     ../src/bwcrypto.h \
     ../src/config.h \
