@@ -15,6 +15,7 @@
 #include <QUrl>
 
 #include "appcontroller.h"
+#include "browserproxy.h"
 #include "clipboard.h"
 #include "config.h"
 #include "generator.h"
@@ -141,6 +142,16 @@ int runCommandLine(int argc, char *argv[], const QStringList &args, bool *handle
 }
 
 int main(int argc, char *argv[]) {
+    // Started by a browser as the KeePassXC-Browser extension's native
+    // messaging host: relay, and nothing else — no config written, no window.
+    {
+        QStringList args;
+        for (int i = 0; i < argc; ++i)
+            args.append(QString::fromLocal8Bit(argv[i]));
+        if (BrowserProxy::isProxyInvocation(args))
+            return BrowserProxy::run(argc, argv);
+    }
+
     Config::ensureConfigExists();
     const AppConfig config = Config::load();
     I18n::load(config.language);
