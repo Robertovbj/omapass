@@ -13,6 +13,9 @@ Modal {
     property string wordlistInUse: ""
     property string configPath: ""
     property bool browserSupported: false
+    // The open vault's name when the icon boxes are its own choice; empty
+    // when they edit the default.
+    property string iconsVault: ""
 
     signal submitted(var values)
 
@@ -30,6 +33,7 @@ Modal {
         lockField.text = String(values.lockMinutes);
         iconsBox.checked = values.siteIcons;
         duckDuckGoBox.checked = values.siteIconsDuckDuckGo;
+        root.iconsVault = values.iconsVault || "";
         browserBox.checked = values.browserIntegration;
         root.browserSupported = values.browserSupported;
         root.wordlist = values.wordlist;
@@ -145,7 +149,9 @@ Modal {
 
     CheckOption {
         id: iconsBox
-        text: i18n.t("settings.site_icons")
+        text: root.iconsVault.length > 0
+            ? i18n.t("settings.site_icons_vault", { "vault": root.iconsVault })
+            : i18n.t("settings.site_icons")
 
         onSubmitted: root.submit()
         onCancelled: root.dismissed()
@@ -163,6 +169,15 @@ Modal {
         onCancelled: root.dismissed()
         onNextRequested: root.focusNext(duckDuckGoBox)
         onPreviousRequested: root.focusPrevious(duckDuckGoBox)
+    }
+
+    Text {
+        width: parent.width
+        text: root.iconsVault.length > 0 ? i18n.t("settings.site_icons_stored")
+                                         : i18n.t("settings.site_icons_default")
+        color: theme.guidance
+        wrapMode: Text.WordWrap
+        font.pixelSize: Math.round(11 * root.s)
     }
 
     Text {

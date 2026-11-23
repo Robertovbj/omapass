@@ -29,6 +29,7 @@ SOURCES += \
     tst_filter.cpp \
     tst_generator.cpp \
     tst_history.cpp \
+    tst_iconchoice.cpp \
     tst_kdbx.cpp \
     tst_onepassword.cpp \
     tst_pass.cpp \
@@ -56,6 +57,7 @@ SOURCES += \
     ../src/generator.cpp \
     ../src/history.cpp \
     ../src/i18n.cpp \
+    ../src/iconchoice.cpp \
     ../src/kdbx.cpp \
     ../src/kdbx2pass.cpp \
     ../src/keepassvault.cpp \
@@ -93,6 +95,7 @@ HEADERS += \
     ../src/generator.h \
     ../src/history.h \
     ../src/i18n.h \
+    ../src/iconchoice.h \
     ../src/kdbx.h \
     ../src/kdbx2pass.h \
     ../src/keepassvault.h \

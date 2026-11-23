@@ -283,6 +283,8 @@ private:
     // (`origin` set, and the icon asked for when it is not cached yet, when
     // site icons are on).
     void applyIcon(QVariantMap *row, const QString &path, const QString &url);
+    // Reads the open vault's icon choice, before its rows are built.
+    void loadIconChoice();
     void storeEntryIcon(const QString &entry, const QByteArray &png);
     // A row of m_allRows changed: the shown copy, if it is shown, follows.
     void updateShownRow(int index);
@@ -407,6 +409,11 @@ private:
     QHash<QString, int> m_rowOf;      // entry path → position in m_allEntries
     EntryRowsModel m_rowsModel;
     SiteIcons m_siteIcons;
+    // Whether the open vault's rows ask the sites for icons (IconChoice):
+    // its own choice, not the config.toml default the settings edit while
+    // no vault is open.
+    bool m_iconsDownload = false;
+    bool m_iconsDuckDuckGo = false;
     EntryIcons m_entryIcons;
 
     // Login and URL read one entry at a time for a backend that cannot list

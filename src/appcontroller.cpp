@@ -6,6 +6,7 @@
 #include "filter.h"
 #include "generator.h"
 #include "i18n.h"
+#include "iconchoice.h"
 #include "onepasswordvault.h"
 #include "passstore.h"
 
@@ -821,6 +822,7 @@ void AppController::openVault(const DbRef &ref, const Secret &secret) {
 void AppController::adoptVault(const DbRef &ref, Vault *vault) {
     m_browser.waitForReads();
     m_vault.reset(vault);
+    loadIconChoice();
     refreshPinState();
     m_history.recordUse(ref.path);
 
@@ -928,7 +930,7 @@ void AppController::applyIcon(QVariantMap *row, const QString &path, const QStri
         return;
     }
 
-    const QString origin = m_config.siteIcons ? SiteIcons::originOf(url) : QString();
+    const QString origin = m_iconsDownload ? SiteIcons::originOf(url) : QString();
     row->insert(QStringLiteral("origin"), origin);
     if (origin.isEmpty()) {
         row->insert(QStringLiteral("icon"), QString());
@@ -941,6 +943,14 @@ void AppController::applyIcon(QVariantMap *row, const QString &path, const QStri
         row->insert(QStringLiteral("icon"), QString());
         m_siteIcons.request(origin);
     }
+}
+
+void AppController::loadIconChoice() {
+    const IconChoice choice =
+        IconChoice::load(m_vault.data(), m_config.siteIcons, m_config.siteIconsDuckDuckGo);
+    m_iconsDownload = choice.download;
+    m_iconsDuckDuckGo = choice.duckDuckGo;
+    m_siteIcons.setDuckDuckGo(m_iconsDuckDuckGo);
 }
 
 void AppController::updateShownRow(int index) {
@@ -1861,8 +1871,13 @@ QVariantMap AppController::settings() const {
             {QStringLiteral("lockEnabled"), m_config.lockMinutes.has_value()},
             {QStringLiteral("lockMinutes"), m_config.lockMinutes.value_or(10)},
             {QStringLiteral("wordlist"), m_config.wordlist},
-            {QStringLiteral("siteIcons"), m_config.siteIcons},
-            {QStringLiteral("siteIconsDuckDuckGo"), m_config.siteIconsDuckDuckGo},
+            // With a vault open, its own choice; otherwise the default for
+            // vaults that have none.
+            {QStringLiteral("siteIcons"), m_vault.isNull() ? m_config.siteIcons : m_iconsDownload},
+            {QStringLiteral("siteIconsDuckDuckGo"),
+             m_vault.isNull() ? m_config.siteIconsDuckDuckGo : m_iconsDuckDuckGo},
+            {QStringLiteral("iconsVault"),
+             m_vault.isNull() ? QString() : Vault::displayName({m_vault->path(), m_vault->kind()})},
             {QStringLiteral("browserIntegration"), m_config.browserIntegration},
             {QStringLiteral("browserSupported"), BrowserIntegration::supported()},
             {QStringLiteral("wordlistInUse"), Generator::wordlistPath()},
@@ -1895,8 +1910,14 @@ void AppController::saveSettings(const QVariantMap &values) {
     toml.insert(QStringLiteral("general.lock_minutes"),
                 lockEnabled ? QString::number(lockMinutes) : QStringLiteral("false"));
     toml.insert(QStringLiteral("generator.wordlist"), Config::tomlString(wordlist));
-    toml.insert(QStringLiteral("icons.download"), siteIcons ? QStringLiteral("true") : QStringLiteral("false"));
-    toml.insert(QStringLiteral("icons.duckduckgo"), duckDuckGo ? QStringLiteral("true") : QStringLiteral("false"));
+    // The icon boxes are the open vault's when there is one, and leave the
+    // default alone.
+    const bool perVault = !m_vault.isNull();
+    const bool defaultIcons = perVault ? m_config.siteIcons : siteIcons;
+    const bool defaultDuckDuckGo = perVault ? m_config.siteIconsDuckDuckGo : duckDuckGo;
+    toml.insert(QStringLiteral("icons.download"), defaultIcons ? QStringLiteral("true") : QStringLiteral("false"));
+    toml.insert(QStringLiteral("icons.duckduckgo"),
+                defaultDuckDuckGo ? QStringLiteral("true") : QStringLiteral("false"));
     toml.insert(QStringLiteral("browser.enabled"), browser ? QStringLiteral("true") : QStringLiteral("false"));
 
     if (!Config::writeValues(toml)) {
@@ -1911,15 +1932,24 @@ void AppController::saveSettings(const QVariantMap &values) {
     m_config.recencyEnabled = recency;
     m_config.lockMinutes = lockEnabled ? std::optional<int>(lockMinutes) : std::nullopt;
     m_config.wordlist = wordlist;
-    // Turning DuckDuckGo on is a reason to ask again for the sites that
-    // had nothing of their own.
-    const bool iconsChanged = siteIcons != m_config.siteIcons
-        || duckDuckGo != m_config.siteIconsDuckDuckGo;
-    m_config.siteIcons = siteIcons;
-    m_config.siteIconsDuckDuckGo = duckDuckGo;
-    m_siteIcons.setDuckDuckGo(duckDuckGo);
-    if (iconsChanged)
+    m_config.siteIcons = defaultIcons;
+    m_config.siteIconsDuckDuckGo = defaultDuckDuckGo;
+    // Written to the vault only when it changed, so saving the other
+    // settings never rewrites a database. Turning DuckDuckGo on is a reason
+    // to ask again for the sites that had nothing of their own.
+    QString iconError;
+    if (perVault && (siteIcons != m_iconsDownload || duckDuckGo != m_iconsDuckDuckGo)) {
+        QString error;
+        if (!IconChoice::save(m_vault.data(), siteIcons, duckDuckGo, &error))
+            iconError = I18n::t(QStringLiteral("settings.site_icons_save_error"), QStringLiteral("err"), error);
+    }
+    if (perVault && iconError.isEmpty()
+        && (siteIcons != m_iconsDownload || duckDuckGo != m_iconsDuckDuckGo)) {
+        m_iconsDownload = siteIcons;
+        m_iconsDuckDuckGo = duckDuckGo;
+        m_siteIcons.setDuckDuckGo(duckDuckGo);
         rebuildRows();
+    }
 
     Generator::configure(m_config.wordlist, m_config.language);
     applyLockSettings();
@@ -1928,7 +1958,10 @@ void AppController::saveSettings(const QVariantMap &values) {
     if (pathChanged || recencyChanged)
         refreshDatabases();
 
-    showMessage(I18n::t(QStringLiteral("settings.saved")), false);
+    if (iconError.isEmpty())
+        showMessage(I18n::t(QStringLiteral("settings.saved")), false);
+    else
+        showMessage(iconError, true);
     // After the line above, so what turning it on says (the browsers it was
     // set up for, or why not) is what stays on the status line.
     const bool browserChanged = browser != m_config.browserIntegration;

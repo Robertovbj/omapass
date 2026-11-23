@@ -988,8 +988,20 @@ ui.help_copy_otp:
   pt-BR: "Copiar código OTP"
   en: "Copy OTP code"
 settings.site_icons:
-  pt-BR: "Mostrar ícones dos sites"
-  en: "Show site icons"
+  pt-BR: "Baixar os ícones dos sites (padrão para os bancos)"
+  en: "Download the sites' icons (default for the vaults)"
+settings.site_icons_vault:
+  pt-BR: "Baixar os ícones dos sites para %{vault}"
+  en: "Download the sites' icons for %{vault}"
+settings.site_icons_stored:
+  pt-BR: "Os ícones guardados no banco aparecem sempre. Esta opção só decide se os que faltam são buscados nos sites."
+  en: "Icons stored in the vault always show. This only decides whether the missing ones are fetched from the sites."
+settings.site_icons_default:
+  pt-BR: "Vale para os bancos sem escolha própria. Com um banco aberto, a opção é só dele; um .kdbx que já tem ícones gravados começa com ela ligada."
+  en: "Applies to vaults without a choice of their own. With a vault open, the option is that vault's; a .kdbx that already stores icons starts with it on."
+settings.site_icons_save_error:
+  pt-BR: "Não foi possível gravar a escolha dos ícones no banco: %{err}"
+  en: "Could not save the icon choice in the vault: %{err}"
 settings.site_icons_duckduckgo:
   pt-BR: "Se o site não tiver ícone, buscar no DuckDuckGo"
   en: "When a site has no icon, ask DuckDuckGo"
