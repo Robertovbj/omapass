@@ -20,9 +20,14 @@ JOBS="$(nproc 2>/dev/null || echo 1)"
 # headers and links them with fresh ones. Inline template code from the two
 # versions then meets in one binary, and it crashed in filterItems. Start
 # over whenever the toolchain changes.
-toolchain="$("$QMAKE" -query QT_VERSION) $("$QMAKE" -query QT_INSTALL_HEADERS) $("${CXX:-g++}" --version 2>/dev/null | head -n 1)"
+#
+# Botan counts as toolchain too: System_RNG's vtable is emitted in our own
+# objects from its headers, so a bwcrypto.o built against 3.13 and linked
+# with libbotan 3.14 called a virtual slot past the end of it and crashed
+# on every Bitwarden unlock.
+toolchain="$("$QMAKE" -query QT_VERSION) $("$QMAKE" -query QT_INSTALL_HEADERS) $("${CXX:-g++}" --version 2>/dev/null | head -n 1) botan-$(pkg-config --modversion botan-3 2>/dev/null || echo unknown)"
 if [ -d "$BUILD_DIR" ] && [ "$(cat "$BUILD_DIR/.toolchain" 2>/dev/null)" != "$toolchain" ]; then
-  echo "Qt or compiler changed since the last build; rebuilding $BUILD_DIR from scratch." >&2
+  echo "Qt, compiler or Botan changed since the last build; rebuilding $BUILD_DIR from scratch." >&2
   rm -rf "$BUILD_DIR"
 fi
 mkdir -p "$BUILD_DIR"
