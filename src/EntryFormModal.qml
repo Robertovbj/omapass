@@ -27,6 +27,7 @@ Modal {
         passwordField.text = root.fields.password || "";
         urlField.text = root.fields.url || "";
         notesArea.text = root.fields.notes || "";
+        otpField.text = root.fields.otp || "";
         refreshGroups();
 
         // Group and title already came from the path, so editing starts on
@@ -67,8 +68,10 @@ Modal {
             "url": urlField.text,
             "notes": notesArea.text,
             "extra": root.fields.extra || [],
-            // Carried through as read, so an edit keeps the entry's OTP.
-            "otp": root.fields.otp || ""
+            // The controller keeps the original as it was when the field was
+            // not touched, and checks and normalises it when it was.
+            "otp": otpField.text,
+            "originalOtp": root.fields.otp || ""
         });
     }
 
@@ -76,7 +79,7 @@ Modal {
     // moveFocus knows to skip them.
     readonly property var tabOrder: [
         groupField, titleField, usernameField, passwordField, revealPassword,
-        urlField, notesArea
+        otpField, urlField, notesArea
     ]
 
     function focusNext(from) { root.moveFocus(root.tabOrder, from, 1); }
@@ -146,6 +149,21 @@ Modal {
         onCancelled: root.dismissed()
         onNextRequested: root.focusNext(revealPassword)
         onPreviousRequested: root.focusPrevious(revealPassword)
+    }
+
+    // Every backend keeps one, pass included (pass-otp's line). The secret
+    // a site shows when setting it up, or the otpauth:// URI behind its QR
+    // code, both go in as they are.
+    Field {
+        id: otpField
+        objectName: "otpField"
+        width: parent.width
+        label: i18n.t("common.otp_label")
+
+        onCancelled: root.dismissed()
+        onSubmitted: root.submit()
+        onNextRequested: root.focusNext(otpField)
+        onPreviousRequested: root.focusPrevious(otpField)
     }
 
     Field {

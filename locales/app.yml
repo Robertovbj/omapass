@@ -963,3 +963,27 @@ totp.not_totp:
 totp.invalid_parameter:
   pt-BR: "A URI do OTP tem algoritmo, dígitos ou período inválidos"
   en: "The OTP URI has an invalid algorithm, digits or period"
+app.no_otp:
+  pt-BR: "A entrada não tem OTP."
+  en: "The entry has no OTP."
+app.otp_unreadable:
+  pt-BR: "O OTP de %{entry} não pôde ser lido: %{err}"
+  en: "The OTP of %{entry} could not be read: %{err}"
+app.copied_otp:
+  pt-BR: "Código OTP de %{entry} copiado"
+  en: "OTP code of %{entry} copied"
+common.otp_label:
+  pt-BR: "OTP (segredo ou URI otpauth://)"
+  en: "OTP (secret or otpauth:// URI)"
+ui.info_otp:
+  pt-BR: "Código OTP"
+  en: "OTP code"
+ui.info_otp_seconds:
+  pt-BR: "%{seconds}s"
+  en: "%{seconds}s"
+ui.context_copy_otp:
+  pt-BR: "Copiar código OTP"
+  en: "Copy OTP code"
+ui.help_copy_otp:
+  pt-BR: "Copiar código OTP"
+  en: "Copy OTP code"

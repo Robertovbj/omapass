@@ -17,6 +17,7 @@
 #include "generator.h"
 #include "history.h"
 #include "onepasswordlogin.h"
+#include "totp.h"
 #include "vault.h"
 
 class QEvent;
@@ -186,7 +187,19 @@ public:
     Q_INVOKABLE void copyUsername(const QString &entry);
     Q_INVOKABLE void copyUrl(const QString &entry);
     Q_INVOKABLE void openUrl(const QString &entry);
+    // The entry's current one-time password to the clipboard, cleared like
+    // a password.
+    Q_INVOKABLE void copyOtp(const QString &entry);
+    // Also keeps the entry's one-time password, parsed, for otpNow(): the
+    // info sheet asks for the code every second and the secret never has
+    // to leave this side. `hasOtp` says whether there is one.
     Q_INVOKABLE QVariantMap entryDetails(const QString &entry);
+    // The code of the entry last shown by entryDetails(), with `secondsLeft`
+    // and `period` for the countdown; empty when it has none.
+    Q_INVOKABLE QVariantMap otpNow() const;
+    Q_INVOKABLE void copyShownOtp();
+    // Drops what entryDetails() kept, when the sheet closes.
+    Q_INVOKABLE void forgetShownOtp();
     Q_INVOKABLE QVariantMap entryFields(const QString &entry);
     Q_INVOKABLE void saveEntry(const QVariantMap &fields);
     Q_INVOKABLE void deleteEntry(const QString &entry);
@@ -239,6 +252,8 @@ private:
     // Whether the open vault can take a change right now; says why not on the
     // status line when it cannot.
     bool vaultReadyForChanges();
+    // Puts a one-time code on the clipboard, cleared like a password.
+    void copyOtpCode(const QString &code, const QString &entry);
     // Whether nothing else is running. Account actions used to return in
     // silence while busy, which looks exactly like a shortcut that does
     // nothing.
@@ -366,6 +381,8 @@ private:
         EntryMeta meta;
     };
     QHash<QString, EntryMeta> m_lazyMeta;     // what has arrived so far
+    std::optional<TotpParams> m_shownOtp;     // the info sheet's entry, see otpNow()
+    QString m_shownOtpEntry;
     QHash<QString, EntryMeta> m_listedMeta;   // what the backend listed at once
     QFutureWatcher<LazyMeta> *m_metaWatcher = nullptr;
     QThreadPool m_metaPool;

@@ -78,6 +78,20 @@ public:
     Q_INVOKABLE void cancelOnePasswordLogin() {}
     Q_INVOKABLE void logoutOnePassword(int) {}
 
+    // The info sheet's one-time password: a fixed code, and copying it goes
+    // through its own call (the clipboard clearing of a password), which is
+    // what a test checks.
+    Q_INVOKABLE QVariantMap otpNow() const {
+        return {{QStringLiteral("code"), QStringLiteral("287082")},
+                {QStringLiteral("secondsLeft"), 4},
+                {QStringLiteral("period"), 30}};
+    }
+    Q_INVOKABLE void copyShownOtp() {
+        m_lastCopied = QStringLiteral("otp:287082");
+        emit copied();
+    }
+    Q_INVOKABLE void forgetShownOtp() {}
+
     // What GeneratorModal reads on opening and calls on every change. The
     // password is not the point there, only that the sheet can be walked.
     Q_INVOKABLE QVariantMap generatorOptions() const {

@@ -152,6 +152,29 @@ private slots:
         QVERIFY(!Totp::fromKeepassLegacy(seed, QStringLiteral("x;6")));
     }
 
+    // The form's field: what came from the entry goes back untouched, in
+    // its backend's own spelling; what was typed is checked and becomes a URI.
+    void totpFormKeepsTheOriginalAndNormalisesWhatWasTyped() {
+        const QString bitwarden = QStringLiteral("jbsw y3dp ehpk 3pxp");
+        QCOMPARE(*Totp::forSaving(bitwarden + QLatin1Char(' '), bitwarden, QStringLiteral("x")), bitwarden);
+        QCOMPARE(*Totp::forSaving(QString(), QString(), QStringLiteral("x")), QString());
+        QCOMPARE(*Totp::forSaving(QString(), bitwarden, QStringLiteral("x")), QString());
+
+        const std::optional<QString> typed =
+            Totp::forSaving(QStringLiteral("JBSWY3DPEHPK3PXP"), QString(), QStringLiteral("Gmail"));
+        QVERIFY(typed);
+        QVERIFY2(typed->startsWith(QLatin1String("otpauth://totp/Gmail?secret=JBSWY3DPEHPK3PXP")),
+                 qPrintable(*typed));
+
+        // A stored value that no longer parses is still kept as it was.
+        QCOMPARE(*Totp::forSaving(QStringLiteral("lixo!"), QStringLiteral("lixo!"), QStringLiteral("x")),
+                 QStringLiteral("lixo!"));
+
+        QString error;
+        QVERIFY(!Totp::forSaving(QStringLiteral("lixo!"), QString(), QStringLiteral("x"), &error));
+        QVERIFY(!error.isEmpty());
+    }
+
     void base32RoundTrips() {
         for (const QByteArray &bytes : {QByteArray(), QByteArray("f"), QByteArray("fo"),
                                         QByteArray("foo"), QByteArray("foob"), QByteArray("fooba"),

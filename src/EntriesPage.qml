@@ -131,6 +131,7 @@ FocusScope {
         onGenerateRequested: page.mode = "generate"
         onPinToggleRequested: page.togglePin()
         onCopyUsernameRequested: page.withEntry(controller.copyUsername)
+        onCopyOtpRequested: page.withEntry(controller.copyOtp)
         onCopyUrlRequested: page.withEntry(controller.copyUrl)
         onOpenUrlRequested: page.withEntry(controller.openUrl)
         onHelpRequested: page.mode = "help"
@@ -154,8 +155,9 @@ FocusScope {
         // pass entries have no login or URL of their own to offer. The first
         // group acts on the selected entry; the second is not about it.
         readonly property var groups: controller.passBackend
-            ? [["copyPassword", "edit", "delete", "info"], ["add", "generate"]]
-            : [["copyPassword", "copyUsername", "copyUrl", "openUrl", "edit", "delete", "info"],
+            ? [["copyPassword", "copyOtp", "edit", "delete", "info"], ["add", "generate"]]
+            : [["copyPassword", "copyUsername", "copyUrl", "openUrl", "copyOtp", "edit", "delete",
+                "info"],
                ["add", "generate"]]
         readonly property var actions: [].concat.apply([], groups)
         readonly property var labels: ({
@@ -163,6 +165,7 @@ FocusScope {
             "copyUsername": i18n.t("ui.context_copy_username"),
             "copyUrl": i18n.t("ui.context_copy_url"),
             "openUrl": i18n.t("ui.context_open_url"),
+            "copyOtp": i18n.t("ui.context_copy_otp"),
             "info": i18n.t("ui.context_info"),
             "add": i18n.t("ui.context_add_new"),
             "edit": i18n.t("ui.context_edit"),
@@ -191,6 +194,8 @@ FocusScope {
                 page.withEntry(controller.copyUrl);
             else if (action === "openUrl")
                 page.withEntry(controller.openUrl);
+            else if (action === "copyOtp")
+                page.withEntry(controller.copyOtp);
             else if (action === "info")
                 page.openInfo();
             else if (action === "add")
@@ -252,6 +257,7 @@ FocusScope {
         visible: page.mode === "info"
         passBackend: controller.passBackend
 
+        onVisibleChanged: if (!visible) controller.forgetShownOtp()
         onDismissed: page.mode = "list"
     }
 
@@ -293,6 +299,7 @@ FocusScope {
                           ["CTRL-B", i18n.t("ui.help_copy_username")],
                           ["CTRL-L", i18n.t("ui.help_copy_url")],
                           ["CTRL-SHIFT-L", i18n.t("ui.help_open_url")],
+                          ["CTRL-T", i18n.t("ui.help_copy_otp")],
                           ["TAB", i18n.t("ui.help_view_details")],
                           [i18n.t("common.space_key"), i18n.t("ui.help_open_menu")],
                           ["CTRL-A", i18n.t("ui.help_add_entry")],

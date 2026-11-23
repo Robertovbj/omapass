@@ -48,6 +48,14 @@ int secondsLeft(const TotpParams &params, qint64 unixTime);
 // authenticator app when the params carry none (the entry title, say).
 QString toUri(const TotpParams &params, const QString &label = QString());
 
+// What an entry form's OTP field saves. `original` is what the entry held
+// when the form opened: left untouched (whitespace aside), it goes back
+// exactly as it was, in whatever form its backend keeps it. Anything else is
+// checked and written as an otpauth URI named `label`. Empty clears it;
+// nothing, with `error` set, when what was typed is not a TOTP secret.
+std::optional<QString> forSaving(const QString &typed, const QString &original,
+                                 const QString &label, QString *error = nullptr);
+
 // Base32 as RFC 4648 writes it, read leniently: any case, spaces, hyphens
 // and padding are ignored (authenticator setup pages print the secret in
 // groups). Nothing on invalid input.

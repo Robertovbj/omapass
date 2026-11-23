@@ -89,6 +89,7 @@ FocusScope {
     signal generateRequested()
     signal pinToggleRequested()
     signal copyUsernameRequested()
+    signal copyOtpRequested()
     signal copyUrlRequested()
     signal openUrlRequested()
     signal helpRequested()
@@ -164,6 +165,8 @@ FocusScope {
         // scrolls half a page here, so L (link) copies it and Shift+L opens
         // it. Ctrl+O is taken by the settings, application-wide.
         case Qt.Key_B: pane.copyUsernameRequested(); return true;
+        // T for the one-time password, as in KeePassXC.
+        case Qt.Key_T: pane.copyOtpRequested(); return true;
         case Qt.Key_L:
             if (event.modifiers & Qt.ShiftModifier)
                 pane.openUrlRequested();

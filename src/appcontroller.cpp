@@ -10,6 +10,7 @@
 #include "passstore.h"
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDesktopServices>
 #include <QDir>
 #include <QEvent>
@@ -1048,6 +1049,35 @@ void AppController::copyUrl(const QString &entry) {
         showMessage(I18n::t(QStringLiteral("app.copy_error")), true);
 }
 
+void AppController::copyOtp(const QString &entry) {
+    EntryData data;
+    if (!fetchForCopy(entry, &data))
+        return;
+    if (data.otp.isEmpty()) {
+        showMessage(I18n::t(QStringLiteral("app.no_otp")), true);
+        return;
+    }
+
+    QString error;
+    const std::optional<TotpParams> params = Totp::parse(data.otp.toString(), &error);
+    if (!params) {
+        showMessage(I18n::t(QStringLiteral("app.otp_unreadable"), {{QStringLiteral("entry"), entry},
+                                                                   {QStringLiteral("err"), error}}),
+                    true);
+        return;
+    }
+    copyOtpCode(Totp::code(*params, QDateTime::currentSecsSinceEpoch()), entry);
+}
+
+void AppController::copyOtpCode(const QString &code, const QString &entry) {
+    if (!Clipboard::copy(code)) {
+        showMessage(I18n::t(QStringLiteral("app.copy_error")), true);
+        return;
+    }
+    showClipboardMessage(I18n::t(QStringLiteral("app.copied_otp"), QStringLiteral("entry"), entry));
+    Clipboard::scheduleClear(Secret(code));
+}
+
 void AppController::openUrl(const QString &entry) {
     EntryData data;
     if (!fetchForCopy(entry, &data))
@@ -1082,10 +1112,36 @@ QVariantMap AppController::entryDetails(const QString &entry) {
     QString error;
     m_vault->fetchEntry(entry, &data, &error);
 
+    // A value that does not parse is still shown as missing rather than as
+    // a wrong code; copying it says why.
+    m_shownOtpEntry = entry;
+    m_shownOtp = data.otp.isEmpty() ? std::nullopt : Totp::parse(data.otp.toString());
+
     return {{QStringLiteral("title"), m_vault->titleFor(entry, fallback)},
             {QStringLiteral("username"), data.username},
             {QStringLiteral("url"), data.url},
-            {QStringLiteral("notes"), data.notes}};
+            {QStringLiteral("notes"), data.notes},
+            {QStringLiteral("hasOtp"), m_shownOtp.has_value()}};
+}
+
+QVariantMap AppController::otpNow() const {
+    if (!m_shownOtp)
+        return {};
+    const qint64 now = QDateTime::currentSecsSinceEpoch();
+    return {{QStringLiteral("code"), Totp::code(*m_shownOtp, now)},
+            {QStringLiteral("secondsLeft"), Totp::secondsLeft(*m_shownOtp, now)},
+            {QStringLiteral("period"), m_shownOtp->period}};
+}
+
+void AppController::copyShownOtp() {
+    if (!m_shownOtp)
+        return;
+    copyOtpCode(Totp::code(*m_shownOtp, QDateTime::currentSecsSinceEpoch()), m_shownOtpEntry);
+}
+
+void AppController::forgetShownOtp() {
+    m_shownOtp.reset();
+    m_shownOtpEntry.clear();
 }
 
 // The password comes back in the clear because an editable field has to hold
@@ -1140,7 +1196,18 @@ void AppController::saveEntry(const QVariantMap &fields) {
     data.url = fields.value(QStringLiteral("url")).toString().trimmed();
     data.notes = fields.value(QStringLiteral("notes")).toString();
     data.extra = fields.value(QStringLiteral("extra")).toStringList();
-    data.otp = Secret(fields.value(QStringLiteral("otp")).toString());
+    // Named after the entry, as an authenticator app would show it.
+    {
+        QString error;
+        const std::optional<QString> otp =
+            Totp::forSaving(fields.value(QStringLiteral("otp")).toString(),
+                            fields.value(QStringLiteral("originalOtp")).toString(), title, &error);
+        if (!otp) {
+            showMessage(error, true);
+            return;
+        }
+        data.otp = Secret(*otp);
+    }
 
     // Locking waits while busy, so the vault outlives the task.
     const Vault *vault = m_vault.data();
@@ -1589,6 +1656,7 @@ void AppController::closeVault() {
     m_metaPool.waitForDone();
     m_lazyMeta.clear();
     m_metaArrived.clear();
+    forgetShownOtp();
     m_vault->close();
     m_vault.reset();
 }

@@ -214,6 +214,19 @@ QString toUri(const TotpParams &params, const QString &label) {
            + QLatin1Char('?') + query.toString(QUrl::FullyEncoded);
 }
 
+std::optional<QString> forSaving(const QString &typed, const QString &original,
+                                 const QString &label, QString *error) {
+    const QString value = typed.trimmed();
+    if (value == original.trimmed())
+        return original;
+    if (value.isEmpty())
+        return QString();
+    const std::optional<TotpParams> params = parse(value, error);
+    if (!params)
+        return std::nullopt;
+    return toUri(*params, label);
+}
+
 std::optional<QByteArray> base32Decode(const QString &text) {
     QByteArray out;
     quint32 buffer = 0;
