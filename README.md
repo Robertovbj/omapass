@@ -14,558 +14,62 @@ Segue a linha do [omacalc](https://github.com/omacom-io/omacalc),
 [omacut](https://github.com/omacom-io/omacut): Qt 6 + QML, com as cores lidas do
 tema ativo do Omarchy e retintadas ao vivo quando o tema muda.
 
+A documentação completa está na [wiki](https://github.com/higorhgon/omapass/wiki).
+
 ## Funcionalidades
 
-- Detecta bancos KeePassXC e pass sozinho e ajusta a interface a cada um (no pass, o formulário tem só Título e Senha, sem Usuário/URL/Notas)
-- No pass, o omapass guarda a passphrase só durante a sessão e decifra as entradas com ela
-- Contas Bitwarden (bitwarden.com, a nuvem europeia ou um servidor próprio, como Vaultwarden e Bitwarden self-hosted), com login pela própria interface, incluindo verificação em duas etapas e verificação de novo dispositivo
-- Desbloqueio opcional por PIN, um PIN por banco, em qualquer backend
-- Contas 1Password com login pela própria interface (endereço, e-mail, Secret Key, senha mestra e, quando houver, código de duas etapas), com os cofres virando grupos e as etiquetas aninhadas abaixo deles
-- Seletor de banco de dados com busca multi-termo e navegação estilo vim
-- Desbloqueio do banco num modal, com validação da senha/passphrase
-- Criação de bancos pela própria interface: KeePassXC (nome + senha), pass (diretório com autocomplete + escolha de chave GPG existente) ou conta Bitwarden/1Password (login)
-- Listagem, adição, edição, exclusão e renomeação de grupos/entradas
-- Gerador de senhas e de frases (diceware) em modal próprio, que copia ou preenche o campo Senha do formulário
-- `Ctrl+?` mostra todos os atalhos
-- Ordenação por frecency (frequência + recência de uso)
-- Cores vindas do tema do Omarchy, com sobreposição opcional por tema próprio em TOML
-- Lista de entradas em colunas (tipo senha/ssh, nome, grupo, login e URL), e a busca
-  multi-termo olha todas elas. No pass, só tipo, nome e grupo, porque login e URL
-  exigiriam abrir cada entrada
-- Atalhos de teclado iguais aos da versão TUI: `j/k`, `gg/G`, `Ctrl+U/D`, `/` para buscar
-- Suporte a mouse: clique, duplo-clique e botão direito na lista; seleção de texto nos detalhes da entrada
-
-## Requisitos
-
-- Qt 6: `qt6-base`, `qt6-declarative`
-- `xdg-desktop-portal` e um backend de portal (para o modo claro/escuro e o tamanho de texto do desktop)
-- Linux, em Wayland ou X11. A cópia de senhas usa o clipboard do próprio Qt, sem depender de programa externo.
-- `wl-clipboard` (`wl-copy`) é opcional e só é usado em sessões Wayland, onde melhora a limpeza automática do clipboard. A limpeza acontece 10 segundos depois da cópia, quando o foco já está na janela em que você colou, e o `wl-copy --clear` solta a seleção pelo `wlr-data-control`, que não exige foco. Sem ele, a limpeza depende do compositor aceitar a escrita do Qt nesse momento. Em X11 não é usado.
-- Para o desbloqueio por PIN (opcional, em qualquer banco): `secret-tool`, do `libsecret`, e um chaveiro do sistema destravado. O Omarchy já traz os dois. Sem isso, a opção de PIN não aparece.
-- Botan 3 (`botan` no Arch/Omarchy) ou Botan 2.19+ (`libbotan-2-dev` no Ubuntu 24.04 LTS, que ainda não tem o 3), usado na criptografia dos bancos KeePass e das contas Bitwarden
-- ZLIB (`zlib` / `zlib1g-dev`), para a compressão dos bancos `.kdbx`
-
-Para bancos KeePass/KeePassXC não é preciso instalar nada: o omapass lê e grava
-`.kdbx` (formatos 3.1 e 4, com AES-256, ChaCha20 ou Twofish e AES-KDF, Argon2d ou Argon2id)
-sozinho. Bancos protegidos por arquivo-chave ou por chave de hardware ainda não
-são suportados, só senha.
-
-Para bancos pass:
-
-- [`pass`](https://www.passwordstore.org/) instalado
-- `gpg`/`gpg-agent`, com pelo menos uma chave secreta já criada (veja [Configurando o pass](#configurando-o-pass))
-- `gpg-agent` configurado para aceitar a senha via loopback (`allow-loopback-pinentry`). O omapass decifra as entradas passando a passphrase pelo stdin do `gpg`, sem abrir um pinentry a cada acesso
-
-Para contas Bitwarden, nada além do omapass. Ele fala direto com a API do servidor pelo
-módulo de rede do Qt (que já vem no `qt6-base`); o `bitwarden-cli` não é mais necessário.
-
-Para contas 1Password:
-
-- [`1password-cli`](https://developer.1password.com/docs/cli/) (o comando `op`) no PATH. No Arch/Omarchy: `sudo pacman -S 1password-cli`. Sem ele, a opção 1Password não aparece no menu de novo banco.
-- Uma conta em que você possa usar a senha mestra e a Secret Key (as contas que entram só por SSO não têm senha mestra, e o `op` não as adiciona desse jeito).
-- `script`, do `util-linux` (presente em qualquer instalação). O `op` só pergunta o código de verificação em duas etapas quando está falando com um terminal, então o omapass empresta um a ele. Sem o `script`, contas sem duas etapas continuam abrindo normalmente.
-
-`omapass --doctor` lista o que foi encontrado no sistema e para que serve cada coisa. É o
-primeiro lugar a olhar quando um backend não aparece.
-
-A busca por bancos usa [`fd`](https://github.com/sharkdp/fd) quando disponível
-(bem mais rápido em um diretório home inteiro) e cai para uma varredura própria
-quando não está instalado.
-
-### No Ubuntu
-
-O omapass compila no Ubuntu 24.04 LTS com:
-
-```bash
-sudo apt install build-essential cmake pkg-config qmake6 qt6-base-dev \
-  qt6-declarative-dev qt6-tools-dev qml6-module-qtquick \
-  qml6-module-qtquick-controls qml6-module-qtquick-templates \
-  qml6-module-qtquick-window qml6-module-qtqml-workerscript qml6-module-qttest \
-  libgl-dev libbotan-2-dev zlib1g-dev libminizip-dev libpcsclite-dev \
-  libusb-1.0-0-dev libreadline-dev libxkbcommon-dev
-```
-
-Daí em diante é igual ao Arch: `./bin/build` e `sudo make install`. Testado num container
-`ubuntu:24.04` (Qt 6.4.2, Botan 2.19.3), com os testes passando. O CI compila nas duas
-distribuições a cada mudança.
+- Detecta bancos KeePassXC e pass sozinho e ajusta a interface a cada um
+- Contas Bitwarden (bitwarden.com, bitwarden.eu, Vaultwarden, self-hosted) e 1Password, com login e verificação em duas etapas pela própria interface
+- Criação de bancos pela interface, sem sair do omapass
+- Busca multi-termo, navegação estilo vim e ordenação por frecency (frequência + recência de uso)
+- Adição, edição, exclusão e renomeação de grupos e entradas
+- [Gerador de senhas e de frases](https://github.com/higorhgon/omapass/wiki/Gerador-de-senhas) (diceware, com lista em pt-BR e em inglês)
+- [Desbloqueio opcional por PIN](https://github.com/higorhgon/omapass/wiki/Desbloqueio-por-PIN), um PIN por banco
+- Clipboard marcado como sensível e limpo depois de 10 segundos
+- Trava por inatividade e fecha quando a tela do sistema é bloqueada
+- Cores do tema do Omarchy, com sobreposição opcional por tema próprio em TOML
+- Suporte a mouse, além do teclado
 
 ## Instalação
+
+Precisa de Qt 6 (`qt6-base`, `qt6-declarative`), Botan 3 (ou 2.19+) e zlib. Cada backend
+tem os seus requisitos (`pass` e `gpg`, o `op` do 1Password); a lista completa, os pacotes do
+Ubuntu e os builds para Windows e macOS estão em
+[Instalação](https://github.com/higorhgon/omapass/wiki/Instala%C3%A7%C3%A3o).
 
 ```bash
 git clone https://github.com/higorhgon/omapass.git
 cd omapass
 make
+sudo make install   # ou: make install PREFIX="$HOME/.local"
 ```
 
-O binário fica em `build/omapass`. Os testes rodam com `make test`.
+O binário fica em `build/omapass`, e os testes rodam com `make test`. Há AppImage,
+instalador para Windows e DMG para macOS Intel nas
+[releases](https://github.com/higorhgon/omapass/releases).
 
-Para instalar no sistema (padrão `PREFIX=/usr/local`):
-
-```bash
-sudo make install
-```
-
-ou para instalar em `~/.local`:
-
-```bash
-make install PREFIX="$HOME/.local"
-```
-
-
-### AppImage
-
-`make appimage` gera um arquivo único em `dist/omapass-<versão>-x86_64.AppImage`, com Qt,
-os módulos QML e as listas de palavras dentro:
-
-```bash
-make appimage          # compila num container Ubuntu 24.04 (docker ou podman)
-bin/appimage --native  # compila nesta máquina, para experimentar
-```
-
-O build roda dentro de um container Ubuntu LTS de propósito: um AppImage só roda onde a
-glibc for pelo menos tão nova quanto a da máquina que o gerou, então um feito no Arch só
-rodaria em sistemas igualmente recentes. `bin/appimage --native` serve para testar
-localmente, e avisa disso.
-
-Os CLIs dos backends não vão dentro: `op`, `gpg` e `pass` continuam sendo os do
-sistema, porque são eles que guardam as suas contas e chaves. `./omapass-*.AppImage --doctor`
-mostra o que foi encontrado na máquina em que ele estiver rodando.
-
-### Windows (x64)
-
-O mesmo código compila para Windows com o MinGW do MSYS2 (UCRT64): Qt 6, Botan 3 e zlib. O
-workflow `windows.yml` faz isso a cada PR e gera dois arquivos:
-
-- `omapass-<versão>-windows-x64-setup.exe`: o instalador. Pergunta a pasta (por padrão
-  `Arquivos de Programas\omapass`; dá para instalar só para o seu usuário, sem administrador) e
-  oferece os atalhos no menu Iniciar e na área de trabalho, cada um podendo ser desmarcado.
-  Tem desinstalador e abre em português quando o Windows está em português.
-- `omapass-<versão>-windows-x64.zip`: a versão portátil. É só descompactar e abrir
-  `omapass.exe`, sem instalar nada.
-
-Os dois trazem o executável, as DLLs do Qt/Botan/runtime, os módulos QML e as listas de palavras.
-Não existe um `.exe` único com tudo dentro, como o AppImage. Isso exigiria um Qt compilado
-estaticamente, e a alternativa (um executável que se extrai numa pasta temporária ao abrir)
-demora mais para iniciar e costuma ser barrada por antivírus. Por isso o instalador.
-
-Para compilar à mão, num shell UCRT64 do MSYS2 com
-`mingw-w64-ucrt-x86_64-{gcc,make,pkgconf,qt6-base,qt6-declarative,qt6-tools,libbotan,zlib}`:
-
-```bash
-mkdir build && cd build
-qmake6 ../omapass.pro
-mingw32-make release
-```
-
-No Windows funcionam os bancos KeePass (`.kdbx`) e as contas Bitwarden, que o omapass trata
-sozinho. O que depende de programas do Linux fica de fora: o `pass` e o `gpg`
-(se estiverem no PATH, funcionam), o PIN (`secret-tool`) e a trava de sessão do desktop. O
-claro/escuro e o idioma vêm do Windows (o `config.toml` ainda manda); a escala do texto do
-desktop não é lida. A configuração fica em
-`%USERPROFILE%\.config\omapass`.
-
-### macOS (Intel)
-
-Baixe `omapass-<versão>-macos-x64.dmg` na release, abra a imagem e arraste
-**Omapass.app** para **Aplicativos**. O pacote inclui Qt, Botan e as listas de
-palavras. O app recebe assinatura ad hoc e é distribuído sem notarização da Apple.
-
-### Releases
-
-Para publicar, o workflow **Release** (em Actions → Release → Run workflow) gera o
-AppImage, os pacotes do Windows e o DMG do macOS Intel em paralelo. Quando os três
-builds passam, o workflow anexa os arquivos e o `SHA256SUMS` à release.
-Por padrão, ele usa a tag `v<versão do main.cpp>`, criada no commit compilado.
-Se a release já existir, o workflow substitui os arquivos.
-
-### Empacotando para o Arch
-
-`packaging/PKGBUILD` monta um pacote a partir do HEAD do repositório
-(`makepkg -si` dentro dele). Quando houver versões marcadas, ele vira um
-`omapass` comum com tarball e `pkgver` fixo.
+`omapass --doctor` mostra o que foi encontrado no sistema e para que serve cada coisa.
 
 ## Uso
 
 ```bash
-./build/omapass
+omapass
 ```
 
-O programa procura, dentro do diretório configurado (`path` no `config.toml`; padrão: o
-diretório home):
-
-- arquivos `.kdbx` (bancos KeePassXC)
-- diretórios contendo `.gpg-id` (password-stores do pass)
-
-e lista também as contas Bitwarden e 1Password adicionadas pelo omapass, se houver. Cada
-banco aparece com o seu tipo (`[KeePassXC]`, `[pass]`, `[Bitwarden]` ou `[1Password]`).
-Havendo um único banco, ele vai direto para o modal de desbloqueio.
-
-### Criando um banco pela interface
-
-Na tela de seleção, `Ctrl+A` abre um menu perguntando o tipo de banco a criar:
-
-- **KeePassXC**: pede nome do arquivo e senha mestra; o banco é criado em `~/.config/omapass/databases/`.
-- **pass**: pede o diretório de destino (com autocomplete dos nomes de pasta existentes) e uma chave GPG dentre as já presentes no seu chaveiro. O omapass não gera chaves GPG; veja [Configurando o pass](#configurando-o-pass) para criar uma.
-- **Bitwarden**: pede servidor, e-mail e senha mestra da sua conta; veja [Usando o Bitwarden](#usando-o-bitwarden).
-- **1Password**: só aparece com o `op` instalado. Pede endereço, e-mail, Secret Key e senha mestra; veja [Usando o 1Password](#usando-o-1password).
-
-### Usando o Bitwarden
-
-O omapass fala direto com a API do Bitwarden, com a mesma criptografia dos clientes
-oficiais e sem CLI. Funciona com bitwarden.com, com a nuvem europeia (bitwarden.eu) e com
-servidores próprios (Vaultwarden ou Bitwarden self-hosted). Dá para ter várias contas ao
-mesmo tempo, inclusive em servidores diferentes.
-
-- **Adicionando a conta**: `Ctrl+A` → **Bitwarden** → servidor, e-mail e senha mestra. O
-  servidor vem preenchido com o último usado (`bitwarden.com` da primeira vez); para um
-  Vaultwarden, troque pelo endereço dele (`https://vault.exemplo.com`, ou só
-  `vault.exemplo.com`, que o `https://` é suposto). Se a conta usa verificação em duas
-  etapas, o omapass pede o código em seguida (com vários métodos cadastrados, pergunta
-  antes qual usar: aplicativo autenticador, e-mail ou YubiKey OTP; Duo e passkeys não são
-  suportados). Num dispositivo novo, o Bitwarden manda um código por e-mail, que é pedido do
-  mesmo jeito. Um código errado pode ser digitado de novo, sem repetir a senha.
-- **Abrindo**: a conta aparece na lista com o e-mail (e o servidor, quando não é o
-  bitwarden.com); abrir pede só a senha mestra. O omapass decifra a cópia local que ele
-  mesmo guarda, sem tocar na rede, então a lista aparece em uma fração de segundo e funciona
-  sem internet. A sincronização com o servidor roda logo em seguida, em segundo plano; o
-  rodapé indica enquanto isso acontece, e alterações esperam terminar. Se a sessão tiver sido
-  encerrada no servidor (pelo cofre web, ou com a troca da senha mestra), a sincronização
-  avisa, e abrir a conta de novo leva ao login com o e-mail e o servidor preenchidos.
-- **Pastas viram grupos**: uma pasta `Trabalho/Email` é o grupo `Trabalho/Email`.
-  Aparecem itens do tipo login e chave SSH; cartões, identidades e notas seguras ficam de
-  fora. Numa chave SSH, copiar a senha copia a chave privada, já pronta (quebras de linha
-  LF e newline final) para gravar num arquivo. Itens com o mesmo nome na mesma pasta ganham
-  o começo do id entre colchetes (`Email [1a2b3c4d]`) para se distinguirem.
-- **Editar preserva o resto**: o formulário mexe em nome, pasta, usuário, senha,
-  primeira URL e notas; TOTP, campos personalizados, as demais URLs, passkeys e anexos
-  do item ficam como estavam. Trocar a senha guarda a anterior no histórico de senhas do
-  item, como os clientes oficiais fazem.
-- **Excluir manda para a lixeira** do Bitwarden (recuperável pelo cofre web por 30 dias).
-- **Saindo da conta**: `Ctrl+X` sobre a conta na tela de bancos apaga a cópia local (e,
-  com ela, o acesso ao servidor), tira a conta da lista e apaga o PIN guardado, se houver.
-- **Servidor próprio precisa de HTTPS**: o login nunca vai em `http://`. Se o certificado
-  do servidor não vem de uma autoridade pública (um certificado autoassinado ou de uma CA
-  interna), o login avisa que ele não é confiável. Instale a CA no chaveiro do sistema (no
-  Arch/Omarchy, `sudo trust anchor --store ca.crt`; no Ubuntu, copie para
-  `/usr/local/share/ca-certificates/` e rode `sudo update-ca-certificates`) ou aponte o
-  omapass para ela com `OMAPASS_CA_CERTS` no ambiente em que ele é aberto. No Hyprland, por
-  exemplo, em `~/.config/hypr/hyprland.conf`:
-
-  ```
-  env = OMAPASS_CA_CERTS,/caminho/para/ca.crt
-  ```
-- **Vindo de uma versão que usava o `bw`**: a conta continua na lista, mas pede login uma
-  vez, porque o omapass não lê mais os dados do `bw`. O PIN de uma conta do bitwarden.com
-  continua valendo.
-
-### Desbloqueio por PIN
-
-Vale para qualquer banco, com um PIN por banco: um para o `.kdbx` do trabalho, outro para
-a conta Bitwarden, outro para o 1Password. Com o banco aberto, `Ctrl+I` ativa o desbloqueio
-por PIN (e desativa, quando já está ativo). Ele pede a senha do banco uma vez (a senha
-mestra, ou a passphrase GPG no caso do pass) e um PIN de pelo menos 4 caracteres. A partir
-daí, a tela de desbloqueio daquele banco pede o PIN; `Tab` volta para a senha a qualquer
-momento.
-
-Por padrão o PIN é só de dígitos, mas a opção **Permitir letras e símbolos** no mesmo modal
-libera o alfabeto. Isso muda muito o que ele protege, porque o PIN é a única coisa entre o
-dado guardado e quem o ler. Com 6 caracteres:
-
-| alfabeto | combinações |
-|---|---|
-| só dígitos | 1.000.000 |
-| dígitos e letras minúsculas | ~2,2 bilhões |
-| com maiúsculas e símbolos | ~690 bilhões |
-
-O aviso abaixo do campo aparece enquanto o PIN der menos de um milhão de combinações (o que
-seis dígitos dão), contando o alfabeto que ele realmente usa. Então `1234` avisa, `abcd`
-(456.976) também, e `k7$w` não.
-
-A senha é conferida antes de ser guardada, sem abrir o banco de novo (abrir custaria uma sessão
-nova no Bitwarden e no 1Password). A única exceção é o 1Password, que não tem como conferir
-localmente: ali uma senha errada só aparece no primeiro desbloqueio por PIN, que então remove
-o PIN e pede a senha.
-
-O PIN vale entre sessões e depois de reiniciar a máquina. Ele é removido quando você desativa
-com `Ctrl+I`, erra 5 vezes seguidas, sai da conta (`Ctrl+X`), ou quando a senha guardada deixa
-de abrir o banco, por exemplo depois de trocar a senha mestra, quando o omapass pede a nova.
-
-O limite de 5 erros vale só pela interface do omapass. Quem consegue ler o chaveiro (um
-programa rodando na sua sessão, com o chaveiro destravado) leva o dado cifrado e testa PINs
-offline, sem contador nenhum, e o próprio contador fica no `omapass.conf`, que o seu usuário
-edita. O que segura esse ataque são as 600.000 iterações de PBKDF2, uns 90 ms por tentativa:
-seis dígitos caem em cerca de um dia num único núcleo, e bem mais rápido numa GPU. Por isso o
-aviso de PIN fraco é um piso, não uma garantia; para algo mais forte, use letras e símbolos
-(veja [Segurança](#segurança)).
-
-Quem já usava o PIN só do Bitwarden não precisa refazer nada: o PIN guardado é movido para a
-chave nova na primeira vez que o banco é aberto.
-
-### Usando o 1Password
-
-O omapass conversa com o 1Password pelo `op`, e a lista de bancos é montada a partir do
-que `op account list` mostra, sem cópia à parte. Todas as contas do `op` aparecem, e uma
-conta adicionada (ou removida) pelo terminal aparece (ou some) sozinha.
-
-- **Adicionando uma conta**: `Ctrl+A` → **1Password** → endereço (vem preenchido com
-  `my.1password.com`, o padrão do 1Password), e-mail, Secret Key, senha mestra e, se quiser,
-  um apelido. Se a conta usa verificação em duas etapas, o omapass pede o código em
-  seguida, tanto ao adicionar a conta quanto ao abri-la depois, já que o 1Password pede o
-  código a cada nova sessão. O apelido é o `--shorthand` do `op` e é como a conta aparece na
-  lista; deixando em branco, o omapass usa a parte do e-mail antes do @ (com um número no
-  fim, se já houver outra conta com esse nome). Isso porque o `op`, sozinho, nomearia a conta
-  a partir do endereço (`my`), o que não diz de quem ela é. Contas adicionadas pelo terminal
-  sem apelido aparecem pelo e-mail.
-- **Abrindo**: abrir faz `op signin` e lista cofres e itens. A sessão do `op` expira depois
-  de 30 minutos sem uso; quando isso acontece, o omapass avisa e volta a pedir a senha
-  mestra. Ele não guarda a senha depois de abrir.
-- **Cofres viram grupos, etiquetas aninham abaixo**: um item no cofre `Pessoal` com a
-  etiqueta `Trabalho/Email` aparece em `Pessoal/Trabalho/Email`. Um item com várias
-  etiquetas aparece pela primeira em ordem alfabética; mover a entrada troca só essa
-  etiqueta, e as outras ficam como estavam. Renomear ou apagar um grupo de primeiro nível
-  mexe no cofre (`op vault edit`/`op vault delete`); nos demais níveis, mexe nas etiquetas
-  dos itens daquele cofre.
-- **Só logins e senhas** aparecem. Cartões, identidades, notas seguras e chaves SSH ficam
-  de fora, porque o formulário do omapass (título, usuário, senha, URL e notas) não daria
-  conta de reescrevê-los. Itens com o mesmo título no mesmo grupo ganham o começo do id
-  entre colchetes (`Netflix [1a2b3c4d]`).
-- **Editar preserva o resto**: o formulário mexe em título, etiqueta, usuário, senha,
-  primeira URL e notas; seções, campos personalizados, OTP e as demais URLs ficam como
-  estavam. Entradas com passkey são somente-leitura no omapass: o `op` não sabe reescrever
-  uma passkey a partir de um template, e editar a destruiria. Use o aplicativo do 1Password
-  para essas.
-- **Excluir manda para "Excluídos recentemente"** (recuperável pelos aplicativos do
-  1Password por 30 dias).
-- **Saindo de uma conta**: `Ctrl+X` sobre ela na tela de bancos apaga os dados da conta
-  deste computador e, com isso, a tira da lista. O comando que faz isso depende de haver
-  uma sessão aberta (`op signout --forget` quando há, `op account forget` quando não),
-  então o omapass tenta os dois e só diz que desconectou depois de conferir que o `op` parou
-  de listar a conta. As outras contas continuam onde estavam.
-- Cada comando do `op` é rápido (é um binário Go, com um daemon que guarda os itens
-  cifrados em memória), mas cada um fala com o servidor. Por isso a listagem é carregada
-  ao abrir e as senhas são buscadas na primeira vez que aparecem, ficando em memória
-  enquanto o cofre está aberto. Tudo isso roda em segundo plano, sem travar a janela.
-
-### Configurando o pass
-
-Se preferir configurar por fora da interface (ou ainda não tiver uma chave GPG):
-
-**1. Gere uma chave GPG**, caso ainda não tenha uma:
-
-```bash
-gpg --full-generate-key
-```
-
-Siga os prompts (tipo e tamanho da chave, validade, nome, e-mail e senha). Para conferir as chaves disponíveis depois:
-
-```bash
-gpg --list-secret-keys --keyid-format long
-```
-
-**2. Inicialize um password-store** com essa chave:
-
-```bash
-pass init <SEU-GPG-KEY-ID>
-```
-
-Isso cria o store em `~/.password-store`. Para criar em outro lugar, defina `PASSWORD_STORE_DIR` antes de rodar o comando:
-
-```bash
-PASSWORD_STORE_DIR=/caminho/personalizado pass init <SEU-GPG-KEY-ID>
-```
-
-O omapass encontra qualquer diretório com `.gpg-id` dentro do diretório de busca configurado (veja `path` em [Configuração](#configuração)). Dá para ter vários password-stores em locais diferentes.
-
-**3. Permita que o gpg-agent aceite a senha via loopback**, para o omapass poder decifrar entradas com a passphrase que já pediu uma vez:
-
-```bash
-echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
-gpg-connect-agent reloadagent /bye
-```
-
-> **Nota:** no pass, o formulário de adicionar/editar do omapass só tem Título e Senha, porque o formato do pass é bem menos estruturado que o do KeePassXC. Campos como usuário/URL/notas de uma entrada existente são preservados ao editá-la, mesmo sem aparecer no formulário.
-
-### Migrando um banco KeePassXC para o pass
-
-```bash
-omapass --kdbx2pass banco.kdbx KEYID1 [KEYID2...]
-```
-
-Roda no terminal, sem abrir janela. Inicializa (ou reaponta) o password-store
-padrão para os `KEYID`s informados e importa cada entrada do `.kdbx`, pedindo a
-senha mestra uma única vez. Username/URL/Notas viram metadados nas linhas
-seguintes à senha, no formato convencional do pass; nada é gravado em disco em
-texto puro durante o processo.
-
-### Gerando senhas
-
-Com um banco aberto, `Ctrl+G` (ou **Gerar senha** no menu de ações) abre o gerador. Ele tem
-dois modos:
-
-- **Senha**: tamanho, maiúsculas, minúsculas, números, símbolos, evitar caracteres parecidos
-  (`l/1/I`, `O/0`), excluir caracteres específicos e um conjunto personalizado, que substitui
-  as classes.
-- **Frase**: número de palavras e separador. A lista segue o idioma da interface: em
-  português usa a lista pt-BR do omapass, e em inglês a lista EFF, ambas
-  com 7.776 palavras (12,9 bits de entropia por palavra).
-
-A senha é gerada de novo a cada ajuste, e `Ctrl+R` sorteia outra sem mudar nada. `Enter` copia
-para a área de transferência, com a mesma limpeza automática de 10 segundos das entradas. Dentro
-do formulário de entrada, `Ctrl+G` sobre o campo Senha abre o mesmo gerador e `Enter` preenche o
-campo em vez de copiar. As escolhas ficam guardadas para a próxima vez.
-
-O gerador é sempre o do próprio omapass, mesmo em bancos do pass ou do Bitwarden: ele responde
-na hora, e o `pass generate` não gera sem criar uma entrada. Caracteres e palavras saem da fonte
-de números aleatórios do sistema, sorteados sem viés. As listas de palavras são instaladas pelo
-`make install` em `$(PREFIX)/share/omapass/wordlists`; rodando direto de `build/`, elas são lidas
-do repositório (`wordlists/`; a lista em inglês é a EFF Large Wordlist, CC BY 3.0 US). Sem lista alguma, o modo frase não aparece.
-
-Para escolher outra lista, use `wordlist` no `config.toml`:
-
-```toml
-[generator]
-# "auto" (padrão) segue o idioma da interface; "pt-BR" ou "en" escolhem uma
-# das listas que acompanham o omapass; qualquer outra coisa é um caminho.
-wordlist = "auto"
-```
-
-Uma lista própria é um arquivo de texto com uma palavra por linha (o formato numerado
-`11111 palavra` do diceware também é aceito). Apontar para um arquivo que não existe deixa o
-modo frase indisponível, em vez de cair silenciosamente na lista padrão.
-
-A lista pt-BR foi montada a partir do corpus [fserb/pt-br](https://github.com/fserb/pt-br)
-(MIT, Fernando Serboncini) pelo script `tools/build-wordlist-pt-br.py`, que documenta os
-critérios: 7.776 palavras de 4 a 9 letras, sem acento, as mais comuns primeiro, sem nomes de
-lugares nem palavras ofensivas, e nenhuma palavra sendo prefixo de outra.
-
-## Segurança
-
-- **Backend KeePass**: o banco é decifrado dentro do omapass, uma vez, ao abrir. Nenhuma senha, usuário ou URL passa por argumentos de processo nem por outro programa. Enquanto o banco está aberto, as entradas (senhas incluídas) ficam na memória do omapass e são descartadas ao travar. Cada alteração regrava o arquivo por inteiro, de forma atômica (arquivo temporário e troca), na mesma versão do formato. Se outro programa (o próprio KeePassXC, um cliente de sincronização) trocar o arquivo, o omapass o lê de novo antes de mexer, em vez de sobrescrever a mudança dele. Arquivos-chave e chaves de hardware (YubiKey) não são suportados.
-- **Backend Bitwarden**: o omapass fala com o servidor só por HTTPS, com a criptografia dos clientes oficiais: PBKDF2-SHA256 ou Argon2id conforme a conta, HKDF, AES-256-CBC com HMAC-SHA256 verificado antes de decifrar e RSA-OAEP para chaves de organização, via Botan. A senha mestra nunca sai da máquina (ao servidor vai só o hash de login, como nos clientes oficiais) e não fica guardada: serve para derivar as chaves e é descartada. A cópia local da conta (`~/.local/share/omapass/bitwarden/`, legível só pelo seu usuário) guarda o cofre cifrado como o servidor o entrega. O refresh token, que permite voltar a falar com o servidor, vai cifrado com a chave do usuário; sem a senha mestra, o arquivo não abre nada nem chega ao servidor. O token de acesso, de curta duração, fica só na memória. Enquanto o cofre está aberto, os itens (senhas incluídas) ficam na memória do omapass e são descartados ao travar. Alterações são cifradas no omapass antes de sair.
-- **Desbloqueio por PIN**: nenhum backend aceita PIN (o Bitwarden e o `op` só conhecem a senha mestra, um `.kdbx` é cifrado com a dele, e o pass quer a passphrase GPG). Então o que fica guardado é a senha do banco, cifrada com uma chave derivada do PIN (PBKDF2-SHA256, 600.000 iterações, com salt aleatório) no formato AES-256-CBC + HMAC-SHA256, no chaveiro do sistema (`secret-tool`, atributos `service=omapass account=pin:<caminho do banco>`, um por banco). O contador de tentativas erradas fica no `omapass.conf` sob um resumo SHA-256 do caminho, para o arquivo não listar onde estão seus bancos. O PIN em si não é guardado, nem um hash dele: o PIN errado falha na verificação do HMAC. O limite: um PIN de 4 dígitos são 10.000 combinações, e quem conseguir ler o chaveiro pode testá-las offline. As 600.000 iterações são a única barreira, e o limite de 5 tentativas é da interface, não da criptografia. Use 6 dígitos ou mais (ou marque letras e símbolos, que multiplica isso por milhares sem custo) e deixe o PIN desligado em máquina compartilhada. Nem a senha mestra nem o PIN passam por argumentos de processo.
-- **Backend 1Password**: a senha mestra é digitada no próprio prompt do `op` (que roda com um terminal emprestado do `script`), a Secret Key vai pela variável de ambiente `OP_SECRET_KEY` e o JSON dos itens (que carrega a senha) pelo stdin do `op item create`/`op item edit`. Nada disso aparece em argv, que o próprio `op` avisa ser legível por outros processos; o ambiente de um processo, ao contrário da linha de comando, só é legível pelo próprio usuário. O token de sessão fica num `Secret` e só chega ao `op` pela variável de ambiente que o próprio `op` nomeou ao devolvê-lo. A senha mestra não fica guardada depois de abrir: quando a sessão expira (30 minutos de inatividade), o omapass tranca e pede a senha de novo, em vez de manter a senha em memória para renovar sozinho. Enquanto o cofre está aberto, os itens já abertos (senhas incluídas) ficam na memória do omapass e são descartados ao travar. Travar o cofre roda `op signout`, o que **também encerra a sessão do `op` no terminal**.
-- Senhas e passphrases circulam em um tipo `Secret`, que mantém uma cópia própria e sobrescreve a memória ao ser destruído. A exceção inevitável é o campo de senha do formulário de edição: um campo editável precisa do texto em claro enquanto está na tela.
-- Ao copiar uma senha, o conteúdo é marcado como sensível pelo mime `x-kde-passwordManagerHint`, que gerenciadores de clipboard como cliphist, Klipper e GPaste respeitam para não gravar no histórico. O clipboard é limpo automaticamente após 10 segundos, com contagem regressiva visível na interface. O mime acompanha a senha tanto pelo clipboard do Qt quanto pelo `wl-copy --sensitive`, conforme o caminho usado. Gerenciadores que ignoram esse mime (não há garantia de que o `xfce4-clipman` o respeite, por exemplo) ainda podem guardar a senha no histórico até a limpeza.
-- **`~/.config/omapass/history`** guarda só HMACs (com chave aleatória local em `.history_key`, 0600) e timestamps de uso, nunca o conteúdo das entradas. Mesmo assim, revela a outro usuário local com acesso ao arquivo quantas entradas existem e o padrão de uso.
-- **Bloqueio manual**: `ESC` ou `q` com um banco aberto o travam na hora, pelo mesmo caminho do auto-lock abaixo: o `Vault` é descartado da memória e a interface volta para a lista de bancos. Na lista, as mesmas teclas fecham o omapass.
-- **Auto-lock por inatividade**: por padrão, 10 minutos sem uso travam o banco desbloqueado. O `Vault` (senha/passphrase incluída) é descartado da memória e a interface volta para a tela de bancos, pedindo para desbloquear de novo. Ajustável (ou desativável) via `lock_minutes` no `config.toml` (veja [Configuração](#configuração)).
-- **Fecha ao travar a tela do sistema**: quando a sessão do desktop é bloqueada, o omapass fecha por completo (não só trava), para não deixar um banco desbloqueado atrás da tela de bloqueio. Ele reage ao sinal `Lock` do logind (GNOME, KDE, qualquer setup com `loginctl lock-session`) e, no Hyprland/Omarchy, que não passa pelo logind para travar a tela, consulta `omarchy-hyprland-session-locked` a cada 2s. Sem nenhum dos dois, esse fechamento não acontece (o auto-lock por inatividade continua funcionando).
-
-## Configuração
-
-`Ctrl+O` abre as configurações dentro do omapass, de qualquer tela. O modal edita o
-`config.toml` e aplica na hora o diretório de busca, a ordenação por uso, o auto-lock e a lista
-de palavras do gerador, que são as opções que valem sem reiniciar. Tema e idioma continuam só no
-arquivo, porque são lidos uma vez na abertura.
-
-Ao gravar, só os valores dessas chaves mudam; comentários, ordem das linhas e chaves que o
-omapass não conhece ficam como estavam. `Ctrl+F` no modal abre o seletor de arquivos para uma
-lista de palavras sua. O arquivo escolhido é copiado para `~/.config/omapass/wordlists/` e o
-caminho da cópia é gravado, assim a lista continua valendo se você mover ou apagar o original.
-Listas com menos de 1.296 palavras (o mínimo para a frase ter força) são recusadas na hora, com o
-número de palavras na mensagem.
-
-Arquivos em `~/.config/omapass/`:
-
-- `config.toml`: caminho de busca, recency, tema ativo, idioma, tempo de auto-lock e lista de palavras do gerador
-- `themes/*.toml`: sobreposições de cores
-- `wordlists/*`: listas de palavras trazidas pelo modal de configurações
-
-> **Vindo do fpass:** se `~/.config/omapass` não existir e `~/.config/fpass`
-> existir, o omapass continua usando o diretório antigo: histórico, temas e
-> bancos criados pela interface seguem funcionando sem nenhum passo manual.
-> Para adotar o nome novo, basta `mv ~/.config/fpass ~/.config/omapass`.
-
-`path` define onde o omapass procura tanto arquivos `.kdbx` quanto password-stores do pass (diretórios com `.gpg-id`). O `~/.password-store` convencional é sempre verificado, mesmo que `path` aponte para outro lugar.
-
-`language` controla o idioma da interface, em ordem de prioridade: (1) valor explícito no config.toml (`"pt-BR"`/`"en"`); (2) com `"auto"` ou sem a chave, o `$LANG`/`$LC_ALL` do sistema; (3) se nada foi configurado nem detectado, inglês. Só o texto gerado pelo próprio omapass é traduzido; mensagens de erro que vêm direto do `pass` ou do `gpg` continuam no idioma dessas ferramentas.
-
-Exemplo de `config.toml`:
-
-```toml
-[general]
-path = "~/docs/keepass"
-recency = true
-theme = "default"
-language = "pt-BR"
-lock_minutes = 10
-
-[generator]
-wordlist = "auto"
-```
-
-`lock_minutes` define, em minutos, quanto tempo de inatividade até o banco desbloqueado ser travado (a interface volta para a tela de bancos, pedindo a senha de novo). Sem a chave, o padrão é 10. `lock_minutes = false` desativa o auto-lock, e o banco fica desbloqueado enquanto o omapass estiver aberto.
-
-### Cores
-
-Por padrão (`theme = "default"`) as cores vêm do tema ativo do Omarchy, em
-`~/.local/state/omarchy/current/theme/colors.toml`, e são reaplicadas na hora
-quando você troca de tema, sem reiniciar o omapass. Sem o Omarchy
-instalado, o omapass usa Catppuccin Mocha ou Latte conforme a preferência
-clara/escura do desktop.
-
-As janelas de vidro do Omarchy também valem: com `omarchy hyprland window
-transparency glassy` o fundo da janela fica translúcido (0,75) e o Hyprland
-borra o que está atrás; com `transparent`, o padrão, o efeito é bem mais leve
-(0,96); com `opaque` tudo fica sólido. Modais e menus seguem sólidos, e a troca
-vale na hora.
-
-Um tema próprio sobrepõe só os papéis que declarar; o resto continua
-vindo do Omarchy. Em `~/.config/omapass/themes/tema.toml`:
-
-```toml
-[theme]
-name = "meu-tema"
-
-[colors]
-Title = "#00AAAA"
-Base = "#CCCCCC"
-Guidance = "#666666"
-```
-
-e então `theme = "meu-tema"` no `config.toml`. Os papéis disponíveis são
-`Title`, `Base`, `Guidance`, `Annotation`, `Important`, `AlertInfo`,
-`AlertWarn` e `AlertError`.
-
-### Fonte e tamanho do texto
-
-O omapass não embute nenhuma fonte: a interface inteira usa a família genérica
-`monospace`, que é o que o `omarchy font set` configura em
-`~/.config/fontconfig/fonts.conf`. Trocar a fonte do sistema troca a do
-omapass:
-
-```bash
-omarchy font list
-omarchy font set "CaskaydiaMono Nerd Font"
-```
-
-Como o Qt resolve o fontconfig na inicialização, a mudança aparece ao reabrir o
-omapass, como o Omarchy já avisa que acontece com o Ghostty e o Foot.
-
-O tamanho do texto segue o do desktop, ao vivo: `omarchy display text size`
-ou o `text-scaling-factor` do GNOME.
-
-## Atalhos
-
-Lista completa a qualquer momento com `Ctrl+?`. Os principais:
-
-| Tecla | Ação |
-|-------|------|
-| `j` / `k` | Navegar para baixo/cima |
-| `gg` / `G` | Ir para o topo/final |
-| `Ctrl+U` / `Ctrl+D` | Meia página para cima/baixo |
-| `Ctrl+N` / `Ctrl+P` | Próximo/anterior (funciona na busca e nas dropdowns) |
-| `/`, `f` ou `i` | Entrar no modo de busca |
-| `Enter` | Copiar senha / Confirmar |
-| `Ctrl+B` | Copiar o login da entrada |
-| `Ctrl+L` | Copiar a URL da entrada |
-| `Ctrl+Shift+L` | Abrir a URL da entrada no navegador |
-| `Tab` | Ver detalhes da entrada (lá, `Enter` copia o campo selecionado) |
-| `Espaço` | Menu de ações |
-| `Ctrl+A` / `Ctrl+E` / `Ctrl+X` | Adicionar / editar / excluir (na tela de bancos, `Ctrl+X` sai de uma conta Bitwarden ou 1Password) |
-| `Ctrl+G` | Gerar senha (na lista, ou sobre o campo Senha do formulário) |
-| `Ctrl+I` | Ativar/desativar o desbloqueio por PIN (do banco aberto) |
-| `Ctrl+O` | Abrir as configurações |
-| `ESC` / `q` | Cancelar; com um banco aberto, bloqueia e volta para a lista; na lista, sai do omapass |
-| `Ctrl+Q` | Sair do programa |
-| `Ctrl+C` | Sair do programa (fora de campos de texto, onde copia) |
+O omapass procura arquivos `.kdbx` e password-stores do pass (diretórios com `.gpg-id`)
+dentro do diretório configurado (padrão: o home) e lista também as contas Bitwarden e
+1Password adicionadas por ele. Havendo um único banco, ele vai direto para o desbloqueio.
+
+Na tela de bancos, `Ctrl+A` cria um banco ou adiciona uma conta. `Ctrl+?` mostra todos os
+atalhos, e `Ctrl+O` abre as configurações.
+
+## Documentação
+
+- [Instalação](https://github.com/higorhgon/omapass/wiki/Instala%C3%A7%C3%A3o)
+- [Configuração](https://github.com/higorhgon/omapass/wiki/Configura%C3%A7%C3%A3o): `config.toml`, cores, fonte e tamanho do texto
+- [Atalhos](https://github.com/higorhgon/omapass/wiki/Atalhos)
+- Backends: [KeePass](https://github.com/higorhgon/omapass/wiki/KeePass), [pass](https://github.com/higorhgon/omapass/wiki/pass), [Bitwarden](https://github.com/higorhgon/omapass/wiki/Bitwarden), [1Password](https://github.com/higorhgon/omapass/wiki/1Password)
+- [Desbloqueio por PIN](https://github.com/higorhgon/omapass/wiki/Desbloqueio-por-PIN)
+- [Gerador de senhas](https://github.com/higorhgon/omapass/wiki/Gerador-de-senhas)
+- [Segurança](https://github.com/higorhgon/omapass/wiki/Seguran%C3%A7a)
+- [Releases](https://github.com/higorhgon/omapass/wiki/Releases)
