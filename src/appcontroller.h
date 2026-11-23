@@ -3,6 +3,7 @@
 #include <QElapsedTimer>
 #include <QFuture>
 #include <QFutureWatcher>
+#include <QPromise>
 #include <QThreadPool>
 #include <QObject>
 #include <QScopedPointer>
@@ -204,6 +205,12 @@ public:
     Q_INVOKABLE void cancelAccountCheck();
 
     Q_INVOKABLE void copyPassword(const QString &entry);
+    Q_INVOKABLE QVariantMap entryMenuFields(const QString &entry) const;
+    Q_INVOKABLE QVariantMap sshKeyOptions(const QString &entry) const;
+    Q_INVOKABLE bool saveSshKeyOptions(const QString &entry, bool addOnUnlock,
+                                      bool confirm, int lifetimeSeconds);
+    Q_INVOKABLE void addSshKey(const QString &entry);
+    Q_INVOKABLE void removeSshKey(const QString &entry);
     Q_INVOKABLE void copyText(const QString &text);
     // The entry's login or URL to the clipboard, and its URL to the browser.
     Q_INVOKABLE void copyUsername(const QString &entry);
@@ -225,7 +232,7 @@ public:
     // Drops what entryDetails() kept, when the sheet closes.
     Q_INVOKABLE void forgetShownOtp();
     Q_INVOKABLE QVariantMap entryFields(const QString &entry);
-    Q_INVOKABLE void saveEntry(const QVariantMap &fields);
+    Q_INVOKABLE bool saveEntry(const QVariantMap &fields);
     Q_INVOKABLE void deleteEntry(const QString &entry);
     // An icon of the user's choosing for the entry, from an image file (a
     // file:// URL, as the file dialog gives it), or none. In the database for
@@ -331,7 +338,13 @@ private:
     // to be unlocked.
     DbRef pinTarget() const;
     void refreshPinState();
-    void closeVault();
+    QString closeVault();
+    void startSshKeys();
+    void runSshTask(std::function<QString(const QPromise<QString> &)> work,
+                    const QString &success = {});
+    QString addSshIdentity(const Vault *vault, const QString &entry, const SshKeyConfig &key,
+                           const SshKeyOptions &options);
+    QString clearSshKeys();
     void showClipboardMessage(const QString &text);
 
     AppConfig m_config;
@@ -390,6 +403,8 @@ private:
     bool m_pinConfigured = false;
 
     QScopedPointer<Vault> m_vault;
+    SshAgent m_sshAgent;
+    QFutureWatcher<QString> *m_sshTask = nullptr;
 
     BitwardenLogin m_bitwardenLogin;
     OnePasswordLogin m_onePasswordLogin;

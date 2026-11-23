@@ -7,8 +7,10 @@
 #include <QStringList>
 
 #include <memory>
+#include <optional>
 
 #include "secret.h"
+#include "sshagent.h"
 
 // A KeePass database (.kdbx, formats 3.1 and 4) read and written in-process,
 // with Botan for the cryptography. The XML is kept as a tree and edited in
@@ -21,6 +23,7 @@
 
 // What the entry form shows.
 struct KdbxEntry {
+    Secret sshAttachment;  // Used when creating an entry with a KeeAgent attachment.
     QString title;
     QString username;
     Secret password;
@@ -67,6 +70,8 @@ public:
     void list(QStringList *entries, QStringList *groups) const;
 
     bool entry(const QString &path, KdbxEntry *entry) const;
+    QHash<QString, SshKeyConfig> sshKeys() const;
+    std::optional<SshKeyConfig> sshKey(const QString &path, Secret *key) const;
     // Every entry with its path, for exporting. Entries in the recycle bin
     // are left out unless asked for.
     QList<QPair<QString, KdbxEntry>> allEntries(bool includeRecycled = true) const;

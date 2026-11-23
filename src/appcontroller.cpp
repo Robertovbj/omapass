@@ -11,6 +11,7 @@
 #include "passstore.h"
 
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QDir>
@@ -25,6 +26,7 @@
 #include <QtConcurrent/QtConcurrentMap>
 #include <QtConcurrent/QtConcurrentRun>
 
+#include <tuple>
 #include <utility>
 
 namespace {
@@ -54,6 +56,21 @@ struct OpenResult {
     Vault *vault = nullptr;
     QString error;
 };
+
+QString sshSettingsKey(const Vault *vault, const SshKeyConfig &key) {
+    const QByteArray id = QByteArray::number(int(vault->kind())) + '\0'
+        + vault->path().toUtf8() + '\0' + key.id.toUtf8();
+    return QStringLiteral("sshAgent/")
+        + QString::fromLatin1(QCryptographicHash::hash(id, QCryptographicHash::Sha256).toHex());
+}
+
+SshKeyOptions sshOptions(const Vault *vault, const SshKeyConfig &key) {
+    QSettings settings;
+    settings.beginGroup(sshSettingsKey(vault, key));
+    return {settings.value(QStringLiteral("addOnUnlock"), key.defaults.addOnUnlock).toBool(),
+            settings.value(QStringLiteral("confirm"), key.defaults.confirm).toBool(),
+            settings.value(QStringLiteral("lifetimeSeconds"), key.defaults.lifetimeSeconds).toInt()};
+}
 
 QVariantMap describe(const DbRef &ref) {
     // `label` is what the list shows: the file's own path for a database on
@@ -295,6 +312,9 @@ AppController::~AppController() {
     // A sync or login waiting on the network ends now rather than when the
     // server gets round to answering; what it was doing is lost either way.
     BwApi::abortAll();
+    const QString sshError = clearSshKeys();
+    if (!sshError.isEmpty())
+        qWarning().noquote() << sshError;
     m_bitwardenLogin.cancel();
     m_onePasswordLogin.cancel();
     m_task.waitForFinished();
@@ -398,7 +418,7 @@ void AppController::lock() {
     if (m_busy || m_syncing)
         return; // uma operação ainda usa o banco; o timer tenta de novo no próximo ciclo
 
-    closeVault();
+    const QString sshError = closeVault();
     // Nothing is open any more, so no database is the PIN's subject until
     // one is picked again.
     refreshPinState();
@@ -408,6 +428,8 @@ void AppController::lock() {
     m_stage = QStringLiteral("databases");
     emit stageChanged();
     refreshDatabases();
+    if (!sshError.isEmpty())
+        showMessage(sshError, true);
 }
 
 QVariantList AppController::databases() const {
@@ -822,7 +844,7 @@ void AppController::openVault(const DbRef &ref, const Secret &secret) {
 }
 
 void AppController::adoptVault(const DbRef &ref, Vault *vault) {
-    m_browser.waitForReads();
+    const QString sshError = closeVault();
     m_vault.reset(vault);
     loadIconChoice();
     refreshPinState();
@@ -838,6 +860,9 @@ void AppController::adoptVault(const DbRef &ref, Vault *vault) {
     m_stage = QStringLiteral("entries");
     emit stageChanged();
     showVaultWarning();
+    if (!sshError.isEmpty())
+        showMessage(sshError, true);
+    startSshKeys();
 
     // Opening read omapass' own copy; what changed on the server since the
     // last sync arrives a moment later.
@@ -1041,6 +1066,135 @@ bool AppController::isEmptyGroup(const QString &entry) const {
 QString AppController::groupNameOf(const QString &entry) const {
     const QString suffix = Vault::emptyGroupSuffix();
     return entry.endsWith(suffix) ? entry.chopped(suffix.size()) : entry;
+}
+
+QVariantMap AppController::entryMenuFields(const QString &entry) const {
+    EntryData data;
+    QString error;
+    if (!m_vault || entry.isEmpty() || isEmptyGroup(entry) || !m_vault->fetchEntry(entry, &data, &error))
+        return {};
+    // A native Bitwarden SSH item exposes its private key through fetchPassword.
+    const bool privateKey = m_listedMeta.value(entry).type == QLatin1String("ssh");
+    return {{QStringLiteral("hasPassword"), !privateKey && !data.password.isEmpty()},
+            {QStringLiteral("hasUsername"), !data.username.trimmed().isEmpty()},
+            {QStringLiteral("hasUrl"), !data.url.trimmed().isEmpty()},
+            {QStringLiteral("hasOtp"), !data.otp.isEmpty() && Totp::parse(data.otp.toString()).has_value()}};
+}
+
+QVariantMap AppController::sshKeyOptions(const QString &entry) const {
+    const auto key = m_listedMeta.value(entry).ssh;
+    if (!SshAgent::supported() || !m_vault || !key)
+        return {};
+    const auto options = sshOptions(m_vault.data(), *key);
+    return {{QStringLiteral("addOnUnlock"), options.addOnUnlock},
+            {QStringLiteral("confirm"), options.confirm},
+            {QStringLiteral("lifetimeSeconds"), options.lifetimeSeconds}};
+}
+
+bool AppController::saveSshKeyOptions(const QString &entry, bool addOnUnlock, bool confirm,
+                                      int lifetimeSeconds) {
+    const auto key = m_listedMeta.value(entry).ssh;
+    if (!m_vault || !key || lifetimeSeconds < 0)
+        return false;
+    QSettings settings;
+    settings.beginGroup(sshSettingsKey(m_vault.data(), *key));
+    settings.setValue(QStringLiteral("addOnUnlock"), addOnUnlock);
+    settings.setValue(QStringLiteral("confirm"), confirm);
+    settings.setValue(QStringLiteral("lifetimeSeconds"), lifetimeSeconds);
+    settings.sync();
+    if (settings.status() != QSettings::NoError) {
+        showMessage(I18n::t(QStringLiteral("ssh.save_failed")), true);
+        return false;
+    }
+    showMessage(I18n::t(QStringLiteral("ssh.saved")), false);
+    return true;
+}
+
+void AppController::runSshTask(std::function<QString(const QPromise<QString> &)> work,
+                               const QString &success) {
+    if (m_sshTask) {
+        showMessage(I18n::t(QStringLiteral("app.working")), true);
+        return;
+    }
+    auto *watcher = new QFutureWatcher<QString>(this);
+    m_sshTask = watcher;
+    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher, success]() {
+        m_sshTask = nullptr;
+        const QString error = watcher->result();
+        watcher->deleteLater();
+        if (!error.isEmpty() || !success.isEmpty())
+            showMessage(error.isEmpty() ? success : error, !error.isEmpty());
+    });
+    watcher->setFuture(QtConcurrent::run([work = std::move(work)](QPromise<QString> &promise) {
+        promise.addResult(work(promise));
+    }));
+}
+
+QString AppController::addSshIdentity(const Vault *vault, const QString &entry,
+                                      const SshKeyConfig &key, const SshKeyOptions &options) {
+    Secret privateKey;
+    QString error;
+    if (!vault->fetchSshKey(entry, key.id, &privateKey, &error))
+        return error.isEmpty() ? I18n::t(QStringLiteral("ssh.invalid_key")) : error;
+    return m_sshAgent.add(sshSettingsKey(vault, key), privateKey, options);
+}
+
+void AppController::startSshKeys() {
+    if (!SshAgent::supported())
+        return;
+    const Vault *vault = m_vault.data();
+    QList<std::tuple<QString, SshKeyConfig, SshKeyOptions>> keys;
+    for (auto it = m_listedMeta.cbegin(); it != m_listedMeta.cend(); ++it) {
+        if (!it->ssh)
+            continue;
+        const SshKeyOptions options = sshOptions(vault, *it->ssh);
+        if (options.addOnUnlock)
+            keys.append({it.key(), *it->ssh, options});
+    }
+    if (keys.isEmpty())
+        return;
+    runSshTask([this, vault, keys](const QPromise<QString> &promise) {
+        QString error;
+        for (const auto &[entry, key, options] : keys) {
+            if (promise.isCanceled())
+                break;
+            const QString failure = addSshIdentity(vault, entry, key, options);
+            if (!failure.isEmpty())
+                error = failure;
+        }
+        return error;
+    });
+}
+
+void AppController::addSshKey(const QString &entry) {
+    const auto key = m_listedMeta.value(entry).ssh;
+    const Vault *vault = m_vault.data();
+    if (!SshAgent::supported() || !vault || !key)
+        return;
+    const auto options = sshOptions(vault, *key);
+    runSshTask([this, vault, entry, key, options](const QPromise<QString> &) {
+        return addSshIdentity(vault, entry, *key, options);
+    }, I18n::t(QStringLiteral("ssh.added")));
+}
+
+void AppController::removeSshKey(const QString &entry) {
+    const auto key = m_listedMeta.value(entry).ssh;
+    const Vault *vault = m_vault.data();
+    if (!vault || !key)
+        return;
+    const QString id = sshSettingsKey(vault, *key);
+    runSshTask([this, vault, entry, key, id](const QPromise<QString> &) {
+        if (m_sshAgent.tracks(id))
+            return m_sshAgent.remove(id);
+
+        // An explicit removal can target the selected identity even when
+        // this instance did not load it, e.g. after an ungraceful exit.
+        Secret privateKey;
+        QString error;
+        if (!vault->fetchSshKey(entry, key->id, &privateKey, &error))
+            return error.isEmpty() ? I18n::t(QStringLiteral("ssh.invalid_key")) : error;
+        return m_sshAgent.removeKey(privateKey);
+    }, I18n::t(QStringLiteral("ssh.removed")));
 }
 
 void AppController::copyPassword(const QString &entry) {
@@ -1253,9 +1407,9 @@ QVariantMap AppController::entryFields(const QString &entry) {
     return fields;
 }
 
-void AppController::saveEntry(const QVariantMap &fields) {
+bool AppController::saveEntry(const QVariantMap &fields) {
     if (!vaultReadyForChanges())
-        return;
+        return false;
 
     QString group = fields.value(QStringLiteral("group")).toString().trimmed();
     while (group.endsWith(QLatin1Char('/')))
@@ -1264,7 +1418,7 @@ void AppController::saveEntry(const QVariantMap &fields) {
     const QString title = fields.value(QStringLiteral("title")).toString().trimmed();
     if (title.isEmpty()) {
         showMessage(I18n::t(QStringLiteral("app.title_empty")), true);
-        return;
+        return false;
     }
 
     const QString path = group.isEmpty() ? title : group + QLatin1Char('/') + title;
@@ -1273,6 +1427,16 @@ void AppController::saveEntry(const QVariantMap &fields) {
     EntryData data;
     data.username = fields.value(QStringLiteral("username")).toString().trimmed();
     data.password = Secret(fields.value(QStringLiteral("password")).toString());
+    if (!isEdit && fields.value(QStringLiteral("type")).toString() == QLatin1String("ssh")) {
+        if (passBackend() || onePasswordBackend())
+            return false;
+        data.password = Secret(data.password.toString().trimmed() + QLatin1Char('\n'));
+        data.sshPublicKey = SshAgent::publicIdentity(data.password);
+        if (data.sshPublicKey.isEmpty()) {
+            showMessage(I18n::t(QStringLiteral("ssh.invalid_key")), true);
+            return false;
+        }
+    }
     data.url = fields.value(QStringLiteral("url")).toString().trimmed();
     // Typed as one line, separated by spaces (or one per line): an address
     // has none of its own. The main URL is not repeated among them, and
@@ -1296,7 +1460,7 @@ void AppController::saveEntry(const QVariantMap &fields) {
                             fields.value(QStringLiteral("originalOtp")).toString(), title, &error);
         if (!otp) {
             showMessage(error, true);
-            return;
+            return false;
         }
         data.otp = Secret(*otp);
     }
@@ -1334,6 +1498,7 @@ void AppController::saveEntry(const QVariantMap &fields) {
             }
             refreshEntries();
         });
+    return true;
 }
 
 void AppController::deleteEntry(const QString &entry) {
@@ -1811,9 +1976,20 @@ QString AppController::pinWeakWarning(const QString &pin) const {
     return Pin::weakWarning(pin);
 }
 
-void AppController::closeVault() {
+QString AppController::clearSshKeys() {
+    if (m_sshTask) {
+        m_sshTask->cancel();
+        m_sshTask->waitForFinished();
+        delete m_sshTask;
+        m_sshTask = nullptr;
+    }
+    return m_sshAgent.clear();
+}
+
+QString AppController::closeVault() {
     if (m_vault.isNull())
-        return;
+        return {};
+    const QString sshError = clearSshKeys();
     stopMetaLoad();
     m_metaPool.waitForDone();
     m_lazyMeta.clear();
@@ -1823,6 +1999,7 @@ void AppController::closeVault() {
     m_vault->close();
     m_vault.reset();
     m_browser.vaultChanged();
+    return sshError;
 }
 
 QString AppController::message() const {

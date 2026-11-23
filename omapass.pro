@@ -68,6 +68,7 @@ HEADERS += \
     src/secret.h \
     src/sessionlock.h \
     src/siteicons.h \
+    src/sshagent.h \
     src/systemtheme.h \
     src/totp.h \
     src/vault.h
@@ -113,6 +114,7 @@ SOURCES += \
     src/secret.cpp \
     src/sessionlock.cpp \
     src/siteicons.cpp \
+    src/sshagent.cpp \
     src/systemtheme.cpp \
     src/totp.cpp \
     src/vault.cpp

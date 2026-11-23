@@ -591,6 +591,21 @@ private slots:
         QVERIFY(bwEntryData(item).otp.isEmpty());
     }
 
+    void bitwardenCreatesSshCipher() {
+        const auto key = BwCrypto::keyFromBytes(BwCrypto::randomBytes(64));
+        EntryData data;
+        data.password = Secret(QStringLiteral("private"));
+        data.sshPublicKey = QStringLiteral("ssh-ed25519 YWJj");
+        const auto request = BwAccount::cipherRequest({}, {}, QStringLiteral("Deploy"), {}, data, *key, {});
+        QCOMPARE(request.value("type").toInt(), 5);
+        QVERIFY(!request.contains("login"));
+        const auto ssh = request.value("sshKey").toObject();
+        QCOMPARE(decrypted(ssh.value("privateKey"), *key), data.password.toString());
+        QCOMPARE(decrypted(ssh.value("publicKey"), *key), data.sshPublicKey);
+        QCOMPARE(decrypted(ssh.value("keyFingerprint"), *key),
+                 QStringLiteral("SHA256:ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0"));
+    }
+
     void bitwardenNewItemStartsFromABlankLogin() {
         const std::optional<BwKey> key = BwCrypto::keyFromBytes(BwCrypto::randomBytes(64));
         EntryData data;

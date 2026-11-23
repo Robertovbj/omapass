@@ -501,6 +501,88 @@ private slots:
                     "pw\n", &out));
         QCOMPARE(QString::fromUtf8(out).trimmed(), QStringLiteral("segredo-omapass"));
     }
+
+    void createsSshAttachments() {
+        QTemporaryDir dir;
+        for (bool legacy : {false, true}) {
+            auto db = KdbxDatabase::create(Secret(QStringLiteral("pw")), QStringLiteral("SSH"), legacy);
+            KdbxEntry entry;
+            entry.title = QStringLiteral("Deploy");
+            entry.sshAttachment = Secret(QByteArray("private key content\n"));
+            QVERIFY(db->addEntry({}, entry).isEmpty());
+            const QString path = dir.filePath(legacy ? QStringLiteral("3.kdbx") : QStringLiteral("4.kdbx"));
+            QVERIFY(db->save(path).isEmpty());
+            KdbxStatus status;
+            db = KdbxDatabase::open(path, Secret(QStringLiteral("pw")), &status);
+            QVERIFY(db);
+            Secret key;
+            QVERIFY(db->sshKey(entry.title, &key));
+            QCOMPARE(key.bytes(), entry.sshAttachment.bytes());
+        }
+    }
+
+    void kdbxReadsKeeAgentAttachments_data() {
+        QTest::addColumn<bool>("legacy");
+        QTest::newRow("KDBX 3.1") << true;
+        QTest::newRow("KDBX 4") << false;
+    }
+
+    void kdbxReadsKeeAgentAttachments() {
+        QFETCH(bool, legacy);
+        const QString cli = QStandardPaths::findExecutable(QStringLiteral("keepassxc-cli"));
+        if (cli.isEmpty())
+            QSKIP("keepassxc-cli is not available");
+
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("agent.kdbx"));
+        const Secret password(QStringLiteral("pw"));
+        auto db = KdbxDatabase::create(password, QStringLiteral("Agent"), legacy);
+        QVERIFY(db);
+        KdbxEntry entry;
+        entry.title = QStringLiteral("SSH");
+        QVERIFY(db->addEntry(QString(), entry).isEmpty());
+        QVERIFY(db->save(path).isEmpty());
+
+        const auto attach = [&](const QString &name, const QByteArray &bytes) {
+            QFile file(dir.filePath(name));
+            if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size())
+                return false;
+            file.close();
+            return runProcess(cli, {QStringLiteral("attachment-import"), QStringLiteral("-q"),
+                                    path, entry.title, name, file.fileName()}, "pw\n").success;
+        };
+        QVERIFY(attach(QStringLiteral("id_ed25519"), "key content\n"));
+        QVERIFY(attach(QStringLiteral("KeeAgent.settings"), R"xml(
+<EntrySettings>
+  <AllowUseOfSshKey>true</AllowUseOfSshKey>
+  <AddAtDatabaseOpen>true</AddAtDatabaseOpen>
+  <UseConfirmConstraintWhenAdding>true</UseConfirmConstraintWhenAdding>
+  <UseLifetimeConstraintWhenAdding>true</UseLifetimeConstraintWhenAdding>
+  <LifetimeConstraintDuration>47</LifetimeConstraintDuration>
+  <Location>
+    <SelectedType>attachment</SelectedType>
+    <AttachmentName>id_ed25519</AttachmentName>
+  </Location>
+</EntrySettings>)xml"));
+
+        QString error;
+        std::unique_ptr<KeepassVault> vault(KeepassVault::unlock(path, password, &error));
+        QVERIFY2(vault, qPrintable(error));
+        const auto config = vault->entryMeta().value(entry.title).ssh;
+        QVERIFY(config);
+        QVERIFY(config->defaults.addOnUnlock);
+        QVERIFY(config->defaults.confirm);
+        QCOMPARE(config->defaults.lifetimeSeconds, 47);
+
+        Secret key;
+        QVERIFY(vault->fetchSshKey(entry.title, config->id, &key, &error));
+        QCOMPARE(key.bytes(), QByteArray("key content\n"));
+        QVERIFY(vault->removeEntry(entry.title, &error));
+        const auto after = vault->entryMeta();
+        for (const EntryMeta &meta : after)
+            QVERIFY(!meta.ssh);
+    }
 };
 
 OMAPASS_TEST(TestKdbx)

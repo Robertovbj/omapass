@@ -122,14 +122,27 @@ QHash<QString, EntryMeta> KeepassVault::entryMeta() const {
     if (!refresh(&error))
         return meta;
     const auto all = m_db->allEntries();
+    const auto ssh = m_db->sshKeys();
     for (const auto &item : all) {
         EntryMeta entry;
         entry.username = item.second.username;
         entry.url = item.second.url;
         entry.extraUrls = item.second.extraUrls;
+        const auto key = ssh.constFind(item.first);
+        if (key != ssh.cend())
+            entry.ssh = key.value();
         meta.insert(item.first, entry);
     }
     return meta;
+}
+
+bool KeepassVault::fetchSshKey(const QString &entryPath, const QString &id, Secret *key,
+                                QString *error) const {
+    const QMutexLocker locker(&m_mutex);
+    if (!refresh(error))
+        return false;
+    const auto settings = m_db->sshKey(entryPath, key);
+    return settings && settings->id == id && !key->isEmpty();
 }
 
 QString KeepassVault::titleFor(const QString &entryPath, const QString &fallback) const {
@@ -184,6 +197,10 @@ bool KeepassVault::addEntry(const QString &entryPath, const QString &group, cons
     entry.notes = data.notes;
     entry.otp = data.otp;
 
+    if (!data.sshPublicKey.isEmpty()) {
+        entry.sshAttachment = data.password;
+        entry.password.clear();
+    }
     return finish(m_db->addEntry(group, entry), error);
 }
 

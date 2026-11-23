@@ -1191,3 +1191,56 @@ picker.no_file:
 ui.help_sheet_choose:
   pt-BR: "Escolher o diretório ou a lista de palavras, nas configurações"
   en: "Choose the directory or the wordlist, in the settings"
+
+ssh.unavailable:
+  pt-BR: "Não foi possível acessar o agente SSH. Verifique o SSH_AUTH_SOCK e as ferramentas OpenSSH."
+  en: "Could not reach the SSH agent. Check SSH_AUTH_SOCK and the OpenSSH tools."
+ssh.invalid_key:
+  pt-BR: "O OpenSSH não conseguiu ler a chave privada. Ela precisa estar sem frase secreta."
+  en: "OpenSSH could not read the private key. The key must be unencrypted."
+ssh.already_present:
+  pt-BR: "A chave já está no agente SSH. Para aplicar as opções atuais, remova a chave pelo menu e adicione de novo."
+  en: "This key is already in the SSH agent. To apply the current options, choose Remove from SSH agent, then add the key again."
+ssh.add_failed:
+  pt-BR: "Não foi possível adicionar a chave ao agente SSH."
+  en: "Could not add the key to the SSH agent."
+ssh.remove_failed:
+  pt-BR: "Não foi possível confirmar a remoção da chave do agente SSH."
+  en: "Could not confirm removal of the key from the SSH agent."
+ssh.not_added:
+  pt-BR: "O omapass não tem registro de ter adicionado esta chave ao agente SSH."
+  en: "Omapass has no record of adding this key to the SSH agent."
+ssh.add:
+  pt-BR: "Adicionar ao agente SSH"
+  en: "Add to SSH agent"
+ssh.remove:
+  pt-BR: "Remover do agente SSH"
+  en: "Remove from SSH agent"
+ssh.options:
+  pt-BR: "Opções do agente SSH"
+  en: "SSH agent options"
+ssh.on_unlock:
+  pt-BR: "Adicionar ao desbloquear o banco"
+  en: "Add when unlocking the vault"
+ssh.confirm:
+  pt-BR: "Pedir confirmação a cada uso"
+  en: "Ask for confirmation on each use"
+ssh.lifetime:
+  pt-BR: "Tempo de vida em segundos (0 para usar o padrão do agente)"
+  en: "Lifetime in seconds (0 for the agent default)"
+ssh.save_failed:
+  pt-BR: "Não foi possível salvar as opções do agente SSH."
+  en: "Could not save the SSH agent options."
+ssh.saved:
+  pt-BR: "Opções salvas para a próxima inclusão da chave."
+  en: "Options saved for the next time the key is added."
+ssh.added:
+  pt-BR: "Chave adicionada ao agente SSH."
+  en: "Key added to the SSH agent."
+ssh.removed:
+  pt-BR: "Chave removida do agente SSH."
+  en: "Key removed from the SSH agent."
+
+ssh.private_key:
+  pt-BR: "Cole a chave privada SSH"
+  en: "Paste the SSH private key"

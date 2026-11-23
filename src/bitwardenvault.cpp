@@ -392,9 +392,10 @@ QHash<QString, EntryMeta> BitwardenVault::entryMeta() const {
     for (auto it = m_index.items.cbegin(); it != m_index.items.cend(); ++it) {
         const QJsonObject item = m_items.value(it.value().id);
         EntryMeta entry;
-        if (item.value(QStringLiteral("type")).toInt() == 5)
+        if (item.value(QStringLiteral("type")).toInt() == 5) {
             entry.type = QStringLiteral("ssh");
-        else {
+            entry.ssh = SshKeyConfig{it.value().id, {}};
+        } else {
             const EntryData data = bwEntryData(item);
             entry.username = data.username;
             entry.url = data.url;
@@ -426,6 +427,17 @@ bool BitwardenVault::fetchEntry(const QString &entryPath, EntryData *data, QStri
         return false;
     *data = bwEntryData(item);
     return true;
+}
+
+bool BitwardenVault::fetchSshKey(const QString &entryPath, const QString &id, Secret *key,
+                                 QString *error) const {
+    BwItemRef ref;
+    QJsonObject item;
+    if (!lookup(entryPath, &ref, &item, error) || ref.id != id
+        || item.value(QStringLiteral("type")).toInt() != 5)
+        return false;
+    *key = bwEntryData(item).password;
+    return !key->isEmpty();
 }
 
 bool BitwardenVault::addEntry(const QString &entryPath, const QString &group, const EntryData &data,

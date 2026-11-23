@@ -5,7 +5,10 @@
 #include <QStringList>
 #include <QVector>
 
+#include <optional>
+
 #include "secret.h"
+#include "sshagent.h"
 
 // Abstraction over the supported password backends: KeePass databases (read
 // in-process, see keepassvault.h), pass (through gpg, see passvault.h),
@@ -25,6 +28,7 @@ struct DbRef {
 // used by the pass backend, to preserve lines it does not model when an
 // entry that already had them is edited.
 struct EntryData {
+    QString sshPublicKey;  // Set when creating a native SSH key entry.
     QString username;
     Secret password;
     QString url;
@@ -48,6 +52,7 @@ struct EntryMeta {
     QString username;
     QString url;
     QStringList extraUrls;
+    std::optional<SshKeyConfig> ssh;
 };
 
 // Tags every group with no entries or subgroups below it, so it still shows
@@ -131,6 +136,7 @@ public:
     virtual bool fetchPassword(const QString &entryPath, Secret *password,
                                QString *error) const = 0;
     virtual bool fetchEntry(const QString &entryPath, EntryData *data, QString *error) const = 0;
+    virtual bool fetchSshKey(const QString &, const QString &, Secret *, QString *) const { return false; }
 
     virtual bool addEntry(const QString &entryPath, const QString &group, const EntryData &data,
                           QString *error) const = 0;

@@ -38,6 +38,7 @@ SOURCES += \
     tst_hyprrounding.cpp \
     tst_sessionlock.cpp \
     tst_siteicons.cpp \
+    tst_sshagent.cpp \
     tst_totp.cpp \
     ../src/bitwardenjson.cpp \
     ../src/bitwardenvault.cpp \
@@ -73,6 +74,7 @@ SOURCES += \
     ../src/hyprrounding.cpp \
     ../src/sessionlock.cpp \
     ../src/siteicons.cpp \
+    ../src/sshagent.cpp \
     ../src/totp.cpp \
     ../src/vault.cpp
 
@@ -112,6 +114,7 @@ HEADERS += \
     ../src/hyprrounding.h \
     ../src/sessionlock.h \
     ../src/siteicons.h \
+    ../src/sshagent.h \
     ../src/totp.h \
     ../src/vault.h
 

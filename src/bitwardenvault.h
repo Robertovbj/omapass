@@ -62,6 +62,8 @@ public:
 
     void list(QStringList *entries, QStringList *groups) const override;
     QHash<QString, EntryMeta> entryMeta() const override;
+    bool fetchSshKey(const QString &entryPath, const QString &id, Secret *key,
+                     QString *error) const override;
     QString titleFor(const QString &entryPath, const QString &fallback) const override;
     bool fetchPassword(const QString &entryPath, Secret *password, QString *error) const override;
     bool fetchEntry(const QString &entryPath, EntryData *data, QString *error) const override;

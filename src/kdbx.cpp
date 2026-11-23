@@ -6,6 +6,7 @@
 #include <QMap>
 #include <QRegularExpression>
 #include <QSaveFile>
+#include <QSet>
 #include <QUuid>
 #include <QXmlStreamReader>
 #include <QXmlStreamWriter>
@@ -519,6 +520,8 @@ public:
     XNode *findGroup(const QString &path) const;
     XNode *ensureGroup(const QString &path);
     XNode *findEntry(const QString &path, XNode **parent = nullptr) const;
+    QByteArray attachment(const XNode &entry, const QString &name) const;
+    std::optional<SshKeyConfig> sshKey(const XNode &entry, Secret *key) const;
     XNode *parentOf(const XNode *target) const;
     XNode *recycleBin(bool create);
     bool insideBin(const XNode *node) const;
@@ -1536,7 +1539,40 @@ QString KdbxDatabase::addEntry(const QString &group, const KdbxEntry &data) {
     XNode *target = d->ensureGroup(group);
     if (!target)
         return I18n::t(QStringLiteral("keepass.corrupt"));
-    target->children.push_back(d->makeEntry(data));
+    auto entry = d->makeEntry(data);
+    if (!data.sshAttachment.isEmpty()) {
+        const auto attach = [&](const QString &name, const QByteArray &bytes) {
+            QString ref;
+            if (d->major >= 4) {
+                ref = QString::number(d->binaries.size());
+                d->binaries.append(QByteArray(1, char(1)) + bytes);
+            } else {
+                XNode *pool = d->meta()->child(QStringLiteral("Binaries"));
+                if (!pool)
+                    pool = d->meta()->add(QStringLiteral("Binaries"));
+                QSet<QString> used;
+                for (const auto &item : pool->children)
+                    used.insert(item->attr(QStringLiteral("ID")));
+                int index = 0;
+                while (used.contains(QString::number(index)))
+                    ++index;
+                ref = QString::number(index);
+                pool->add(QStringLiteral("Binary"), QString::fromLatin1(bytes.toBase64()))
+                    ->setAttr(QStringLiteral("ID"), ref);
+            }
+            XNode *binary = entry->add(QStringLiteral("Binary"));
+            binary->add(QStringLiteral("Key"), name);
+            binary->add(QStringLiteral("Value"))->setAttr(QStringLiteral("Ref"), ref);
+        };
+        if (!d->meta())
+            return I18n::t(QStringLiteral("keepass.corrupt"));
+        attach(QStringLiteral("id_ssh"), data.sshAttachment.bytes());
+        attach(QStringLiteral("KeeAgent.settings"),
+               "<EntrySettings><AllowUseOfSshKey>true</AllowUseOfSshKey>"
+               "<Location><SelectedType>attachment</SelectedType><AttachmentName>id_ssh</AttachmentName>"
+               "</Location></EntrySettings>");
+    }
+    target->children.push_back(std::move(entry));
     d->touch(*target, QStringLiteral("LastModificationTime"));
     return QString();
 }
@@ -1841,6 +1877,117 @@ void walkNodes(const XNode &group, const QString &prefix, const XNode *skip,
 QString KdbxDatabase::rootUuid() const {
     const XNode *root = d->rootGroup();
     return root ? hexUuid(*root) : QString();
+}
+
+QByteArray KdbxDatabase::Impl::attachment(const XNode &entry, const QString &name) const {
+    for (const XNode *binary : entry.childrenNamed(QStringLiteral("Binary"))) {
+        if (binary->childText(QStringLiteral("Key")) != name)
+            continue;
+        const XNode *value = binary->child(QStringLiteral("Value"));
+        if (!value)
+            break;
+
+        const QString ref = value->attr(QStringLiteral("Ref"));
+        if (major >= 4) {
+            bool ok;
+            const int index = ref.toInt(&ok);
+            if (ok && index >= 0 && index < binaries.size())
+                return binaries.at(index).mid(1); // Inner header flag byte.
+            break;
+        }
+
+        if (!ref.isEmpty()) {
+            const XNode *metadata = meta();
+            const XNode *pool = metadata ? metadata->child(QStringLiteral("Binaries")) : nullptr;
+            value = nullptr;
+            if (pool) {
+                for (const XNode *stored : pool->childrenNamed(QStringLiteral("Binary"))) {
+                    if (stored->attr(QStringLiteral("ID")) == ref) {
+                        value = stored;
+                        break;
+                    }
+                }
+            }
+            if (!value)
+                break;
+        }
+
+        QByteArray data = QByteArray::fromBase64(value->text.toLatin1());
+        if (value->attr(QStringLiteral("Compressed")).compare(QLatin1String("True"),
+                                                               Qt::CaseInsensitive) != 0)
+            return data;
+        QByteArray decompressed;
+        const bool ok = gunzip(data, &decompressed);
+        data.fill('\0');
+        if (ok)
+            return decompressed;
+        decompressed.fill('\0');
+        break;
+    }
+    return {};
+}
+
+std::optional<SshKeyConfig> KdbxDatabase::Impl::sshKey(const XNode &entry, Secret *key) const {
+    const QByteArray xml = attachment(entry, QStringLiteral("KeeAgent.settings"));
+    if (xml.isEmpty())
+        return std::nullopt;
+    const auto settings = parseXml(xml);
+    const auto enabled = [](const XNode &node, const QString &name) {
+        return node.childText(name).trimmed().compare(QLatin1String("true"), Qt::CaseInsensitive) == 0;
+    };
+    if (!settings || settings->name != QLatin1String("EntrySettings")
+        || !enabled(*settings, QStringLiteral("AllowUseOfSshKey")))
+        return std::nullopt;
+
+    const XNode *location = settings->child(QStringLiteral("Location"));
+    if (!location || location->childText(QStringLiteral("SelectedType")) != QLatin1String("attachment"))
+        return std::nullopt;
+
+    const QString name = location->childText(QStringLiteral("AttachmentName"));
+    SshKeyConfig config;
+    config.id = hexUuid(entry);
+    if (name.isEmpty() || config.id.isEmpty())
+        return std::nullopt;
+
+    config.defaults.addOnUnlock = enabled(*settings, QStringLiteral("AddAtDatabaseOpen"));
+    config.defaults.confirm = enabled(*settings, QStringLiteral("UseConfirmConstraintWhenAdding"));
+    if (enabled(*settings, QStringLiteral("UseLifetimeConstraintWhenAdding"))) {
+        const XNode *duration = settings->child(QStringLiteral("LifetimeConstraintDuration"));
+        bool ok = true;
+        config.defaults.lifetimeSeconds = duration ? duration->text.toInt(&ok) : 600;
+        if (!ok || config.defaults.lifetimeSeconds <= 0)
+            return std::nullopt;
+    }
+
+    if (key) {
+        QByteArray bytes = attachment(entry, name);
+        if (bytes.isEmpty())
+            return std::nullopt;
+        if (!bytes.endsWith('\n'))
+            bytes.append('\n');
+        *key = Secret(bytes);
+        bytes.fill('\0');
+    }
+    return config;
+}
+
+QHash<QString, SshKeyConfig> KdbxDatabase::sshKeys() const {
+    QHash<QString, SshKeyConfig> result;
+    if (const XNode *root = d->rootGroup()) {
+        walkNodes(*root, QString(), d->recycleBin(false),
+                  [&](const QString &path, const XNode &entry) {
+                      if (const auto config = d->sshKey(entry, nullptr))
+                          result.insert(path, *config);
+                  }, nullptr);
+    }
+    return result;
+}
+
+std::optional<SshKeyConfig> KdbxDatabase::sshKey(const QString &path, Secret *key) const {
+    const XNode *entry = d->findEntry(path);
+    if (!entry || d->insideBin(entry))
+        return std::nullopt;
+    return d->sshKey(*entry, key);
 }
 
 QHash<QString, QString> KdbxDatabase::entryUuids() const {
