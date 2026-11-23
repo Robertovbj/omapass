@@ -133,7 +133,7 @@ struct Extension {
                             {"message", b64(sealed)},
                             {"nonce", b64(lastNonce)},
                             {"clientID", clientId}};
-        for (auto it = extra.cbegin(); it != extra.cend(); ++it)
+        for (auto it = extra.constBegin(); it != extra.constEnd(); ++it)
             request.insert(it.key(), it.value());
         return request;
     }
