@@ -19,6 +19,23 @@ QString omarchyColorsPath() {
     return omarchyThemeDir() + QStringLiteral("/colors.toml");
 }
 
+// Omarchy's window transparency (omarchy hyprland window transparency) is a
+// toggle file: opaque and glassy each add one, and neither means transparent.
+QString omarchyTogglesDir() {
+    return omarchyCurrentDir() + QStringLiteral("/../toggles/hypr");
+}
+
+// How opaque the window's backdrop is. Without an Omarchy theme there is
+// nothing to be see-through with.
+double windowOpacity() {
+    if (!QFile::exists(omarchyColorsPath()) ||
+        QFile::exists(omarchyTogglesDir() + QStringLiteral("/window-opaque.lua")))
+        return 1.0;
+    if (QFile::exists(omarchyTogglesDir() + QStringLiteral("/window-glassy.lua")))
+        return 0.75;
+    return 0.96;
+}
+
 // Catppuccin Mocha / Latte, the palettes carried over from the TUI version.
 // Only reached when no Omarchy theme is installed.
 struct Fallback {
@@ -112,6 +129,9 @@ void Palette::reload() {
     m_alertWarn = pick(colors, {QStringLiteral("yellow")}, fallback.alertWarn);
     m_alertError = pick(colors, {QStringLiteral("red")}, fallback.alertError);
 
+    m_windowBackground = m_background;
+    m_windowBackground.setAlphaF(windowOpacity());
+
     const auto applyOverride = [this](const QString &role, QColor &target) {
         const QColor color(m_overrides.value(role));
         if (color.isValid())
@@ -145,4 +165,10 @@ void Palette::watchThemeFiles() {
         m_watcher.addPath(omarchyThemeDir());
     if (QFile::exists(omarchyColorsPath()))
         m_watcher.addPath(omarchyColorsPath());
+
+    const QString toggles = QDir::cleanPath(omarchyTogglesDir());
+    if (QDir(QDir::cleanPath(toggles + QStringLiteral("/.."))).exists())
+        m_watcher.addPath(QDir::cleanPath(toggles + QStringLiteral("/..")));
+    if (QDir(toggles).exists())
+        m_watcher.addPath(toggles);
 }

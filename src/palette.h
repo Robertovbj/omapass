@@ -27,6 +27,10 @@ class Palette : public QObject {
     Q_PROPERTY(QColor alertInfo READ alertInfo NOTIFY changed)
     Q_PROPERTY(QColor alertWarn READ alertWarn NOTIFY changed)
     Q_PROPERTY(QColor alertError READ alertError NOTIFY changed)
+    // The window's own backdrop: the background, faded under Omarchy's
+    // Glassy (0.75) and Transparent (0.96, the default) windows so Hyprland's
+    // blur shows through. Modals and menus keep `background`, so they stay solid.
+    Q_PROPERTY(QColor windowBackground READ windowBackground NOTIFY changed)
     Q_PROPERTY(bool darkMode READ darkMode NOTIFY darkModeChanged)
 
 public:
@@ -43,6 +47,7 @@ public:
     QColor alertInfo() const { return m_alertInfo; }
     QColor alertWarn() const { return m_alertWarn; }
     QColor alertError() const { return m_alertError; }
+    QColor windowBackground() const { return m_windowBackground; }
     bool darkMode() const { return m_darkMode; }
 
 public slots:
@@ -72,6 +77,7 @@ private:
     QColor m_alertInfo;
     QColor m_alertWarn;
     QColor m_alertError;
+    QColor m_windowBackground;
 
     bool m_darkMode = true;
     bool m_systemDarkMode = true;

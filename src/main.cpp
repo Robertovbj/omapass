@@ -8,6 +8,7 @@
 #include <QQmlContext>
 #include <QQmlError>
 #include <QQuickStyle>
+#include <QQuickWindow>
 #include <QStandardPaths>
 #include <QTextStream>
 #include <QUrl>
@@ -173,6 +174,13 @@ int main(int argc, char *argv[]) {
     // Omarchy palette, and Material's own chrome (filled text containers,
     // floating placeholder labels) fights that instead of helping.
     QQuickStyle::setStyle(QStringLiteral("Basic"));
+
+    // Omarchy's Glassy and Transparent windows need a window that can be
+    // see-through, and the buffer is picked when the window is made; the
+    // backdrop stays opaque until the theme says otherwise.
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
+    QQuickWindow::setDefaultAlphaBuffer(true);
+#endif
 
     // Wordlist for the passphrase generator; needs the application object for
     // the paths it searches, so it comes after the one above.

@@ -21,7 +21,8 @@ ApplicationWindow {
     // keeps its clipboard meaning while typing and only quits otherwise.
     property bool editingText: false
 
-    color: theme.background
+    // See-through under Omarchy's Glassy and Transparent windows.
+    color: theme.windowBackground
 
     Shortcut {
         sequence: "Ctrl+Q"

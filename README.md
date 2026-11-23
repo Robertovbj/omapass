@@ -504,6 +504,12 @@ quando você troca de tema — não é preciso reiniciar o omapass. Sem Omarchy
 instalado, o omapass usa Catppuccin Mocha ou Latte conforme a preferência
 clara/escura do desktop.
 
+As janelas de vidro do Omarchy também valem: com `omarchy hyprland window
+transparency glassy` o fundo da janela fica translúcido (0,75) e o Hyprland
+borra o que está atrás; com `transparent`, o padrão, o efeito é bem mais leve
+(0,96); com `opaque` tudo fica sólido. Modais e menus seguem sólidos, e a troca
+vale na hora.
+
 Um tema próprio sobrepõe apenas os papéis que ele declarar; o resto continua
 vindo do Omarchy. Em `~/.config/omapass/themes/tema.toml`:
 
