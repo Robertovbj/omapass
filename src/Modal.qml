@@ -41,6 +41,12 @@ Popup {
 
     onOpened: if (!announcedShown) announceShown()
 
+    // Puts the keyboard on the sheet's own key handling, for a sheet that
+    // opens over something that may have taken it meanwhile.
+    function takeKeyboard() {
+        keyCatcher.forceActiveFocus();
+    }
+
     function announceShown() {
         announcedShown = true;
         shown();

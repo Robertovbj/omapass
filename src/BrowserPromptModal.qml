@@ -30,7 +30,11 @@ Modal {
     capturesKeys: asksYesNo
 
     onShown: {
-        if (root.kind === "associate") {
+        if (root.asksYesNo) {
+            // Can open before the page under it has loaded and taken the
+            // keyboard (the manifest question, at start-up).
+            root.takeKeyboard();
+        } else if (root.kind === "associate") {
             nameField.text = "";
             nameField.field.forceActiveFocus();
         } else if (root.kind === "access") {
@@ -38,6 +42,19 @@ Modal {
             // The boxes are made for the new question after this runs.
             Qt.callLater(root.focusFirstEntry);
         }
+    }
+
+    // Gives the keyboard back to the question without resetting it, after
+    // something underneath (a page that just loaded) took it.
+    function refocus() {
+        if (!root.visible)
+            return;
+        if (root.asksYesNo)
+            root.takeKeyboard();
+        else if (root.kind === "associate")
+            nameField.field.forceActiveFocus();
+        else if (root.kind === "access")
+            root.focusFirstEntry();
     }
 
     function focusFirstEntry() {

@@ -13,6 +13,10 @@ FocusScope {
     property color footerColor: theme.guidance
     property bool searchMode: true
     property bool acceptsKeys: true
+    // A question from the browser sits over every page, whatever the page
+    // thinks is on top: while one is up, the keyboard is the question's.
+    readonly property bool browserAsking: controller.browser.prompt.kind !== undefined
+    readonly property bool ownsKeys: acceptsKeys && !browserAsking
     // Bracketed tag drawn before a row's text, or "" for none.
     property var tagFor: function(item) { return ""; }
     // Optional table layout: [{ "key": "name", "title": "Nome", "weight": 3 }…].
@@ -218,7 +222,7 @@ FocusScope {
                 }
 
                 Keys.onPressed: function(event) {
-                    if (!pane.acceptsKeys)
+                    if (!pane.ownsKeys)
                         return;
                     if (pane.handleControlKey(event)) {
                         event.accepted = true;
@@ -467,7 +471,7 @@ FocusScope {
         z: -1
 
         Keys.onPressed: function(event) {
-            if (!pane.acceptsKeys)
+            if (!pane.ownsKeys)
                 return;
             if (pane.handleControlKey(event)) {
                 event.accepted = true;
@@ -528,7 +532,7 @@ FocusScope {
     // sheet on top owns it otherwise, and grabbing focus regardless would
     // send typing to the search line behind the sheet.
     function claimKeyboard() {
-        if (!pane.acceptsKeys)
+        if (!pane.ownsKeys)
             return;
         if (pane.searchMode)
             searchInput.forceActiveFocus();
@@ -536,7 +540,7 @@ FocusScope {
             keyCatcher.forceActiveFocus();
     }
 
-    onAcceptsKeysChanged: claimKeyboard()
+    onOwnsKeysChanged: claimKeyboard()
 
     Component.onCompleted: claimKeyboard()
 }

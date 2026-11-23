@@ -66,9 +66,16 @@ ApplicationWindow {
         // after loading would take it straight back off a sheet that opened
         // during construction.
         focus: true
+
+        // A page loading (the list at start-up, the entries after an
+        // unlock) takes the keyboard with it, even from a question the
+        // browser left open over it.
+        onLoaded: Qt.callLater(browserPrompt.refocus)
     }
 
-    BrowserPromptModal {}
+    BrowserPromptModal {
+        id: browserPrompt
+    }
 
     // The browser asked to unlock, or asks something: the window comes up.
     Connections {

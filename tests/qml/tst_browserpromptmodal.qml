@@ -105,6 +105,29 @@ TestCase {
         compare(lastAnswer().value, false);
     }
 
+    Component {
+        id: paneComponent
+        ListPane {
+            anchors.fill: parent
+            model: [{ "path": "/casa/cofre.kdbx", "label": "/casa/cofre.kdbx" }]
+        }
+    }
+
+    // At start-up the manifest question opens before the database list
+    // loads, and the list used to take the keyboard from under it: y and n
+    // went to the list's search line.
+    function test_aPageLoadingUnderneathDoesNotTakeTheKeys() {
+        ask({ "kind": "conflict", "browsers": ["Brave"] });
+        const pane = createTemporaryObject(paneComponent, testCase);
+        verify(pane !== null);
+        pane.claimKeyboard();
+        keyClick(Qt.Key_Y);
+        compare(lastAnswer().kind, "conflict");
+        compare(lastAnswer().value, true);
+        // The question gone, the list has the keyboard again.
+        tryVerify(function() { return pane.ownsKeys; }, 2000);
+    }
+
     function test_clickingOutsideRefuses() {
         ask({ "kind": "update", "name": "GitHub", "login": "ana", "site": "github.com" });
         modal.dismissed();
