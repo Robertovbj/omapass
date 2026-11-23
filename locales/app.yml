@@ -951,3 +951,15 @@ common.space_key:
 common.empty_group_marker:
   pt-BR: "[vazio]"
   en: "[empty]"
+totp.invalid_secret:
+  pt-BR: "O segredo do OTP não é um base32 válido"
+  en: "The OTP secret is not valid base32"
+totp.invalid_uri:
+  pt-BR: "A URI otpauth:// não pôde ser lida"
+  en: "The otpauth:// URI could not be read"
+totp.not_totp:
+  pt-BR: "Só códigos por tempo (TOTP) são suportados, não por contador (HOTP)"
+  en: "Only time-based codes (TOTP) are supported, not counter-based ones (HOTP)"
+totp.invalid_parameter:
+  pt-BR: "A URI do OTP tem algoritmo, dígitos ou período inválidos"
+  en: "The OTP URI has an invalid algorithm, digits or period"

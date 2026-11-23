@@ -32,6 +32,7 @@ SOURCES += \
     tst_pin.cpp \
     tst_secret.cpp \
     tst_sessionlock.cpp \
+    tst_totp.cpp \
     ../src/bitwardenjson.cpp \
     ../src/bitwardenvault.cpp \
     ../src/bwcrypto.cpp \
@@ -55,6 +56,7 @@ SOURCES += \
     ../src/process.cpp \
     ../src/secret.cpp \
     ../src/sessionlock.cpp \
+    ../src/totp.cpp \
     ../src/vault.cpp
 
 HEADERS += \
@@ -82,6 +84,7 @@ HEADERS += \
     ../src/process.h \
     ../src/secret.h \
     ../src/sessionlock.h \
+    ../src/totp.h \
     ../src/vault.h
 
 RESOURCES += ../src/resources.qrc
