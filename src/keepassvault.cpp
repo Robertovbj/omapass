@@ -230,6 +230,68 @@ bool KeepassVault::setEntryIcon(const QString &entryPath, const QByteArray &png,
     return finish(m_db->setEntryIcon(entryPath, png), error);
 }
 
+// The reads below answer from what is in memory when the file cannot be
+// read again: the browser asks often, and a sync client replacing the file
+// mid-read is no reason to tell it the database is gone.
+QString KeepassVault::databaseUuid() const {
+    const QMutexLocker locker(&m_mutex);
+    QString error;
+    refresh(&error);
+    return m_db->rootUuid();
+}
+
+QHash<QString, QString> KeepassVault::entryUuids() const {
+    const QMutexLocker locker(&m_mutex);
+    QString error;
+    refresh(&error);
+    return m_db->entryUuids();
+}
+
+QHash<QString, QString> KeepassVault::groupUuids() const {
+    const QMutexLocker locker(&m_mutex);
+    QString error;
+    refresh(&error);
+    return m_db->groupUuids();
+}
+
+bool KeepassVault::storesBrowserData() const {
+    const QMutexLocker locker(&m_mutex);
+    return m_db->hasEntryCustomData();
+}
+
+QHash<QString, QString> KeepassVault::customData() const {
+    const QMutexLocker locker(&m_mutex);
+    QString error;
+    refresh(&error);
+    return m_db->customData();
+}
+
+bool KeepassVault::setCustomData(const QString &key, const QString &value, QString *error) const {
+    const QMutexLocker locker(&m_mutex);
+    if (!refresh(error))
+        return false;
+    if (m_db->customData().value(key) == value)
+        return true;
+    return finish(m_db->setCustomData(key, value), error);
+}
+
+QHash<QString, QString> KeepassVault::entryCustomData(const QString &key) const {
+    const QMutexLocker locker(&m_mutex);
+    QString error;
+    refresh(&error);
+    return m_db->entryCustomData(key);
+}
+
+bool KeepassVault::setEntryCustomData(const QString &entryPath, const QString &key, const QString &value,
+                                      QString *error) const {
+    const QMutexLocker locker(&m_mutex);
+    if (!refresh(error))
+        return false;
+    if (m_db->entryCustomData(key).value(entryPath) == value)
+        return true;
+    return finish(m_db->setEntryCustomData(entryPath, key, value), error);
+}
+
 bool KeepassVault::removeGroup(const QString &group, QString *error) const {
     const QMutexLocker locker(&m_mutex);
     if (!refresh(error))

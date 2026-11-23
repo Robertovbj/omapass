@@ -87,6 +87,24 @@ public:
     QString setEntryIcon(const QString &path, const QByteArray &png);
     QString removeGroup(const QString &path);
 
+    // UUIDs as KeePassXC spells them to the browser: 32 hex digits. The root
+    // group's identifies the database; entries and groups are by path, the
+    // recycle bin left out.
+    QString rootUuid() const;
+    QHash<QString, QString> entryUuids() const;
+    QHash<QString, QString> groupUuids() const;
+
+    // Custom data, the key/value pairs programs keep in a database for
+    // themselves: the database's own (Meta), and each entry's (KDBX 4 only).
+    // Setting an empty value removes the key. KeePassXC keeps its browser
+    // associations and per-entry site permissions there.
+    bool hasEntryCustomData() const;
+    QHash<QString, QString> customData() const;
+    QString setCustomData(const QString &key, const QString &value);
+    // Entry path → value, for the entries that have `key`.
+    QHash<QString, QString> entryCustomData(const QString &key) const;
+    QString setEntryCustomData(const QString &path, const QString &key, const QString &value);
+
 private:
     class Impl;
     explicit KdbxDatabase(std::unique_ptr<Impl> impl);

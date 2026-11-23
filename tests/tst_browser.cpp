@@ -12,6 +12,9 @@
 #include "browserprotocol.h"
 #include "browserproxy.h"
 #include "browserserver.h"
+#include "browserstore.h"
+#include "kdbx.h"
+#include "keepassvault.h"
 
 namespace {
 
@@ -164,6 +167,23 @@ struct Extension {
     }
 };
 
+class LocalVault : public Vault {
+public:
+    explicit LocalVault(const QString &path) : Vault(VaultKind::Pass, path) {}
+    void list(QStringList *, QStringList *) const override {}
+    QString titleFor(const QString &, const QString &fallback) const override { return fallback; }
+    bool fetchPassword(const QString &, Secret *, QString *) const override { return false; }
+    bool fetchEntry(const QString &, EntryData *, QString *) const override { return false; }
+    bool addEntry(const QString &, const QString &, const EntryData &, QString *) const override { return false; }
+    bool editEntry(const QString &, const QString &, const QString &, const EntryData &,
+                   QString *) const override { return false; }
+    bool removeEntry(const QString &, QString *) const override { return false; }
+    bool renameGroup(const QString &, const QString &, QString *) const override { return false; }
+    bool removeGroup(const QString &, QString *) const override { return false; }
+};
+
+// The app around the integration: a real KeePass database, its entries
+// listed the way the controller lists them, changes run on the spot.
 int errorOf(const QJsonObject &reply) {
     return reply.value("errorCode").toString().toInt();
 }
@@ -531,6 +551,93 @@ private slots:
         }
         host.pending.takeFirst()();
         QCOMPARE(replies, 1);
+    }
+
+    // ------------------------------------------------------------ store
+
+    // A KeePass database keeps it all inside, where KeePassXC would look.
+    void browserStoresInTheKdbx() {
+        QTemporaryDir dir;
+        const QString path = dir.filePath("t.kdbx");
+        const Secret password(QStringLiteral("senha"));
+        {
+            auto db = KdbxDatabase::create(password, "Teste");
+            KdbxEntry entry;
+            entry.title = "GitHub";
+            entry.password = Secret(QStringLiteral("p"));
+            QVERIFY(db->addEntry("Web", entry).isEmpty());
+            QVERIFY(db->save(path).isEmpty());
+        }
+        QString error;
+        std::unique_ptr<KeepassVault> vault(KeepassVault::unlock(path, password, &error));
+        QVERIFY2(vault, qPrintable(error));
+
+        QTemporaryDir local;
+        BrowserStore store(vault.get(), local.path());
+        QVERIFY(store.setKey("laptop", "chave-publica", &error));
+        QVERIFY(store.setAccess("Web/GitHub", {{"github.com"}, {"evil.com"}}, &error));
+        QCOMPARE(store.key("laptop"), QStringLiteral("chave-publica"));
+        QCOMPARE(store.associations(), QStringList{"laptop"});
+        QCOMPARE(store.access().value("Web/GitHub"), (BrowserStore::Access{{"github.com"}, {"evil.com"}}));
+        // Nothing on this computer: it went into the file.
+        QVERIFY(QDir(local.path()).isEmpty());
+
+        KdbxStatus status = KdbxStatus::Corrupt;
+        auto reopened = KdbxDatabase::open(path, password, &status);
+        QVERIFY(reopened);
+        QCOMPARE(reopened->customData().value("KPXC_BROWSER_laptop"), QStringLiteral("chave-publica"));
+        QVERIFY(reopened->customData().contains("_CREATED_laptop"));
+        const QJsonObject settings = QJsonDocument::fromJson(
+            reopened->entryCustomData("KeePassXC-Browser Settings").value("Web/GitHub").toUtf8()).object();
+        QCOMPARE(settings.value("Allow").toArray().at(0).toString(), QStringLiteral("github.com"));
+        QCOMPARE(settings.value("Deny").toArray().at(0).toString(), QStringLiteral("evil.com"));
+
+        // KeePassXC's hash: sha256 of the root group's UUID in hex.
+        QCOMPARE(store.databaseHash(),
+                 QString::fromLatin1(QCryptographicHash::hash(reopened->rootUuid().toUtf8(),
+                                                              QCryptographicHash::Sha256).toHex()));
+        QCOMPARE(store.entryUuids({"Web/GitHub"}).value("Web/GitHub"), reopened->entryUuids().value("Web/GitHub"));
+
+        QVERIFY(store.setKey("laptop", QString(), &error));
+        QVERIFY(store.associations().isEmpty());
+    }
+
+    void browserStoresLocallyForTheRest() {
+        QTemporaryDir local;
+        const LocalVault vault("/home/ana/.password-store");
+        BrowserStore store(&vault, local.filePath("browser"));
+        QString error;
+        QVERIFY(store.associations().isEmpty());
+        QVERIFY(store.setKey("laptop", "chave", &error));
+        QVERIFY(store.setAccess("Email/gmail", {{"mail.google.com"}, {}}, &error));
+
+        // Read back by a store made later, as after a restart.
+        BrowserStore again(&vault, local.filePath("browser"));
+        QCOMPARE(again.key("laptop"), QStringLiteral("chave"));
+        QCOMPARE(again.access().value("Email/gmail").allow, QStringList{"mail.google.com"});
+
+        const QStringList files = QDir(local.filePath("browser")).entryList(QDir::Files);
+        QCOMPARE(files.size(), 1);
+        QVERIFY(!files.first().contains("password-store"));
+        QCOMPARE(QFile(local.filePath("browser/" + files.first())).permissions()
+                     & (QFileDevice::ReadGroup | QFileDevice::ReadOther),
+                 QFileDevice::Permissions());
+
+        again.moveEntry("Email/gmail", "Email/google");
+        QVERIFY(!store.access().contains("Email/gmail"));
+        QVERIFY(store.access().contains("Email/google"));
+        store.removeEntry("Email/google");
+        QVERIFY(store.access().isEmpty());
+
+        // Made-up ids are stable, and not the same for an entry and a group.
+        const QString id = store.entryUuids({"Email/gmail"}).value("Email/gmail");
+        QCOMPARE(id.size(), 32);
+        QCOMPARE(again.entryUuids({"Email/gmail"}).value("Email/gmail"), id);
+        QVERIFY(store.groupUuids({"Email/gmail"}).value("Email/gmail") != id);
+
+        // Another vault, another hash.
+        const LocalVault other("/home/ana/outro-store");
+        QVERIFY(BrowserStore(&other, local.path()).databaseHash() != store.databaseHash());
     }
 
     // ------------------------------------------------------------ socket

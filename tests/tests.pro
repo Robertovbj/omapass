@@ -47,6 +47,7 @@ SOURCES += \
     ../src/browserprotocol.cpp \
     ../src/browserproxy.cpp \
     ../src/browserserver.cpp \
+    ../src/browserstore.cpp \
     ../src/clipboard.cpp \
     ../src/config.cpp \
     ../src/entryicons.cpp \
@@ -81,6 +82,7 @@ HEADERS += \
     ../src/browserprotocol.h \
     ../src/browserproxy.h \
     ../src/browserserver.h \
+    ../src/browserstore.h \
     ../src/clipboard.h \
     ../src/bwcrypto.h \
     ../src/config.h \

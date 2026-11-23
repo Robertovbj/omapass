@@ -308,6 +308,64 @@ private slots:
         QVERIFY(!reopened->setEntryIcon(QStringLiteral("nao-existe"), red).isEmpty());
     }
 
+    // Where KeePassXC keeps the browser integration's data: the database's
+    // custom data and the entries'. Both survive a save, and an edit.
+    void kdbxKeepsCustomData() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("t.kdbx"));
+        const Secret password(QStringLiteral("senha"));
+
+        auto db = KdbxDatabase::create(password, QStringLiteral("Teste"));
+        QVERIFY(db);
+        QVERIFY(db->hasEntryCustomData());
+        KdbxEntry entry;
+        entry.password = Secret(QStringLiteral("p"));
+        entry.title = QStringLiteral("A");
+        QVERIFY(db->addEntry(QStringLiteral("Web"), entry).isEmpty());
+        // The recycle bin's contents are no one's business.
+        entry.title = QStringLiteral("Lixo");
+        QVERIFY(db->addEntry(QString(), entry).isEmpty());
+        QVERIFY(db->removeEntry(QStringLiteral("Lixo")).isEmpty());
+
+        QVERIFY(db->setCustomData(QStringLiteral("KPXC_BROWSER_laptop"), QStringLiteral("chave")).isEmpty());
+        QVERIFY(db->setEntryCustomData(QStringLiteral("Web/A"), QStringLiteral("KeePassXC-Browser Settings"),
+                                       QStringLiteral("{\"Allow\":[\"a.com\"]}")).isEmpty());
+        // An edit puts the entry in its history: the data stays on the entry.
+        entry.title = QStringLiteral("A");
+        entry.username = QStringLiteral("ana");
+        QVERIFY(db->editEntry(QStringLiteral("Web/A"), QStringLiteral("Web"), entry).isEmpty());
+        QVERIFY(!db->setEntryCustomData(QStringLiteral("nada"), QStringLiteral("k"), QStringLiteral("v")).isEmpty());
+        QVERIFY(db->save(path).isEmpty());
+
+        KdbxStatus status = KdbxStatus::Corrupt;
+        auto reopened = KdbxDatabase::open(path, password, &status);
+        QVERIFY(reopened);
+        QCOMPARE(reopened->customData().value(QStringLiteral("KPXC_BROWSER_laptop")), QStringLiteral("chave"));
+        QCOMPARE(reopened->entryCustomData(QStringLiteral("KeePassXC-Browser Settings")),
+                 (QHash<QString, QString>{{QStringLiteral("Web/A"), QStringLiteral("{\"Allow\":[\"a.com\"]}")}}));
+
+        QCOMPARE(reopened->rootUuid().size(), 32);
+        const QHash<QString, QString> entries = reopened->entryUuids();
+        QCOMPARE(entries.keys(), QStringList{QStringLiteral("Web/A")});
+        QCOMPARE(entries.value(QStringLiteral("Web/A")).size(), 32);
+        QVERIFY(reopened->groupUuids().contains(QStringLiteral("Web")));
+        QVERIFY(!reopened->groupUuids().contains(reopened->rootUuid()));
+
+        // Removing the last item leaves no empty <CustomData> behind.
+        QVERIFY(reopened->setEntryCustomData(QStringLiteral("Web/A"), QStringLiteral("KeePassXC-Browser Settings"),
+                                             QString()).isEmpty());
+        QVERIFY(reopened->setCustomData(QStringLiteral("KPXC_BROWSER_laptop"), QString()).isEmpty());
+        QVERIFY(reopened->entryCustomData(QStringLiteral("KeePassXC-Browser Settings")).isEmpty());
+        QVERIFY(!reopened->customData().contains(QStringLiteral("KPXC_BROWSER_laptop")));
+
+        // KDBX 3.1 has no custom data on entries.
+        auto legacy = KdbxDatabase::create(password, QStringLiteral("Velho"), true);
+        QVERIFY(!legacy->hasEntryCustomData());
+        QVERIFY(legacy->addEntry(QString(), entry).isEmpty());
+        QVERIFY(!legacy->setEntryCustomData(QStringLiteral("A"), QStringLiteral("k"), QStringLiteral("v")).isEmpty());
+    }
+
     void kdbxLegacyFormatRoundTrips() {
         QTemporaryDir dir;
         QVERIFY(dir.isValid());

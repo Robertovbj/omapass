@@ -150,6 +150,26 @@ public:
     // Sets one (an empty `png` removes it) and saves the database.
     virtual bool setEntryIcon(const QString &, const QByteArray &, QString *) const { return false; }
 
+    // Ids the browser integration can hand out for entries and groups:
+    // KeePass's UUIDs, as 32 hex digits, by path. Empty where the backend
+    // has none, and the integration makes its own.
+    virtual QString databaseUuid() const { return {}; }
+    virtual QHash<QString, QString> entryUuids() const { return {}; }
+    virtual QHash<QString, QString> groupUuids() const { return {}; }
+
+    // The browser integration's data kept in the database itself, where
+    // KeePassXC keeps it (KDBX 4): the database's custom data, and one key
+    // of each entry's. A backend without a place for it keeps none, and the
+    // app stores it on this computer instead. An empty value removes.
+    virtual bool storesBrowserData() const { return false; }
+    virtual QHash<QString, QString> customData() const { return {}; }
+    virtual bool setCustomData(const QString &, const QString &, QString *) const { return false; }
+    // Entry path → value, for the entries that have `key`.
+    virtual QHash<QString, QString> entryCustomData(const QString &) const { return {}; }
+    virtual bool setEntryCustomData(const QString &, const QString &, const QString &, QString *) const {
+        return false;
+    }
+
     // Something the user should hear about what was opened — entries that
     // could not be read, say — or empty when all is well.
     virtual QString warning() const { return {}; }

@@ -1733,3 +1733,161 @@ QString KdbxDatabase::removeGroup(const QString &path) {
     d->recordDeleted(uuid);
     return QString();
 }
+
+// ================================================================ custom data
+
+namespace {
+
+QString hexUuid(const XNode &node) {
+    return QString::fromLatin1(
+        QByteArray::fromBase64(node.childText(QStringLiteral("UUID")).toLatin1()).toHex());
+}
+
+QHash<QString, QString> itemsOf(const XNode *customData) {
+    QHash<QString, QString> items;
+    if (!customData)
+        return items;
+    for (const XNode *item : customData->childrenNamed(QStringLiteral("Item")))
+        items.insert(item->childText(QStringLiteral("Key")), item->childText(QStringLiteral("Value")));
+    return items;
+}
+
+// Sets or (with an empty value) removes `key` in a <CustomData>; says
+// whether anything changed.
+bool setItem(XNode *customData, const QString &key, const QString &value) {
+    for (XNode *item : customData->childrenNamed(QStringLiteral("Item"))) {
+        if (item->childText(QStringLiteral("Key")) != key)
+            continue;
+        if (value.isEmpty()) {
+            customData->detach(item);
+            return true;
+        }
+        if (item->childText(QStringLiteral("Value")) == value)
+            return false;
+        item->setChildText(QStringLiteral("Value"), value);
+        return true;
+    }
+    if (value.isEmpty())
+        return false;
+    XNode *item = customData->add(QStringLiteral("Item"));
+    item->add(QStringLiteral("Key"), key);
+    item->add(QStringLiteral("Value"), value);
+    return true;
+}
+
+// Entries and groups by path, as walk() names them, without the recycle bin.
+void walkNodes(const XNode &group, const QString &prefix, const XNode *skip,
+               const std::function<void(const QString &, const XNode &)> &onEntry,
+               const std::function<void(const QString &, const XNode &)> &onGroup) {
+    for (const XNode *entry : group.childrenNamed(QStringLiteral("Entry"))) {
+        if (onEntry) {
+            QString title;
+            for (const XNode *item : entry->childrenNamed(QStringLiteral("String"))) {
+                if (item->childText(QStringLiteral("Key")) == QLatin1String("Title")) {
+                    title = item->childText(QStringLiteral("Value"));
+                    break;
+                }
+            }
+            onEntry(prefix + title, *entry);
+        }
+    }
+    for (const XNode *sub : group.childrenNamed(QStringLiteral("Group"))) {
+        if (sub == skip)
+            continue;
+        const QString path = prefix + sub->childText(QStringLiteral("Name"));
+        if (onGroup)
+            onGroup(path, *sub);
+        walkNodes(*sub, path + QLatin1Char('/'), skip, onEntry, onGroup);
+    }
+}
+
+}
+
+QString KdbxDatabase::rootUuid() const {
+    const XNode *root = d->rootGroup();
+    return root ? hexUuid(*root) : QString();
+}
+
+QHash<QString, QString> KdbxDatabase::entryUuids() const {
+    QHash<QString, QString> out;
+    if (const XNode *root = d->rootGroup())
+        walkNodes(*root, QString(), d->recycleBin(false),
+                  [&](const QString &path, const XNode &entry) { out.insert(path, hexUuid(entry)); }, nullptr);
+    return out;
+}
+
+QHash<QString, QString> KdbxDatabase::groupUuids() const {
+    QHash<QString, QString> out;
+    if (const XNode *root = d->rootGroup())
+        walkNodes(*root, QString(), d->recycleBin(false), nullptr,
+                  [&](const QString &path, const XNode &group) { out.insert(path, hexUuid(group)); });
+    return out;
+}
+
+bool KdbxDatabase::hasEntryCustomData() const {
+    return d->major >= 4;
+}
+
+QHash<QString, QString> KdbxDatabase::customData() const {
+    const XNode *meta = d->meta();
+    return itemsOf(meta ? meta->child(QStringLiteral("CustomData")) : nullptr);
+}
+
+QString KdbxDatabase::setCustomData(const QString &key, const QString &value) {
+    XNode *meta = d->meta();
+    if (!meta)
+        return I18n::t(QStringLiteral("keepass.corrupt"));
+    XNode *customData = meta->child(QStringLiteral("CustomData"));
+    if (!customData)
+        customData = meta->add(QStringLiteral("CustomData"));
+    // Only where the database already keeps the field (KDBX 4).
+    XNode *changed = meta->child(QStringLiteral("SettingsChanged"));
+    if (setItem(customData, key, value) && changed)
+        changed->text = timeStamp(d->binaryTimes());
+    return QString();
+}
+
+QHash<QString, QString> KdbxDatabase::entryCustomData(const QString &key) const {
+    QHash<QString, QString> out;
+    if (const XNode *root = d->rootGroup()) {
+        walkNodes(*root, QString(), d->recycleBin(false), [&](const QString &path, const XNode &entry) {
+            const QHash<QString, QString> items = itemsOf(entry.child(QStringLiteral("CustomData")));
+            const auto it = items.constFind(key);
+            if (it != items.constEnd())
+                out.insert(path, it.value());
+        }, nullptr);
+    }
+    return out;
+}
+
+QString KdbxDatabase::setEntryCustomData(const QString &path, const QString &key, const QString &value) {
+    if (!hasEntryCustomData())
+        return I18n::t(QStringLiteral("keepass.unsupported"), QStringLiteral("detail"),
+                       QStringLiteral("KDBX 3.1 custom data"));
+    XNode *entry = d->findEntry(path);
+    if (!entry)
+        return I18n::t(QStringLiteral("keepass.entry_not_found"), QStringLiteral("entry"), path);
+
+    XNode *customData = entry->child(QStringLiteral("CustomData"));
+    if (!customData) {
+        if (value.isEmpty())
+            return QString();
+        // Where KeePassXC writes it: after the strings and AutoType, before
+        // the history.
+        auto created = std::make_unique<XNode>();
+        created->name = QStringLiteral("CustomData");
+        customData = created.get();
+        auto at = entry->children.end();
+        for (auto it = entry->children.begin(); it != entry->children.end(); ++it) {
+            if ((*it)->name == QLatin1String("History")) {
+                at = it;
+                break;
+            }
+        }
+        entry->children.insert(at, std::move(created));
+    }
+    setItem(customData, key, value);
+    if (customData->children.empty())
+        entry->detach(customData);
+    return QString();
+}

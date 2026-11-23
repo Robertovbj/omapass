@@ -38,6 +38,16 @@ public:
     QHash<QString, QByteArray> entryIcons() const override;
     bool setEntryIcon(const QString &entryPath, const QByteArray &png, QString *error) const override;
 
+    QString databaseUuid() const override;
+    QHash<QString, QString> entryUuids() const override;
+    QHash<QString, QString> groupUuids() const override;
+    bool storesBrowserData() const override;
+    QHash<QString, QString> customData() const override;
+    bool setCustomData(const QString &key, const QString &value, QString *error) const override;
+    QHash<QString, QString> entryCustomData(const QString &key) const override;
+    bool setEntryCustomData(const QString &entryPath, const QString &key, const QString &value,
+                            QString *error) const override;
+
     // The message for a database that would not open.
     static QString openError(KdbxStatus status, const QString &detail);
 
