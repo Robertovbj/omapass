@@ -71,7 +71,9 @@ AppController::AppController(const AppConfig &config, QObject *parent)
       m_siteIcons(QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation)
                   + QStringLiteral("/omapass/icons")),
       m_entryIcons(QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation)
-                   + QStringLiteral("/omapass/icons")) {
+                   + QStringLiteral("/omapass/icons")),
+      m_browser(this, QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation)
+                          + QStringLiteral("/omapass/browser")) {
     m_siteIcons.setDuckDuckGo(m_config.siteIconsDuckDuckGo);
     // An icon that arrives goes into every row of its site, wherever the
     // list is filtered to.
@@ -264,6 +266,10 @@ AppController::AppController(const AppConfig &config, QObject *parent)
             m_rowsModel.replaceRow(index, row);
         }
     });
+    connect(&m_browser, &BrowserIntegration::message, this, &AppController::showMessage);
+    // Answering from the start, when it was left on: the browser may well
+    // ask before the user gets to the window.
+    m_browser.setEnabled(m_config.browserIntegration, true);
     connect(&m_lockTimer, &QTimer::timeout, this, [this]() {
         if (m_config.lockMinutes && m_lastActivity.hasExpired(qint64(*m_config.lockMinutes) * 60 * 1000))
             lock();
@@ -813,6 +819,7 @@ void AppController::openVault(const DbRef &ref, const Secret &secret) {
 }
 
 void AppController::adoptVault(const DbRef &ref, Vault *vault) {
+    m_browser.waitForReads();
     m_vault.reset(vault);
     refreshPinState();
     m_history.recordUse(ref.path);
@@ -822,6 +829,7 @@ void AppController::adoptVault(const DbRef &ref, Vault *vault) {
 
     m_query.clear();
     refreshEntries();
+    m_browser.vaultChanged();
 
     m_stage = QStringLiteral("entries");
     emit stageChanged();
@@ -1280,6 +1288,8 @@ void AppController::saveEntry(const QVariantMap &fields) {
             // path; one in the database moved along with it.
             if (result.ok && isEdit && !m_vault.isNull() && !m_vault->storesIcons())
                 m_entryIcons.moveLocal(m_vault.data(), originalPath, path);
+            if (result.ok && isEdit)
+                m_browser.entryMoved(originalPath, path);
             if (result.ok) {
                 if (!isEdit)
                     m_history.recordUse(path);
@@ -1313,6 +1323,8 @@ void AppController::deleteEntry(const QString &entry) {
             m_lazyMeta.remove(entry);
             if (result.ok && !emptyGroup && !m_vault.isNull() && !m_vault->storesIcons())
                 m_entryIcons.setLocal(m_vault.data(), entry, QByteArray());
+            if (result.ok && !emptyGroup)
+                m_browser.entryRemoved(entry);
             if (result.ok) {
                 showMessage(I18n::t(emptyGroup ? QStringLiteral("app.group_deleted")
                                                : QStringLiteral("app.entry_deleted")),
@@ -1776,8 +1788,10 @@ void AppController::closeVault() {
     m_lazyMeta.clear();
     m_metaArrived.clear();
     forgetShownOtp();
+    m_browser.waitForReads();
     m_vault->close();
     m_vault.reset();
+    m_browser.vaultChanged();
 }
 
 QString AppController::message() const {
@@ -1849,6 +1863,8 @@ QVariantMap AppController::settings() const {
             {QStringLiteral("wordlist"), m_config.wordlist},
             {QStringLiteral("siteIcons"), m_config.siteIcons},
             {QStringLiteral("siteIconsDuckDuckGo"), m_config.siteIconsDuckDuckGo},
+            {QStringLiteral("browserIntegration"), m_config.browserIntegration},
+            {QStringLiteral("browserSupported"), BrowserIntegration::supported()},
             {QStringLiteral("wordlistInUse"), Generator::wordlistPath()},
             {QStringLiteral("configPath"), Config::configDir() + QStringLiteral("/config.toml")}};
 }
@@ -1870,6 +1886,8 @@ void AppController::saveSettings(const QVariantMap &values) {
         wordlist = QStringLiteral("auto");
     const bool siteIcons = values.value(QStringLiteral("siteIcons")).toBool();
     const bool duckDuckGo = siteIcons && values.value(QStringLiteral("siteIconsDuckDuckGo")).toBool();
+    const bool browser = BrowserIntegration::supported()
+        && values.value(QStringLiteral("browserIntegration")).toBool();
 
     QMap<QString, QString> toml;
     toml.insert(QStringLiteral("general.path"), Config::tomlString(path));
@@ -1879,6 +1897,7 @@ void AppController::saveSettings(const QVariantMap &values) {
     toml.insert(QStringLiteral("generator.wordlist"), Config::tomlString(wordlist));
     toml.insert(QStringLiteral("icons.download"), siteIcons ? QStringLiteral("true") : QStringLiteral("false"));
     toml.insert(QStringLiteral("icons.duckduckgo"), duckDuckGo ? QStringLiteral("true") : QStringLiteral("false"));
+    toml.insert(QStringLiteral("browser.enabled"), browser ? QStringLiteral("true") : QStringLiteral("false"));
 
     if (!Config::writeValues(toml)) {
         showMessage(I18n::t(QStringLiteral("settings.write_error")), true);
@@ -1910,6 +1929,12 @@ void AppController::saveSettings(const QVariantMap &values) {
         refreshDatabases();
 
     showMessage(I18n::t(QStringLiteral("settings.saved")), false);
+    // After the line above, so what turning it on says (the browsers it was
+    // set up for, or why not) is what stays on the status line.
+    const bool browserChanged = browser != m_config.browserIntegration;
+    m_config.browserIntegration = browser;
+    if (browserChanged)
+        m_browser.setEnabled(browser);
 }
 
 QString AppController::importWordlist(const QString &fileUrl) {
@@ -2070,4 +2095,55 @@ void AppController::saveWindowGeometry(int x, int y, int width, int height, bool
     QSettings settings;
     settings.setValue(windowGeometrySetting, QRect(x, y, width, height));
     settings.setValue(QStringLiteral("window/maximized"), maximized);
+}
+
+// ---------------------------------------------------------------- browser
+
+QStringList AppController::browserEntries() const {
+    QStringList entries;
+    entries.reserve(m_allEntries.size());
+    for (const QString &entry : m_allEntries) {
+        if (!isEmptyGroup(entry))
+            entries.append(entry);
+    }
+    return entries;
+}
+
+QHash<QString, EntryMeta> AppController::browserMeta() const {
+    QHash<QString, EntryMeta> meta = m_listedMeta;
+    for (auto it = m_lazyMeta.cbegin(); it != m_lazyMeta.cend(); ++it)
+        meta.insert(it.key(), it.value());
+    return meta;
+}
+
+// With the generator sheet's last settings, as KeePassXC uses its own.
+Secret AppController::browserGeneratePassword() {
+    Secret password;
+    QString error;
+    if (!Generator::generate(optionsFromMap(generatorOptions()), &password, &error))
+        showMessage(error, true);
+    return password;
+}
+
+bool AppController::browserChange(std::function<bool(const Vault *, QString *)> work,
+                                  std::function<void(bool)> done) {
+    if (m_vault.isNull() || m_busy || m_syncing)
+        return false;
+    // Locking waits while busy, so the vault outlives the task.
+    const Vault *vault = m_vault.data();
+    runInBackground(
+        [vault, work]() {
+            TaskResult result;
+            result.ok = work(vault, &result.error);
+            return result;
+        },
+        [this, done](const TaskResult &result) {
+            showMessage(result.ok ? I18n::t(QStringLiteral("browser.login_saved"))
+                                  : I18n::t(QStringLiteral("browser.login_save_error"), QStringLiteral("err"),
+                                            result.error),
+                        !result.ok);
+            refreshEntries();
+            done(result.ok);
+        });
+    return true;
 }

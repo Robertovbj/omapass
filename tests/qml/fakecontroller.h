@@ -4,6 +4,49 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+// Stand-in for BrowserIntegration: the prompt is set by the test, and the
+// answers BrowserPromptModal gives are kept for it to read.
+class FakeBrowser : public QObject {
+    Q_OBJECT
+
+    Q_PROPERTY(QVariantMap prompt MEMBER m_prompt NOTIFY promptChanged)
+    Q_PROPERTY(QVariantList answers MEMBER m_answers NOTIFY promptChanged)
+    Q_PROPERTY(QString existing MEMBER m_existing NOTIFY promptChanged)
+
+public:
+    using QObject::QObject;
+
+    Q_INVOKABLE void setPrompt(const QVariantMap &prompt) {
+        m_prompt = prompt;
+        m_answers.clear();
+        emit promptChanged();
+    }
+    Q_INVOKABLE void answerAssociate(const QString &name) { record(QStringLiteral("associate"), name); }
+    Q_INVOKABLE bool associationExists(const QString &name) const { return !name.isEmpty() && name == m_existing; }
+    Q_INVOKABLE void answerAccess(const QStringList &allowed, bool remember) {
+        record(QStringLiteral("access"), QVariantMap{{QStringLiteral("allowed"), allowed},
+                                                     {QStringLiteral("remember"), remember}});
+    }
+    Q_INVOKABLE void answerUpdate(bool accepted) { record(QStringLiteral("update"), accepted); }
+    Q_INVOKABLE void answerConflict(bool replace) { record(QStringLiteral("conflict"), replace); }
+
+signals:
+    void promptChanged();
+    void raiseRequested();
+
+private:
+    // As the real one does: answered, the prompt goes.
+    void record(const QString &kind, const QVariant &value) {
+        m_answers.append(QVariantMap{{QStringLiteral("kind"), kind}, {QStringLiteral("value"), value}});
+        m_prompt.clear();
+        emit promptChanged();
+    }
+
+    QVariantMap m_prompt;
+    QVariantList m_answers;
+    QString m_existing = QStringLiteral("notebook");
+};
+
 // Stand-in for AppController, so DatabasePage can be drawn in a test the way
 // it is drawn in the application. Only the properties the page reads are
 // here; the actions it calls are no-ops, since what is under test is what
@@ -35,10 +78,12 @@ class FakeController : public QObject {
     Q_PROPERTY(bool hasMessage MEMBER m_hasMessage NOTIFY messageChanged)
     // What the last copy put on the clipboard, for the tests to read.
     Q_PROPERTY(QString lastCopied MEMBER m_lastCopied NOTIFY copied)
+    Q_PROPERTY(QObject *browser READ browser CONSTANT)
 
 public:
     using QObject::QObject;
 
+    QObject *browser() { return &m_browser; }
     bool anyDatabaseFound() const { return !m_databases.isEmpty(); }
 
     // The two halves of a finished scan, so a test can deliver them in
@@ -139,6 +184,7 @@ private:
     QString m_loginEmail;
     QString m_loginServer;
     QString m_lastCopied;
+    FakeBrowser m_browser;
     QVariantList m_loginMethods;
     bool m_onePasswordAvailable = true;
     QString m_message;

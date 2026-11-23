@@ -25,6 +25,7 @@ A documentação completa está na [wiki](https://github.com/higorhgon/omapass/w
 - Adição, edição, exclusão e renomeação de grupos e entradas
 - [Códigos TOTP](https://github.com/higorhgon/omapass/wiki/TOTP) nos quatro backends, com `Ctrl+T` para copiar
 - [Ícones](https://github.com/higorhgon/omapass/wiki/%C3%8Dcones) dos sites na lista (opcional) ou escolhidos à mão para cada entrada
+- Integração com o navegador pela extensão KeePassXC-Browser, que preenche e salva logins nos sites (Linux)
 - [Gerador de senhas e de frases](https://github.com/higorhgon/omapass/wiki/Gerador-de-senhas) (diceware, com lista em pt-BR e em inglês)
 - [Desbloqueio opcional por PIN](https://github.com/higorhgon/omapass/wiki/Desbloqueio-por-PIN), um PIN por banco
 - Clipboard marcado como sensível e limpo depois de 10 segundos

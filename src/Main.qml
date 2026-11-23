@@ -68,6 +68,20 @@ ApplicationWindow {
         focus: true
     }
 
+    BrowserPromptModal {}
+
+    // The browser asked to unlock, or asks something: the window comes up.
+    Connections {
+        target: controller.browser
+
+        function onRaiseRequested() {
+            if (window.visibility === Window.Minimized || window.visibility === Window.Hidden)
+                window.showNormal();
+            window.raise();
+            window.requestActivate();
+        }
+    }
+
     Component {
         id: databasePage
         DatabasePage {}

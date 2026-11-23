@@ -1026,3 +1026,75 @@ ui.icon_pick_title:
 ui.icon_filter:
   pt-BR: "Imagens (*.png *.jpg *.jpeg *.ico *.gif *.bmp *.webp)"
   en: "Images (*.png *.jpg *.jpeg *.ico *.gif *.bmp *.webp)"
+settings.browser:
+  pt-BR: "Integração com o navegador (extensão KeePassXC-Browser)"
+  en: "Browser integration (KeePassXC-Browser extension)"
+settings.browser_hint:
+  pt-BR: "Instale a extensão KeePassXC-Browser no navegador e clique em Conectar nela. Ela passa a falar com o omapass no lugar do KeePassXC: preenche os logins dos sites e oferece salvar os novos."
+  en: "Install the KeePassXC-Browser extension in your browser and click Connect in it. It then talks to omapass instead of KeePassXC: it fills in the sites' logins and offers to save new ones."
+browser.enabled:
+  pt-BR: "Integração com o navegador ligada para: %{browsers}"
+  en: "Browser integration on for: %{browsers}"
+browser.no_browsers:
+  pt-BR: "Integração ligada, mas nenhum navegador conhecido foi encontrado"
+  en: "Integration on, but no known browser was found"
+browser.busy:
+  pt-BR: "Outro programa (o KeePassXC?) já está atendendo o navegador; feche-o e ligue de novo"
+  en: "Another program (KeePassXC?) is already answering the browser; close it and turn this on again"
+browser.start_error:
+  pt-BR: "Não foi possível abrir a integração com o navegador: %{err}"
+  en: "Could not start the browser integration: %{err}"
+browser.manifest_error:
+  pt-BR: "Não foi possível configurar: %{browsers}"
+  en: "Could not set up: %{browsers}"
+browser.save_error:
+  pt-BR: "Não foi possível gravar os dados do navegador: %{err}"
+  en: "Could not save the browser data: %{err}"
+browser.associated:
+  pt-BR: "Navegador conectado como %{name}"
+  en: "Browser connected as %{name}"
+browser.login_saved:
+  pt-BR: "Login salvo pelo navegador"
+  en: "Login saved from the browser"
+browser.login_save_error:
+  pt-BR: "Não foi possível salvar o login do navegador: %{err}"
+  en: "Could not save the login from the browser: %{err}"
+browser.associate_title:
+  pt-BR: " Conectar navegador "
+  en: " Connect browser "
+browser.associate_text:
+  pt-BR: "Um navegador pediu para se conectar a %{vault}. Dê um nome à conexão para reconhecê-la depois, ou Esc para recusar."
+  en: "A browser asked to connect to %{vault}. Give the connection a name to recognize it later, or Esc to refuse."
+browser.associate_name_label:
+  pt-BR: "Nome da conexão"
+  en: "Connection name"
+browser.associate_exists:
+  pt-BR: "Já existe uma conexão com esse nome; ela será substituída."
+  en: "A connection with this name already exists; it will be replaced."
+browser.associate_hint:
+  pt-BR: "Enter: Conectar | Esc: Recusar"
+  en: "Enter: Connect | Esc: Refuse"
+browser.access_title:
+  pt-BR: " Acesso do navegador "
+  en: " Browser access "
+browser.access_text:
+  pt-BR: "%{site} pede os logins abaixo. Marque os que podem ser entregues:"
+  en: "%{site} asks for the logins below. Tick the ones it may have:"
+browser.access_remember:
+  pt-BR: "Lembrar para este site"
+  en: "Remember for this site"
+browser.access_hint:
+  pt-BR: "Espaço: Marcar | Tab: Próximo | Enter: Liberar | Esc: Negar"
+  en: "Space: Tick | Tab: Next | Enter: Allow | Esc: Deny"
+browser.update_title:
+  pt-BR: " Atualizar senha "
+  en: " Update password "
+browser.update_text:
+  pt-BR: "O navegador quer gravar uma nova senha de %{login} em %{name} (%{site}). Substituir a senha salva?"
+  en: "The browser wants to save a new password for %{login} in %{name} (%{site}). Replace the saved password?"
+browser.conflict_title:
+  pt-BR: " Integração existente "
+  en: " Existing integration "
+browser.conflict_text:
+  pt-BR: "%{browsers} já está configurado para outro programa (o KeePassXC?). Passar para o omapass?"
+  en: "%{browsers} is already set up for another program (KeePassXC?). Hand it over to omapass?"

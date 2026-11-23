@@ -12,6 +12,7 @@ Modal {
     property string wordlist: "auto"
     property string wordlistInUse: ""
     property string configPath: ""
+    property bool browserSupported: false
 
     signal submitted(var values)
 
@@ -29,6 +30,8 @@ Modal {
         lockField.text = String(values.lockMinutes);
         iconsBox.checked = values.siteIcons;
         duckDuckGoBox.checked = values.siteIconsDuckDuckGo;
+        browserBox.checked = values.browserIntegration;
+        root.browserSupported = values.browserSupported;
         root.wordlist = values.wordlist;
         root.wordlistInUse = values.wordlistInUse;
         root.configPath = values.configPath;
@@ -45,7 +48,7 @@ Modal {
     // The minutes field only shows while the lock is on; moveFocus skips it
     // otherwise.
     readonly property var tabOrder: [pathField, recencyBox, lockBox, lockField, iconsBox,
-                                     duckDuckGoBox, wordlistField]
+                                     duckDuckGoBox, browserBox, wordlistField]
 
     function focusNext(from) { root.moveFocus(root.tabOrder, from, 1); }
     function focusPrevious(from) { root.moveFocus(root.tabOrder, from, -1); }
@@ -58,7 +61,8 @@ Modal {
             "lockMinutes": parseInt(lockField.text) || 10,
             "wordlist": wordlistField.text,
             "siteIcons": iconsBox.checked,
-            "siteIconsDuckDuckGo": duckDuckGoBox.checked
+            "siteIconsDuckDuckGo": duckDuckGoBox.checked,
+            "browserIntegration": browserBox.checked
         });
     }
 
@@ -166,6 +170,27 @@ Modal {
         visible: iconsBox.checked
         text: duckDuckGoBox.checked ? i18n.t("settings.site_icons_privacy_duckduckgo")
                                     : i18n.t("settings.site_icons_privacy")
+        color: theme.guidance
+        wrapMode: Text.WordWrap
+        font.pixelSize: Math.round(11 * root.s)
+    }
+
+    // Linux only for now; elsewhere there is nothing to turn on.
+    CheckOption {
+        id: browserBox
+        visible: root.browserSupported
+        text: i18n.t("settings.browser")
+
+        onSubmitted: root.submit()
+        onCancelled: root.dismissed()
+        onNextRequested: root.focusNext(browserBox)
+        onPreviousRequested: root.focusPrevious(browserBox)
+    }
+
+    Text {
+        width: parent.width
+        visible: root.browserSupported && browserBox.checked
+        text: i18n.t("settings.browser_hint")
         color: theme.guidance
         wrapMode: Text.WordWrap
         font.pixelSize: Math.round(11 * root.s)

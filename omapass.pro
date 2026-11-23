@@ -37,6 +37,7 @@ HEADERS += \
     src/bwapi.h \
     src/bwcrypto.h \
     src/browsercrypto.h \
+    src/browserintegration.h \
     src/browsermanifests.h \
     src/browserprotocol.h \
     src/browserproxy.h \
@@ -78,6 +79,7 @@ SOURCES += \
     src/bwapi.cpp \
     src/bwcrypto.cpp \
     src/browsercrypto.cpp \
+    src/browserintegration.cpp \
     src/browsermanifests.cpp \
     src/browserprotocol.cpp \
     src/browserproxy.cpp \

@@ -12,6 +12,7 @@
 #include <QVariantMap>
 
 #include "bitwardenlogin.h"
+#include "browserintegration.h"
 #include "config.h"
 #include "entryicons.h"
 #include "entryrowsmodel.h"
@@ -28,7 +29,7 @@ class QEvent;
 // filtered entries and the transient status line. The QML side holds no
 // password-manager logic of its own — it renders these properties and calls
 // these actions, the same split the TUI had between app.rs and ui.rs.
-class AppController : public QObject {
+class AppController : public QObject, public BrowserApp {
     Q_OBJECT
 
     Q_PROPERTY(QString stage READ stage NOTIFY stageChanged)
@@ -82,6 +83,10 @@ class AppController : public QObject {
     Q_PROPERTY(QString query READ query WRITE setQuery NOTIFY entriesChanged)
     Q_PROPERTY(QStringList groups READ groups NOTIFY entriesChanged)
 
+    // The browser extension's side: its questions to the user, and whether
+    // it is being answered (see BrowserIntegration).
+    Q_PROPERTY(QObject *browser READ browser CONSTANT)
+
     Q_PROPERTY(QString message READ message NOTIFY messageChanged)
     Q_PROPERTY(bool messageIsError READ messageIsError NOTIFY messageChanged)
     Q_PROPERTY(bool hasMessage READ hasMessage NOTIFY messageChanged)
@@ -131,6 +136,18 @@ public:
     Q_INVOKABLE QString entryPathAt(int index) const { return m_rowsModel.pathAt(index); }
     void setQuery(const QString &query);
     QStringList groups() const { return m_groups; }
+
+    QObject *browser() { return &m_browser; }
+
+    // BrowserApp
+    const Vault *browserVault() const override { return m_vault.data(); }
+    QStringList browserEntries() const override;
+    QStringList browserGroups() const override { return m_groups; }
+    QHash<QString, EntryMeta> browserMeta() const override;
+    void browserLock() override { lock(); }
+    Secret browserGeneratePassword() override;
+    bool browserChange(std::function<bool(const Vault *, QString *)> work,
+                       std::function<void(bool)> done) override;
 
     QString message() const;
     bool messageIsError() const { return m_messageIsError; }
@@ -414,4 +431,8 @@ private:
     bool m_messageIsError = false;
     int m_clipboardCountdown = -1;
     QTimer m_messageTimer;
+
+    // Last, so it goes first: it waits for its reads of the vault and closes
+    // the socket before anything it uses is torn down.
+    BrowserIntegration m_browser;
 };

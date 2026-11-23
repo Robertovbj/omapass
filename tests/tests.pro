@@ -43,6 +43,7 @@ SOURCES += \
     ../src/bwaccount.cpp \
     ../src/bwapi.cpp \
     ../src/browsercrypto.cpp \
+    ../src/browserintegration.cpp \
     ../src/browsermanifests.cpp \
     ../src/browserprotocol.cpp \
     ../src/browserproxy.cpp \
@@ -78,6 +79,7 @@ HEADERS += \
     ../src/bwaccount.h \
     ../src/bwapi.h \
     ../src/browsercrypto.h \
+    ../src/browserintegration.h \
     ../src/browsermanifests.h \
     ../src/browserprotocol.h \
     ../src/browserproxy.h \

@@ -28,6 +28,9 @@ struct AppConfig {
     // DuckDuckGo's icon service is a further fallback, off on its own.
     bool siteIcons = false;
     bool siteIconsDuckDuckGo = false;
+    // Answer the KeePassXC-Browser extension, so the browser fills and
+    // saves logins from omapass. Off unless asked for.
+    bool browserIntegration = false;
 };
 
 namespace Config {

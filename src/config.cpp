@@ -264,7 +264,12 @@ void writeDefaultConfig(const QString &path) {
         << "download = false\n"
         << "# When a site has none, ask DuckDuckGo's icon service, which is then\n"
         << "# told the site's address.\n"
-        << "duckduckgo = false\n";
+        << "duckduckgo = false\n"
+        << "\n"
+        << "[browser]\n"
+        << "# Fill and save logins in the browser through the KeePassXC-Browser\n"
+        << "# extension, which then talks to omapass instead of KeePassXC.\n"
+        << "enabled = false\n";
 }
 
 AppConfig load() {
@@ -306,6 +311,7 @@ AppConfig load(const QString &file) {
 
     config.siteIcons = raw.value(QStringLiteral("icons.download")) == QLatin1String("true");
     config.siteIconsDuckDuckGo = raw.value(QStringLiteral("icons.duckduckgo")) == QLatin1String("true");
+    config.browserIntegration = raw.value(QStringLiteral("browser.enabled")) == QLatin1String("true");
 
     QString wordlist = raw.value(QStringLiteral("generator.wordlist"));
     if (!wordlist.isEmpty()) {

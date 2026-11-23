@@ -8,6 +8,7 @@
         <file alias="CheckOption.qml">CheckOption.qml</file>
         <file alias="GeneratorModal.qml">GeneratorModal.qml</file>
         <file alias="Modal.qml">Modal.qml</file>
+        <file alias="BrowserPromptModal.qml">BrowserPromptModal.qml</file>
         <file alias="Field.qml">Field.qml</file>
         <file alias="SuggestionList.qml">SuggestionList.qml</file>
         <file alias="ActionsMenu.qml">ActionsMenu.qml</file>

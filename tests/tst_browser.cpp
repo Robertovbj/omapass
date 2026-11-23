@@ -8,6 +8,7 @@
 #include <QLocalSocket>
 
 #include "browsercrypto.h"
+#include "browserintegration.h"
 #include "browsermanifests.h"
 #include "browserprotocol.h"
 #include "browserproxy.h"
@@ -184,6 +185,76 @@ public:
 
 // The app around the integration: a real KeePass database, its entries
 // listed the way the controller lists them, changes run on the spot.
+class FakeApp : public BrowserApp {
+public:
+    std::unique_ptr<KeepassVault> vault;
+    QStringList entries;
+    QStringList groupList;
+    QHash<QString, EntryMeta> meta;
+    int locks = 0;
+    int changes = 0;
+
+    void relist() {
+        entries.clear();
+        groupList.clear();
+        if (!vault)
+            return;
+        vault->list(&entries, &groupList);
+        meta = vault->entryMeta();
+    }
+
+    const Vault *browserVault() const override { return vault.get(); }
+    QStringList browserEntries() const override { return entries; }
+    QStringList browserGroups() const override { return groupList; }
+    QHash<QString, EntryMeta> browserMeta() const override { return meta; }
+    void browserLock() override { ++locks; }
+    Secret browserGeneratePassword() override { return Secret(QStringLiteral("gerada")); }
+    bool browserChange(std::function<bool(const Vault *, QString *)> work,
+                       std::function<void(bool)> done) override {
+        if (!vault)
+            return false;
+        ++changes;
+        QString error;
+        const bool ok = work(vault.get(), &error);
+        relist();
+        done(ok);
+        return true;
+    }
+};
+
+// A KeePass database with two GitHub logins and a bank, opened.
+struct Fixture {
+    QTemporaryDir dir;
+    QTemporaryDir local;
+    FakeApp app;
+
+    Fixture() {
+        const QString path = dir.filePath("t.kdbx");
+        const Secret password(QStringLiteral("senha"));
+        auto db = KdbxDatabase::create(password, "Teste");
+        KdbxEntry entry;
+        entry.title = "GitHub";
+        entry.username = "ana";
+        entry.password = Secret(QStringLiteral("s3nha"));
+        entry.url = "https://github.com/login";
+        entry.otp = Secret(QStringLiteral("otpauth://totp/x?secret=GEZDGNBVGY3TQOJQ"));
+        db->addEntry("Web", entry);
+        entry.title = "GitHub trabalho";
+        entry.username = "ana@empresa";
+        entry.password = Secret(QStringLiteral("outra"));
+        entry.otp = Secret();
+        db->addEntry("Web", entry);
+        entry.title = "Banco";
+        entry.username = "123";
+        entry.url = "https://banco.com.br";
+        db->addEntry(QString(), entry);
+        db->save(path);
+        QString error;
+        app.vault.reset(KeepassVault::unlock(path, password, &error));
+        app.relist();
+    }
+};
+
 int errorOf(const QJsonObject &reply) {
     return reply.value("errorCode").toString().toInt();
 }
@@ -638,6 +709,220 @@ private slots:
         // Another vault, another hash.
         const LocalVault other("/home/ana/outro-store");
         QVERIFY(BrowserStore(&other, local.path()).databaseHash() != store.databaseHash());
+    }
+
+    // ------------------------------------------------------------ integration
+
+    void browserAsksBeforeHandingOutLogins() {
+        Fixture f;
+        BrowserIntegration integration(&f.app, f.local.path());
+        QSignalSpy raised(&integration, &BrowserIntegration::raiseRequested);
+
+        QVector<BrowserLogin> got;
+        bool answered = false;
+        const auto ask = [&]() {
+            answered = false;
+            integration.findLogins({QStringLiteral("https://github.com/"), QString(), false},
+                                   [&](const QVector<BrowserLogin> &logins) {
+                                       got = logins;
+                                       answered = true;
+                                   });
+        };
+
+        ask();
+        // The bank is not asked about: it is not this site's.
+        QCOMPARE(integration.prompt().value("kind").toString(), QStringLiteral("access"));
+        QCOMPARE(integration.prompt().value("site").toString(), QStringLiteral("github.com"));
+        QCOMPARE(integration.prompt().value("entries").toList().size(), 2);
+        QCOMPARE(raised.size(), 1);
+        QVERIFY(!answered);
+
+        // One let out, the other kept, both remembered.
+        integration.answerAccess({"Web/GitHub"}, true);
+        QVERIFY(integration.prompt().isEmpty());
+        QTRY_VERIFY(answered);
+        QCOMPARE(got.size(), 1);
+        QCOMPARE(got.first().login, QStringLiteral("ana"));
+        QCOMPARE(got.first().password.toString(), QStringLiteral("s3nha"));
+        QCOMPARE(got.first().name, QStringLiteral("GitHub"));
+        QCOMPARE(got.first().group, QStringLiteral("Web"));
+        QCOMPARE(got.first().uuid, f.app.vault->entryUuids().value("Web/GitHub"));
+        QCOMPARE(got.first().totp.size(), 6);
+
+        // Asked again: no question this time, the same answer.
+        ask();
+        QVERIFY(integration.prompt().isEmpty());
+        QTRY_VERIFY(answered);
+        QCOMPARE(got.size(), 1);
+
+        // And where KeePassXC keeps it.
+        const QHash<QString, QString> settings = f.app.vault->entryCustomData("KeePassXC-Browser Settings");
+        QCOMPARE(BrowserStore::decodeAccess(settings.value("Web/GitHub")).allow, QStringList{"github.com"});
+        QCOMPARE(BrowserStore::decodeAccess(settings.value("Web/GitHub trabalho")).deny, QStringList{"github.com"});
+
+        // The code of an entry handed out, and of no other.
+        QString code = "x";
+        integration.totp(got.first().uuid, [&](const QString &c) { code = c; });
+        QTRY_COMPARE(code.size(), 6);
+        integration.totp(f.app.vault->entryUuids().value("Banco"), [&](const QString &c) { code = c; });
+        QCOMPARE(code, QString());
+    }
+
+    void browserForgetsWhatWasNotRemembered() {
+        Fixture f;
+        BrowserIntegration integration(&f.app, f.local.path());
+        bool answered = false;
+        QVector<BrowserLogin> got;
+        const auto ask = [&]() {
+            answered = false;
+            integration.findLogins({QStringLiteral("https://github.com/"), QString(), false},
+                                   [&](const QVector<BrowserLogin> &logins) {
+                                       got = logins;
+                                       answered = true;
+                                   });
+        };
+        ask();
+        integration.answerAccess({}, false);
+        QTRY_VERIFY(answered);
+        QVERIFY(got.isEmpty());
+        ask();
+        QCOMPARE(integration.prompt().value("kind").toString(), QStringLiteral("access"));
+        integration.answerAccess({"Web/GitHub", "Web/GitHub trabalho"}, false);
+        QTRY_VERIFY(answered);
+        QCOMPARE(got.size(), 2);
+        QVERIFY(f.app.vault->entryCustomData("KeePassXC-Browser Settings").isEmpty());
+    }
+
+    void browserDropsQuestionsWhenTheVaultGoes() {
+        Fixture f;
+        BrowserIntegration integration(&f.app, f.local.path());
+        QString id = "pendente";
+        integration.associate("chave", [&](const QString &name) { id = name; });
+        QCOMPARE(integration.prompt().value("kind").toString(), QStringLiteral("associate"));
+
+        bool answered = false;
+        QVector<BrowserLogin> got{BrowserLogin()};
+        integration.findLogins({QStringLiteral("https://github.com/"), QString(), false},
+                               [&](const QVector<BrowserLogin> &logins) {
+                                   got = logins;
+                                   answered = true;
+                               });
+        // Queued behind the first question.
+        QCOMPARE(integration.prompt().value("kind").toString(), QStringLiteral("associate"));
+
+        f.app.vault.reset();
+        f.app.relist();
+        integration.vaultChanged();
+        QVERIFY(integration.prompt().isEmpty());
+        QCOMPARE(id, QString());
+        QVERIFY(answered);
+        QVERIFY(got.isEmpty());
+    }
+
+    void browserAssociatesIntoTheDatabase() {
+        Fixture f;
+        BrowserIntegration integration(&f.app, f.local.path());
+        QString id;
+        integration.associate("chave-id", [&](const QString &name) { id = name; });
+        QVERIFY(!integration.associationExists("notebook"));
+        integration.answerAssociate("  notebook ");
+        QCOMPARE(id, QStringLiteral("notebook"));
+        QCOMPARE(integration.associationKey("notebook"), QStringLiteral("chave-id"));
+        QVERIFY(integration.associationExists("notebook"));
+        QCOMPARE(f.app.vault->customData().value("KPXC_BROWSER_notebook"), QStringLiteral("chave-id"));
+
+        // Refused: nothing kept.
+        integration.associate("outra", [&](const QString &name) { id = name; });
+        integration.answerAssociate("");
+        QCOMPARE(id, QString());
+    }
+
+    void browserSavesNewLogins() {
+        Fixture f;
+        BrowserIntegration integration(&f.app, f.local.path());
+        BrowserSaveRequest save;
+        save.url = "https://github.com/session";
+        save.login = "novo";
+        save.password = Secret(QStringLiteral("p1"));
+        bool saved = false;
+        integration.saveLogin(save, [&](bool ok) { saved = ok; });
+        QVERIFY(saved);
+        QVERIFY(f.app.entries.contains("KeePassXC-Browser Passwords/github.com"));
+
+        // A second one for the same site does not replace the first.
+        saved = false;
+        integration.saveLogin(save, [&](bool ok) { saved = ok; });
+        QVERIFY(saved);
+        QVERIFY(f.app.entries.contains("KeePassXC-Browser Passwords/github.com (2)"));
+
+        EntryData data;
+        QString error;
+        QVERIFY(f.app.vault->fetchEntry("KeePassXC-Browser Passwords/github.com", &data, &error));
+        QCOMPARE(data.username, QStringLiteral("novo"));
+        QCOMPARE(data.password.toString(), QStringLiteral("p1"));
+        QCOMPARE(data.url, QStringLiteral("https://github.com/session"));
+        // The site that saved it gets it back without asking.
+        QCOMPARE(BrowserStore::decodeAccess(f.app.vault->entryCustomData("KeePassXC-Browser Settings")
+                                                .value("KeePassXC-Browser Passwords/github.com")).allow,
+                 QStringList{"github.com"});
+
+        // Into a group the extension picked by id, or asked to create.
+        const QJsonArray tree = integration.groups();
+        QCOMPARE(tree.size(), 1);
+        QString webId;
+        for (const QJsonValue &child : tree.at(0).toObject().value("children").toArray()) {
+            if (child.toObject().value("name").toString() == "Web")
+                webId = child.toObject().value("uuid").toString();
+        }
+        QVERIFY(!webId.isEmpty());
+        save.url = "https://gitlab.com";
+        save.groupUuid = webId;
+        integration.saveLogin(save, [&](bool ok) { saved = ok; });
+        QVERIFY(f.app.entries.contains("Web/gitlab.com"));
+
+        QString newName, newId;
+        integration.createGroup("Web/Novos", [&](const QString &name, const QString &uuid) {
+            newName = name;
+            newId = uuid;
+        });
+        QCOMPARE(newName, QStringLiteral("Novos"));
+        save.url = "https://codeberg.org";
+        save.groupUuid = newId;
+        integration.saveLogin(save, [&](bool ok) { saved = ok; });
+        QVERIFY(f.app.entries.contains("Web/Novos/codeberg.org"));
+    }
+
+    void browserAsksBeforeOverwriting() {
+        Fixture f;
+        BrowserIntegration integration(&f.app, f.local.path());
+        BrowserSaveRequest save;
+        save.url = "https://github.com";
+        save.login = "ana";
+        save.password = Secret(QStringLiteral("trocada"));
+        save.uuid = f.app.vault->entryUuids().value("Web/GitHub");
+
+        int result = -1;
+        integration.saveLogin(save, [&](bool ok) { result = ok; });
+        QCOMPARE(integration.prompt().value("kind").toString(), QStringLiteral("update"));
+        integration.answerUpdate(false);
+        QCOMPARE(result, 0);
+        QCOMPARE(f.app.changes, 0);
+
+        integration.saveLogin(save, [&](bool ok) { result = ok; });
+        integration.answerUpdate(true);
+        QCOMPARE(result, 1);
+        EntryData data;
+        QString error;
+        QVERIFY(f.app.vault->fetchEntry("Web/GitHub", &data, &error));
+        QCOMPARE(data.password.toString(), QStringLiteral("trocada"));
+        // The rest of the entry stays as it was.
+        QCOMPARE(data.url, QStringLiteral("https://github.com/login"));
+        QVERIFY(!data.otp.isEmpty());
+
+        save.uuid = QString(32, 'f');
+        integration.saveLogin(save, [&](bool ok) { result = ok; });
+        QCOMPARE(result, 0);
+        QVERIFY(integration.prompt().isEmpty());
     }
 
     // ------------------------------------------------------------ socket
