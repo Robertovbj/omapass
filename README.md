@@ -25,7 +25,7 @@ A documentação completa está na [wiki](https://github.com/higorhgon/omapass/w
 - Adição, edição, exclusão e renomeação de grupos e entradas
 - [Códigos TOTP](https://github.com/higorhgon/omapass/wiki/TOTP) nos quatro backends, com `Ctrl+T` para copiar
 - [Ícones](https://github.com/higorhgon/omapass/wiki/%C3%8Dcones) dos sites na lista (opcional) ou escolhidos à mão para cada entrada
-- Integração com o navegador pela extensão KeePassXC-Browser, que preenche e salva logins nos sites (Linux)
+- [Integração com o navegador](https://github.com/higorhgon/omapass/wiki/Navegador) pela extensão KeePassXC-Browser, que preenche e salva logins nos sites (Linux)
 - [Gerador de senhas e de frases](https://github.com/higorhgon/omapass/wiki/Gerador-de-senhas) (diceware, com lista em pt-BR e em inglês)
 - [Desbloqueio opcional por PIN](https://github.com/higorhgon/omapass/wiki/Desbloqueio-por-PIN), um PIN por banco
 - Clipboard marcado como sensível e limpo depois de 10 segundos
@@ -66,6 +66,14 @@ dentro do diretório configurado (padrão: o home) e lista também as contas Bit
 Na tela de bancos, `Ctrl+A` cria um banco ou adiciona uma conta. `Ctrl+?` mostra todos os
 atalhos, e `Ctrl+O` abre as configurações.
 
+### Navegador
+
+O omapass atende a extensão KeePassXC-Browser no lugar do KeePassXC. Ligue "Integração com o
+navegador" em `Ctrl+O`, instale a extensão e reinicie o navegador (o Firefox e os derivados, como
+o Zen, só enxergam a mudança ao abrir de novo). Depois, com um banco desbloqueado, clique em
+"Conectar" na extensão e dê um nome à conexão. Por enquanto, só no Linux. O resto está em
+[Navegador](https://github.com/higorhgon/omapass/wiki/Navegador).
+
 ## Documentação
 
 - [Instalação](https://github.com/higorhgon/omapass/wiki/Instala%C3%A7%C3%A3o)
@@ -75,6 +83,7 @@ atalhos, e `Ctrl+O` abre as configurações.
 - [Desbloqueio por PIN](https://github.com/higorhgon/omapass/wiki/Desbloqueio-por-PIN)
 - [TOTP](https://github.com/higorhgon/omapass/wiki/TOTP)
 - [Ícones](https://github.com/higorhgon/omapass/wiki/%C3%8Dcones)
+- [Navegador](https://github.com/higorhgon/omapass/wiki/Navegador)
 - [Gerador de senhas](https://github.com/higorhgon/omapass/wiki/Gerador-de-senhas)
 - [Segurança](https://github.com/higorhgon/omapass/wiki/Seguran%C3%A7a)
 - [Releases](https://github.com/higorhgon/omapass/wiki/Releases)
