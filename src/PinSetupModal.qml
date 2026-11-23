@@ -16,8 +16,11 @@ Modal {
     readonly property string warning: controller.pinWeakWarning(pinField.text)
 
     heading: i18n.t("pin.setup_title")
-    hint: i18n.t("pin.setup_footer")
+    acceptText: i18n.t("pin.enable")
+    acceptEnabled: !busy
     cardWidth: Math.round(480 * s)
+
+    onAcceptRequested: root.submit()
 
     capturesKeys: false
 
@@ -29,6 +32,12 @@ Modal {
         pinField.text = "";
         confirmField.text = "";
         passwordField.field.forceActiveFocus();
+    }
+
+    // Only digits go in while letters and symbols are not allowed.
+    RegularExpressionValidator {
+        id: digitsOnly
+        regularExpression: /[0-9]*/
     }
 
     readonly property var tabOrder: [
@@ -79,10 +88,12 @@ Modal {
 
     Field {
         id: pinField
+        objectName: "pinField"
         width: parent.width
         label: i18n.t("pin.label")
         echoMode: revealPin.checked ? TextInput.Normal : TextInput.Password
         field.inputMethodHints: allowText.checked ? Qt.ImhNone : Qt.ImhDigitsOnly
+        field.validator: allowText.checked ? null : digitsOnly
         enabled: !root.busy
 
         onSubmitted: confirmField.field.forceActiveFocus()
@@ -97,6 +108,7 @@ Modal {
         label: i18n.t("pin.confirm_label")
         echoMode: revealPin.checked ? TextInput.Normal : TextInput.Password
         field.inputMethodHints: allowText.checked ? Qt.ImhNone : Qt.ImhDigitsOnly
+        field.validator: allowText.checked ? null : digitsOnly
         enabled: !root.busy
 
         onSubmitted: root.submit()
@@ -118,8 +130,18 @@ Modal {
 
     CheckOption {
         id: allowText
+        objectName: "pinAllowText"
         text: i18n.t("pin.allow_text")
         enabled: !root.busy
+
+        // Back to digits only: whatever else was typed goes, rather than
+        // sitting in the boxes where the validator can no longer be met.
+        onCheckedChanged: {
+            if (!checked) {
+                pinField.text = pinField.text.replace(/[^0-9]/g, "");
+                confirmField.text = confirmField.text.replace(/[^0-9]/g, "");
+            }
+        }
 
         onSubmitted: root.submit()
         onCancelled: root.dismissed()

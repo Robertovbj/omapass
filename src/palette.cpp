@@ -5,6 +5,8 @@
 #include <QDir>
 #include <QFile>
 
+#include <cmath>
+
 namespace {
 
 QString omarchyCurrentDir() {
@@ -65,6 +67,23 @@ QColor pick(const QHash<QString, QString> &colors, const QStringList &keys, QCol
     return fallback;
 }
 
+// `base` moved `amount` of the way towards `ink`.
+QColor mix(const QColor &base, const QColor &ink, double amount) {
+    return QColor::fromRgbF(base.redF() + (ink.redF() - base.redF()) * amount,
+                            base.greenF() + (ink.greenF() - base.greenF()) * amount,
+                            base.blueF() + (ink.blueF() - base.blueF()) * amount);
+}
+
+// Black or white, whichever reads on `color` (WCAG relative luminance).
+QColor contrastInk(const QColor &color) {
+    const auto linear = [](double v) {
+        return v <= .04045 ? v / 12.92 : std::pow((v + .055) / 1.055, 2.4);
+    };
+    const double luminance = .2126 * linear(color.redF()) + .7152 * linear(color.greenF())
+                             + .0722 * linear(color.blueF());
+    return luminance > .179 ? QColor("#111111") : QColor("#ffffff");
+}
+
 bool isDarkColor(const QColor &color) {
     return 0.299 * color.redF() + 0.587 * color.greenF() + 0.114 * color.blueF() < 0.5;
 }
@@ -95,6 +114,13 @@ void Palette::setSystemDarkMode(bool darkMode) {
 
     m_systemDarkMode = darkMode;
     reload();
+}
+
+void Palette::setRadius(int radius) {
+    if (radius < 0 || radius == m_radius)
+        return;
+    m_radius = radius;
+    emit radiusChanged();
 }
 
 void Palette::reload() {
@@ -145,6 +171,17 @@ void Palette::reload() {
     applyOverride(QStringLiteral("AlertInfo"), m_alertInfo);
     applyOverride(QStringLiteral("AlertWarn"), m_alertWarn);
     applyOverride(QStringLiteral("AlertError"), m_alertError);
+
+    // Derived after the overrides, so a pinned Base or Title carries into
+    // the panel, the hover and the rest. The mixes are Hype's.
+    m_panel = mix(m_background, m_base, .025);
+    m_button = pick(colors, {QStringLiteral("lighter_background")}, mix(m_background, m_base, .08));
+    m_hover = mix(m_background, m_title, .22);
+    m_border = mix(m_background, m_base, .22);
+    m_muted = mix(m_background, m_base, .62);
+    m_accentText = contrastInk(m_title);
+    m_accentHover = mix(m_title, m_base, .15);
+    m_selectionText = contrastInk(m_selection);
 
     if (dark != m_darkMode) {
         m_darkMode = dark;

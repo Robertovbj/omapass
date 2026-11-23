@@ -2,6 +2,8 @@
 // copyright David Heinemeier Hansson. See systemtheme.h.
 #include "systemtheme.h"
 
+#include <QFontDatabase>
+
 #ifdef OMAPASS_HAS_DBUS
 #include <QDBusConnection>
 #include <QDBusMessage>
@@ -271,4 +273,16 @@ void SystemTheme::setTextScale(qreal textScale) {
 
     m_textScale = textScale;
     emit textScaleChanged(m_textScale);
+}
+
+// "monospace" is the generic family fontconfig resolves, and `omarchy font
+// set` writes exactly that rule into ~/.config/fontconfig/fonts.conf, so it
+// is the desktop's chosen monospace. Elsewhere there is no fontconfig and the
+// generic name means nothing: the system's own fixed-width font stands in.
+QString SystemTheme::monoFamily() {
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+    return QFontDatabase::systemFont(QFontDatabase::FixedFont).family();
+#else
+    return QStringLiteral("monospace");
+#endif
 }

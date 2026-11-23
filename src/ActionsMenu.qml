@@ -18,14 +18,12 @@ Popup {
 
     readonly property real s: systemTheme.textScale
     readonly property real fontSize: Math.round(13 * s)
-    readonly property real itemMargin: Math.round(8 * s)
+    readonly property real itemMargin: Math.round(12 * s)
 
     // Wide enough for the longest option: the entries are translated and the
     // list changes with the backend, so a fixed width would clip them.
     FontMetrics {
         id: metrics
-        // The interface font is the desktop's monospace one, which is wider
-        // than the default; measuring with anything else clips the options.
         font.family: Qt.application.font.family
         font.pixelSize: root.fontSize
     }
@@ -55,9 +53,12 @@ Popup {
         }
     }
 
+    // Hype's menus: the panel colour, a border, the window's corners.
     background: Rectangle {
-        color: theme.background
-        radius: Math.round(6 * root.s)
+        color: theme.panel
+        border.width: 1
+        border.color: theme.border
+        radius: theme.radius
     }
 
     contentItem: Column {
@@ -103,19 +104,24 @@ Popup {
 
                 spacing: Math.round(2 * root.s)
 
-                Rectangle {
+                Item {
                     visible: slot.startsGroup
                     width: root.availableWidth
-                    height: Math.max(1, Math.round(root.s))
-                    color: theme.annotation
-                    opacity: 0.4
+                    height: Math.round(9 * root.s)
+
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width
+                        height: 1
+                        color: theme.border
+                    }
                 }
 
                 Rectangle {
                     width: root.availableWidth
-                    height: Math.round(28 * root.s)
-                    radius: Math.round(4 * root.s)
-                    color: root.selected === slot.index ? theme.selection : "transparent"
+                    height: Math.round(32 * root.s)
+                    radius: Math.min(4, theme.radius)
+                    color: root.selected === slot.index ? theme.hover : "transparent"
 
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
@@ -124,7 +130,7 @@ Popup {
                         anchors.leftMargin: root.itemMargin
                         anchors.rightMargin: root.itemMargin
                         text: slot.modelData
-                        color: theme.base
+                        color: theme.foreground
                         elide: Text.ElideRight
                         font.pixelSize: root.fontSize
                     }

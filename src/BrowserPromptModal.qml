@@ -17,15 +17,29 @@ Modal {
     visible: kind.length > 0
     // Over whatever sheet the page has open: the browser is waiting.
     z: 10
-    accentColor: theme.important
     heading: kind === "associate" ? i18n.t("browser.associate_title")
            : kind === "access" ? i18n.t("browser.access_title")
            : kind === "update" ? i18n.t("browser.update_title")
            : i18n.t("browser.conflict_title")
-    hint: asksYesNo ? i18n.t("common.yes_no_hint")
-        : kind === "access" ? i18n.t("browser.access_hint")
-        : i18n.t("browser.associate_hint")
+    acceptText: kind === "associate" ? i18n.t("browser.connect")
+              : kind === "access" ? i18n.t("browser.allow")
+              : kind === "update" ? i18n.t("browser.update")
+              : i18n.t("browser.replace")
+    cancelText: kind === "access" ? i18n.t("browser.deny")
+              : asksYesNo ? i18n.t("common.no")
+              : i18n.t("common.cancel")
     cardWidth: Math.round(520 * s)
+
+    onAcceptRequested: {
+        if (root.kind === "associate")
+            root.submitName();
+        else if (root.kind === "access")
+            root.allowChecked();
+        else if (root.kind === "update")
+            root.integration.answerUpdate(true);
+        else if (root.kind === "conflict")
+            root.integration.answerConflict(true);
+    }
 
     capturesKeys: asksYesNo
 
@@ -132,9 +146,9 @@ Modal {
         width: parent.width
         visible: root.kind === "associate"
         text: i18n.t("browser.associate_text", { "vault": root.prompt.vault || "" })
-        color: theme.base
+        color: theme.foreground
         wrapMode: Text.WordWrap
-        font.pixelSize: Math.round(13 * root.s)
+        font.pixelSize: Math.round(14 * root.s)
     }
 
     Field {
@@ -155,7 +169,7 @@ Modal {
         text: i18n.t("browser.associate_exists")
         color: theme.alertWarn
         wrapMode: Text.WordWrap
-        font.pixelSize: Math.round(11 * root.s)
+        font.pixelSize: Math.round(12 * root.s)
     }
 
     // ------------------------------------------------------------ access
@@ -164,9 +178,9 @@ Modal {
         width: parent.width
         visible: root.kind === "access"
         text: i18n.t("browser.access_text", { "site": root.prompt.site || "" })
-        color: theme.base
+        color: theme.foreground
         wrapMode: Text.WordWrap
-        font.pixelSize: Math.round(13 * root.s)
+        font.pixelSize: Math.round(14 * root.s)
     }
 
     Repeater {
@@ -216,8 +230,7 @@ Modal {
                                               "site": root.prompt.site || "" })
             : i18n.t("browser.conflict_text",
                      { "browsers": root.prompt.browsers ? root.prompt.browsers.join(", ") : "" })
-        color: theme.base
-        horizontalAlignment: Text.AlignHCenter
+        color: theme.foreground
         wrapMode: Text.WordWrap
         font.pixelSize: Math.round(14 * root.s)
     }

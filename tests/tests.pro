@@ -35,6 +35,7 @@ SOURCES += \
     tst_pass.cpp \
     tst_pin.cpp \
     tst_secret.cpp \
+    tst_hyprrounding.cpp \
     tst_sessionlock.cpp \
     tst_siteicons.cpp \
     tst_totp.cpp \
@@ -69,6 +70,7 @@ SOURCES += \
     ../src/pin.cpp \
     ../src/process.cpp \
     ../src/secret.cpp \
+    ../src/hyprrounding.cpp \
     ../src/sessionlock.cpp \
     ../src/siteicons.cpp \
     ../src/totp.cpp \
@@ -107,6 +109,7 @@ HEADERS += \
     ../src/pin.h \
     ../src/process.h \
     ../src/secret.h \
+    ../src/hyprrounding.h \
     ../src/sessionlock.h \
     ../src/siteicons.h \
     ../src/totp.h \

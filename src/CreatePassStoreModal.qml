@@ -12,9 +12,12 @@ Modal {
     signal submitted(string directory, string keyId)
 
     heading: i18n.t("db_app.new_pass_store_title")
-    hint: errorText.length > 0 ? errorText : i18n.t("common.footer_create_pass")
-    hintColor: errorText.length > 0 ? theme.alertError : theme.guidance
-    accentColor: errorText.length > 0 ? theme.alertError : theme.alertInfo
+    status: errorText
+    statusIsError: true
+    acceptText: i18n.t("common.create")
+    acceptEnabled: !busy && root.keys.length > 0
+
+    onAcceptRequested: root.submit()
     cardWidth: Math.round(560 * s)
 
     capturesKeys: false
@@ -76,8 +79,8 @@ Modal {
     Text {
         width: parent.width
         text: i18n.t("db_app.gpg_key_label")
-        color: keyList.activeFocus ? theme.annotation : theme.guidance
-        font.pixelSize: Math.round(12 * root.s)
+        color: keyList.activeFocus ? theme.foreground : theme.muted
+        font.pixelSize: Math.round(13 * root.s)
     }
 
     Text {

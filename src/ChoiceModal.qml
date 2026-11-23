@@ -34,6 +34,9 @@ Modal {
         event.accepted = true;
     }
 
+    // Picking a row is the answer; the button and Esc give up.
+    cancelOnly: true
+
     Repeater {
         model: root.options
 
@@ -41,18 +44,35 @@ Modal {
             required property int index
             required property var modelData
 
+            objectName: "choice" + index
+
             width: parent.width
-            height: Math.round(30 * root.s)
-            radius: Math.round(4 * root.s)
+            height: Math.round(38 * root.s)
+            radius: Math.min(4, theme.radius)
             color: root.selected === index ? theme.selection : "transparent"
+            border.width: root.selected === index ? 0 : 1
+            border.color: theme.border
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.left: parent.left
-                anchors.leftMargin: Math.round(10 * root.s)
+                anchors.leftMargin: Math.round(14 * root.s)
+                anchors.right: chevron.left
                 text: modelData
-                color: theme.base
+                color: root.selected === index ? theme.selectionText : theme.foreground
+                elide: Text.ElideRight
                 font.pixelSize: Math.round(14 * root.s)
+            }
+
+            AppIcon {
+                id: chevron
+                anchors.right: parent.right
+                anchors.rightMargin: Math.round(10 * root.s)
+                anchors.verticalCenter: parent.verticalCenter
+                width: Math.round(16 * root.s)
+                height: width
+                name: "chevron-right"
+                color: root.selected === index ? theme.selectionText : theme.muted
             }
 
             HoverHandler {

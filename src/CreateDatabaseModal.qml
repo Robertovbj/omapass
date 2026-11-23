@@ -11,9 +11,12 @@ Modal {
     signal submitted(string name, string password)
 
     heading: i18n.t("db_app.create_db_title")
-    hint: errorText.length > 0 ? errorText : i18n.t("common.footer_navigate_create")
-    hintColor: errorText.length > 0 ? theme.alertError : theme.guidance
-    accentColor: errorText.length > 0 ? theme.alertError : theme.alertInfo
+    status: errorText
+    statusIsError: true
+    acceptText: i18n.t("common.create")
+    acceptEnabled: !busy && nameField.text.trim().length > 0
+
+    onAcceptRequested: root.submit()
 
     capturesKeys: false
 

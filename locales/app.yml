@@ -65,14 +65,11 @@ cli.kdbx2pass_usage:
   en: "Usage: omapass --kdbx2pass <database.kdbx> <KEYID1> [KEYID2...]"
 
 settings.title:
-  pt-BR: " Configurações "
-  en: " Settings "
-settings.footer:
-  pt-BR: "ENTER: Salvar | TAB: Navegar | CTRL+F: Escolher lista de palavras | ESC: Cancelar"
-  en: "ENTER: Save | TAB: Move | CTRL+F: Choose a wordlist | ESC: Cancel"
+  pt-BR: "Configurações"
+  en: "Settings"
 settings.path_label:
-  pt-BR: " Diretório de busca de bancos "
-  en: " Directory searched for databases "
+  pt-BR: "Diretório de busca de bancos"
+  en: "Directory searched for databases"
 settings.recency:
   pt-BR: "Ordenar por uso (frequência e recência)"
   en: "Sort by use (frequency and recency)"
@@ -80,11 +77,11 @@ settings.lock_enabled:
   pt-BR: "Travar por inatividade"
   en: "Lock after inactivity"
 settings.lock_minutes_label:
-  pt-BR: " Minutos até travar "
-  en: " Minutes until locking "
+  pt-BR: "Minutos até travar"
+  en: "Minutes until locking"
 settings.wordlist_label:
-  pt-BR: " Lista de palavras (auto, pt-BR, en ou um caminho) "
-  en: " Wordlist (auto, pt-BR, en or a path) "
+  pt-BR: "Lista de palavras (auto, pt-BR, en ou um caminho)"
+  en: "Wordlist (auto, pt-BR, en or a path)"
 settings.wordlist_in_use:
   pt-BR: "Em uso: %{path}"
   en: "In use: %{path}"
@@ -123,23 +120,23 @@ settings.help:
   en: "Settings"
 
 generator.title:
-  pt-BR: " Gerar Senha "
-  en: " Generate Password "
+  pt-BR: "Gerar senha"
+  en: "Generate password"
 generator.mode_password:
   pt-BR: "Senha"
   en: "Password"
 generator.mode_passphrase:
-  pt-BR: "Gerar frase de palavras"
-  en: "Generate a passphrase"
+  pt-BR: "Frase de palavras"
+  en: "Passphrase"
 generator.length_label:
-  pt-BR: " Tamanho "
-  en: " Length "
+  pt-BR: "Tamanho"
+  en: "Length"
 generator.words_label:
-  pt-BR: " Palavras "
-  en: " Words "
+  pt-BR: "Palavras"
+  en: "Words"
 generator.separator_label:
-  pt-BR: " Separador "
-  en: " Separator "
+  pt-BR: "Separador"
+  en: "Separator"
 generator.separator_space:
   pt-BR: "espaço"
   en: "space"
@@ -159,17 +156,11 @@ generator.exclude_similar:
   pt-BR: "Evitar caracteres parecidos (l/1/I, O/0)"
   en: "Avoid look-alike characters (l/1/I, O/0)"
 generator.exclude_label:
-  pt-BR: " Excluir caracteres "
-  en: " Exclude characters "
+  pt-BR: "Excluir caracteres"
+  en: "Exclude characters"
 generator.custom_label:
-  pt-BR: " Conjunto personalizado (substitui as classes) "
-  en: " Custom set (replaces the classes above) "
-generator.footer_copy:
-  pt-BR: "ENTER: Copiar | CTRL+R: Gerar outra | TAB: Navegar | ESC: Fechar"
-  en: "ENTER: Copy | CTRL+R: Generate another | TAB: Move | ESC: Close"
-generator.footer_use:
-  pt-BR: "ENTER: Usar na entrada | CTRL+R: Gerar outra | TAB: Navegar | ESC: Cancelar"
-  en: "ENTER: Use in the entry | CTRL+R: Generate another | TAB: Move | ESC: Cancel"
+  pt-BR: "Conjunto personalizado (substitui as classes)"
+  en: "Custom set (replaces the classes above)"
 generator.copied:
   pt-BR: "Senha gerada copiada!"
   en: "Generated password copied!"
@@ -380,14 +371,14 @@ bitwarden.unsupported_two_step:
   pt-BR: "Nenhum método de verificação em duas etapas suportado (use aplicativo autenticador, e-mail ou YubiKey OTP)."
   en: "No supported two-step method (use an authenticator app, e-mail or YubiKey OTP)."
 bitwarden.login_title:
-  pt-BR: " Entrar no Bitwarden "
-  en: " Log in to Bitwarden "
+  pt-BR: "Entrar no Bitwarden"
+  en: "Log in to Bitwarden"
 bitwarden.logging_in:
   pt-BR: "Conectando ao Bitwarden…"
   en: "Connecting to Bitwarden…"
 bitwarden.server_label:
-  pt-BR: " Servidor "
-  en: " Server "
+  pt-BR: "Servidor"
+  en: "Server"
 bitwarden.invalid_server:
   pt-BR: "Servidor inválido! Use https:// — o login não é enviado sem criptografia."
   en: "Invalid server! Use https:// — the login is not sent unencrypted."
@@ -398,26 +389,26 @@ bitwarden.server_certificate:
   pt-BR: "O certificado de %{server} não é confiável (veja o README sobre certificados próprios)."
   en: "The certificate of %{server} is not trusted (see the README on certificates of your own)."
 bitwarden.email_label:
-  pt-BR: " E-mail "
-  en: " E-mail "
+  pt-BR: "E-mail"
+  en: "E-mail"
 bitwarden.master_password_label:
-  pt-BR: " Senha Mestra "
-  en: " Master Password "
+  pt-BR: "Senha mestra"
+  en: "Master password"
 bitwarden.code_label:
-  pt-BR: " Código de Verificação em Duas Etapas "
-  en: " Two-step Login Code "
+  pt-BR: "Código de verificação em duas etapas"
+  en: "Two-step login code"
 bitwarden.code_hint:
-  pt-BR: "Digite o código do seu método de verificação | ENTER: Confirmar | ESC: Cancelar"
-  en: "Enter the code from your two-step method | ENTER: Confirm | ESC: Cancel"
+  pt-BR: "Digite o código do seu método de verificação."
+  en: "Enter the code from your two-step method."
 bitwarden.device_code_label:
-  pt-BR: " Código de Verificação do Dispositivo "
-  en: " Device Verification Code "
+  pt-BR: "Código de verificação do dispositivo"
+  en: "Device verification code"
 bitwarden.device_code_hint:
-  pt-BR: "Novo dispositivo: digite o código enviado ao seu e-mail | ENTER: Confirmar | ESC: Cancelar"
-  en: "New device: enter the code sent to your e-mail | ENTER: Confirm | ESC: Cancel"
+  pt-BR: "Novo dispositivo: digite o código enviado ao seu e-mail."
+  en: "New device: enter the code sent to your e-mail."
 bitwarden.method_title:
-  pt-BR: " Verificação em Duas Etapas "
-  en: " Two-step Login "
+  pt-BR: "Verificação em duas etapas"
+  en: "Two-step login"
 bitwarden.method_authenticator:
   pt-BR: "Aplicativo autenticador"
   en: "Authenticator app"
@@ -428,8 +419,8 @@ bitwarden.method_yubikey:
   pt-BR: "YubiKey"
   en: "YubiKey"
 bitwarden.logout_confirm:
-  pt-BR: "\nSair da conta Bitwarden?\nEla sai da lista e a cópia local é apagada. [y/N]"
-  en: "\nLog out of the Bitwarden account?\nIt leaves the list and its local copy is deleted. [y/N]"
+  pt-BR: "Sair da conta Bitwarden? Ela sai da lista e a cópia local é apagada."
+  en: "Log out of the Bitwarden account? It leaves the list and its local copy is deleted."
 pin.title:
   pt-BR: " Desbloqueio por PIN "
   en: " PIN Unlock "
@@ -437,11 +428,11 @@ pin.label:
   pt-BR: " PIN "
   en: " PIN "
 pin.confirm_label:
-  pt-BR: " Repita o PIN "
-  en: " Repeat PIN "
+  pt-BR: "Repita o PIN"
+  en: "Repeat PIN"
 pin.footer:
-  pt-BR: "ENTER: Desbloquear | TAB: Usar a senha mestra | ESC: Cancelar"
-  en: "ENTER: Unlock | TAB: Use the master password | ESC: Cancel"
+  pt-BR: "Tab usa a senha mestra."
+  en: "Tab switches to the master password."
 pin.wrong:
   pt-BR: "PIN incorreto! Restam %{left} tentativa(s)."
   en: "Wrong PIN! %{left} attempt(s) left."
@@ -485,14 +476,11 @@ pin.disabled:
   pt-BR: "Desbloqueio por PIN desativado."
   en: "PIN unlock disabled."
 pin.setup_title:
-  pt-BR: " Ativar Desbloqueio por PIN "
-  en: " Enable PIN Unlock "
-pin.setup_footer:
-  pt-BR: "A senha mestra fica guardada no chaveiro, cifrada pelo PIN | ENTER: Confirmar | ESC: Cancelar"
-  en: "The master password is kept in the keyring, encrypted with the PIN | ENTER: Confirm | ESC: Cancel"
+  pt-BR: "Ativar o desbloqueio por PIN"
+  en: "Enable PIN unlock"
 pin.help:
-  pt-BR: "Ativar/desativar desbloqueio por PIN"
-  en: "Enable/disable PIN unlock"
+  pt-BR: "Ativar ou desativar o desbloqueio por PIN"
+  en: "Enable or disable PIN unlock"
 bitwarden.wait_sync:
   pt-BR: "Aguarde a sincronização com o Bitwarden terminar."
   en: "Wait for the Bitwarden sync to finish."
@@ -558,26 +546,26 @@ onepassword.logged_out:
   pt-BR: "Conta 1Password desconectada."
   en: "1Password account logged out."
 onepassword.login_title:
-  pt-BR: " Entrar no 1Password "
-  en: " Log in to 1Password "
+  pt-BR: "Entrar no 1Password"
+  en: "Log in to 1Password"
 onepassword.logging_in:
   pt-BR: "Conectando ao 1Password…"
   en: "Connecting to 1Password…"
 onepassword.address_label:
-  pt-BR: " Endereço de acesso "
-  en: " Sign-in address "
+  pt-BR: "Endereço de acesso"
+  en: "Sign-in address"
 onepassword.email_label:
-  pt-BR: " E-mail "
-  en: " E-mail "
+  pt-BR: "E-mail"
+  en: "E-mail"
 onepassword.secret_key_label:
-  pt-BR: " Secret Key (A3-XXXXXX-…) "
-  en: " Secret Key (A3-XXXXXX-…) "
+  pt-BR: "Secret Key (A3-XXXXXX-…)"
+  en: "Secret Key (A3-XXXXXX-…)"
 onepassword.master_password_label:
-  pt-BR: " Senha mestra "
-  en: " Master password "
+  pt-BR: "Senha mestra"
+  en: "Master password"
 onepassword.shorthand_label:
-  pt-BR: " Apelido "
-  en: " Nickname "
+  pt-BR: "Apelido"
+  en: "Nickname"
 onepassword.shorthand_hint:
   pt-BR: "opcional — o padrão é o e-mail antes do @"
   en: "optional — defaults to the e-mail before the @"
@@ -585,14 +573,11 @@ onepassword.account_gone:
   pt-BR: "Esta conta não está mais configurada no op."
   en: "This account is no longer set up in op."
 onepassword.code_label:
-  pt-BR: " Código de verificação "
-  en: " Verification code "
+  pt-BR: "Código de verificação"
+  en: "Verification code"
 onepassword.code_hint:
   pt-BR: "Digite o código do seu autenticador."
   en: "Enter the code from your authenticator."
-onepassword.login_footer:
-  pt-BR: "TAB: Próximo campo | ENTER: Confirmar | ESC: Cancelar"
-  en: "TAB: Next field | ENTER: Confirm | ESC: Cancel"
 onepassword.logout_confirm:
   pt-BR: "Desconectar a conta 1Password deste computador?"
   en: "Log out of the 1Password account on this device?"
@@ -623,27 +608,12 @@ kdbx2pass.pass_cmd_failed:
   en: "'pass %{cmd}' failed"
 
 # --- Strings compartilhadas entre db_app.rs e ui.rs ---
-common.yes_no_hint:
-  pt-BR: "y: Sim | n/N: Não"
-  en: "y: Yes | n/N: No"
-common.footer_navigate_create:
-  pt-BR: "TAB: Navegar | ENTER: Criar | ESC: Cancelar"
-  en: "TAB: Navigate | ENTER: Create | ESC: Cancel"
-common.footer_create_pass:
-  pt-BR: "TAB: Navegar | ENTER: Completar/Confirmar | ESC: Voltar"
-  en: "TAB: Navigate | ENTER: Complete/Confirm | ESC: Back"
-common.footer_confirm_cancel:
-  pt-BR: "ENTER: Confirmar | ESC: Cancelar"
-  en: "ENTER: Confirm | ESC: Cancel"
-common.footer_close:
-  pt-BR: "ESC: Fechar"
-  en: "ESC: Close"
 common.confirm_title:
-  pt-BR: " Confirmar "
-  en: " Confirm "
+  pt-BR: "Confirmar"
+  en: "Confirm"
 common.shortcuts_title:
-  pt-BR: " Atalhos de Teclado "
-  en: " Keyboard Shortcuts "
+  pt-BR: "Atalhos de teclado"
+  en: "Keyboard shortcuts"
 
 help.nav_section:
   pt-BR: "NAVEGAÇÃO"
@@ -687,23 +657,14 @@ db_app.dir_empty:
   pt-BR: "O diretório não pode ser vazio!"
   en: "Directory cannot be empty!"
 db_app.filter_title:
-  pt-BR: " Filtrar Banco (/) "
-  en: " Filter Database (/) "
+  pt-BR: "Filtrar bancos"
+  en: "Filter databases"
 db_app.available_dbs_title:
-  pt-BR: " Bancos Disponíveis "
-  en: " Available Databases "
-db_app.footer_search:
-  pt-BR: "ENTER: Selecionar | CTRL+?: Ajuda | ESC: Normal"
-  en: "ENTER: Select | CTRL+?: Help | ESC: Normal"
-db_app.footer_choose_type:
-  pt-BR: "j/k: Navegar | ENTER: Confirmar | ESC: Cancelar"
-  en: "j/k: Navigate | ENTER: Confirm | ESC: Cancel"
-db_app.footer_normal:
-  pt-BR: "ENTER: Selecionar | CTRL+A: Novo | CTRL+?: Ajuda | ESC/q: Sair"
-  en: "ENTER: Select | CTRL+A: New | CTRL+?: Help | ESC/q: Quit"
+  pt-BR: "Bancos"
+  en: "Databases"
 db_app.unlock_title:
-  pt-BR: " Desbloquear: %{db} "
-  en: " Unlock: %{db} "
+  pt-BR: "Desbloquear o banco"
+  en: "Unlock the database"
 db_app.unlocking:
   pt-BR: "Desbloqueando…"
   en: "Unlocking…"
@@ -711,38 +672,35 @@ db_app.scanning:
   pt-BR: "Procurando bancos…"
   en: "Looking for databases…"
 db_app.account_check_title:
-  pt-BR: " Preparando a conta "
-  en: " Getting the account ready "
+  pt-BR: "Preparando a conta"
+  en: "Getting the account ready"
 db_app.account_check_body:
   pt-BR: "Verificando se a conta %{account} continua conectada.\nIsto pode levar alguns segundos na primeira vez."
   en: "Checking whether the account %{account} is still signed in.\nThis can take a few seconds the first time."
-db_app.account_check_hint:
-  pt-BR: "ESC: Cancelar"
-  en: "ESC: Cancel"
 db_app.no_db_found_confirm:
-  pt-BR: "\nNenhum banco de dados encontrado.\nDeseja criar um banco de dados? [y/N]"
-  en: "\nNo database found.\nDo you want to create a database? [y/N]"
+  pt-BR: "Nenhum banco foi encontrado. Quer criar um agora?"
+  en: "No database was found. Do you want to create one now?"
 db_app.create_db_title:
-  pt-BR: " Criar Novo Banco de Dados "
-  en: " Create New Database "
+  pt-BR: "Novo banco KeePassXC"
+  en: "New KeePassXC database"
 db_app.filename_label:
-  pt-BR: " Nome do Arquivo "
-  en: " File Name "
+  pt-BR: "Nome do arquivo"
+  en: "File name"
 db_app.db_password_label:
-  pt-BR: " Senha do Banco "
-  en: " Database Password "
+  pt-BR: "Senha do banco"
+  en: "Database password"
 db_app.new_db_title:
-  pt-BR: " Novo Banco de Dados "
-  en: " New Database "
+  pt-BR: "Novo banco"
+  en: "New database"
 db_app.new_pass_store_title:
-  pt-BR: " Novo Password Store (pass) "
-  en: " New Password Store (pass) "
+  pt-BR: "Novo password store (pass)"
+  en: "New password store (pass)"
 db_app.dir_label:
-  pt-BR: " Diretório "
-  en: " Directory "
+  pt-BR: "Diretório"
+  en: "Directory"
 db_app.gpg_key_label:
-  pt-BR: " Chave GPG "
-  en: " GPG Key "
+  pt-BR: "Chave GPG"
+  en: "GPG key"
 db_app.no_gpg_key_found:
   pt-BR: "Nenhuma chave GPG encontrada.\nCrie uma com: gpg --full-generate-key"
   en: "No GPG key found.\nCreate one with: gpg --full-generate-key"
@@ -757,12 +715,6 @@ db_app.help_exit_search:
   en: "Exit search / Cancel"
 
 # --- ui.rs ---
-ui.footer_search:
-  pt-BR: "ENTER: Copiar | TAB: Info | CTRL+?: Ajuda"
-  en: "ENTER: Copy | TAB: Info | CTRL+?: Help"
-ui.footer_normal:
-  pt-BR: "ENTER: Copiar | ESPAÇO: Ações | CTRL+?: Ajuda | ESC/q: Bloquear"
-  en: "ENTER: Copy | SPACE: Actions | CTRL+?: Help | ESC/q: Lock"
 ui.footer_form:
   pt-BR: "TAB: Navegar | ENTER: Confirmar | ESC: Cancelar"
   en: "TAB: Navigate | ENTER: Confirm | ESC: Cancel"
@@ -772,9 +724,6 @@ ui.footer_info:
 ui.footer_context_menu:
   pt-BR: "j/k: Navegar | ENTER: Confirmar | ESC: Fechar"
   en: "j/k: Navigate | ENTER: Confirm | ESC: Close"
-ui.footer_rename:
-  pt-BR: "ENTER: Renomear | ESC: Cancelar"
-  en: "ENTER: Rename | ESC: Cancel"
 ui.clipboard_clear_countdown:
   pt-BR: "%{msg} (limpo do clipboard em %{secs}s)"
   en: "%{msg} (cleared from clipboard in %{secs}s)"
@@ -803,8 +752,8 @@ ui.column_url:
   pt-BR: "URL"
   en: "URL"
 ui.search_title:
-  pt-BR: " Pesquisar (/) "
-  en: " Search (/) "
+  pt-BR: "Pesquisar"
+  en: "Search"
 ui.mode_normal_title:
   pt-BR: " NORMAL (j/k) "
   en: " NORMAL (j/k) "
@@ -812,29 +761,17 @@ ui.mode_search_title:
   pt-BR: " PESQUISA "
   en: " SEARCH "
 ui.confirm_delete:
-  pt-BR: "\nDeseja EXCLUIR '%{entry}'? [y/N]"
-  en: "\nDo you want to DELETE '%{entry}'? [y/N]"
+  pt-BR: "Excluir “%{entry}”? Isso não pode ser desfeito."
+  en: "Delete “%{entry}”? This can’t be undone."
 ui.rename_group_title:
-  pt-BR: " Renomear Grupo "
-  en: " Rename Group "
-ui.footer_form_full:
-  pt-BR: "TAB/SHIFT-TAB: Navegar | ENTER: Confirmar (nas Notas, CTRL+ENTER)"
-  en: "TAB/SHIFT-TAB: Navigate | ENTER: Confirm (in Notes, CTRL+ENTER)"
+  pt-BR: "Renomear grupo"
+  en: "Rename group"
 ui.show_password:
   pt-BR: "Mostrar senha"
   en: "Show password"
-ui.footer_form_pass:
-  pt-BR: "TAB/SHIFT-TAB: Navegar | ENTER: Confirmar"
-  en: "TAB/SHIFT-TAB: Navigate | ENTER: Confirm"
 ui.info_login:
   pt-BR: "Login"
   en: "Login"
-ui.info_footer_full:
-  pt-BR: "ENTER: Copiar campo | o: Abrir URL | Arraste para selecionar e copiar | TAB: Alternar | ESC: Fechar"
-  en: "ENTER: Copy field | o: Open URL | Drag to select and copy | TAB: Switch | ESC: Close"
-ui.info_footer_pass:
-  pt-BR: "ENTER: Copiar | Arraste para selecionar e copiar | ESC: Fechar"
-  en: "ENTER: Copy | Drag to select and copy | ESC: Close"
 ui.context_copy_password:
   pt-BR: "Copiar senha"
   en: "Copy password"
@@ -913,38 +850,38 @@ ui.help_context_menu_desc:
 
 # --- common (compartilhado entre app.rs/db_app.rs/ui.rs) ---
 common.title_label:
-  pt-BR: " Título "
-  en: " Title "
+  pt-BR: "Título"
+  en: "Title"
 common.username_label:
-  pt-BR: " Usuário "
-  en: " Username "
+  pt-BR: "Usuário"
+  en: "Username"
 common.password_label:
-  pt-BR: " Senha "
-  en: " Password "
+  pt-BR: "Senha"
+  en: "Password"
 common.url_label:
-  pt-BR: " URL "
-  en: " URL "
+  pt-BR: "URL"
+  en: "URL"
 common.notes_label:
-  pt-BR: " Notas "
-  en: " Notes "
+  pt-BR: "Notas"
+  en: "Notes"
 common.group_label:
-  pt-BR: " Grupo "
-  en: " Group "
+  pt-BR: "Grupo"
+  en: "Group"
 common.edit_entry_title:
-  pt-BR: " Editar Entrada "
-  en: " Edit Entry "
+  pt-BR: "Editar entrada"
+  en: "Edit entry"
 common.new_entry_title:
-  pt-BR: " Nova Entrada "
-  en: " New Entry "
+  pt-BR: "Nova entrada"
+  en: "New entry"
 common.entry_info_title:
-  pt-BR: " Informações da Entrada "
-  en: " Entry Information "
+  pt-BR: "Informações da entrada"
+  en: "Entry information"
 common.title_word:
   pt-BR: "Título"
   en: "Title"
 common.actions_title:
-  pt-BR: " Ações "
-  en: " Actions "
+  pt-BR: "Ações"
+  en: "Actions"
 common.space_key:
   pt-BR: "ESPAÇO"
   en: "SPACE"
@@ -1072,8 +1009,8 @@ browser.login_save_error:
   pt-BR: "Não foi possível salvar o login do navegador: %{err}"
   en: "Could not save the login from the browser: %{err}"
 browser.associate_title:
-  pt-BR: " Conectar navegador "
-  en: " Connect browser "
+  pt-BR: "Conectar navegador"
+  en: "Connect browser"
 browser.associate_text:
   pt-BR: "Um navegador pediu para se conectar a %{vault}. Dê um nome à conexão para reconhecê-la depois, ou Esc para recusar."
   en: "A browser asked to connect to %{vault}. Give the connection a name to recognize it later, or Esc to refuse."
@@ -1083,30 +1020,24 @@ browser.associate_name_label:
 browser.associate_exists:
   pt-BR: "Já existe uma conexão com esse nome; ela será substituída."
   en: "A connection with this name already exists; it will be replaced."
-browser.associate_hint:
-  pt-BR: "Enter: Conectar | Esc: Recusar"
-  en: "Enter: Connect | Esc: Refuse"
 browser.access_title:
-  pt-BR: " Acesso do navegador "
-  en: " Browser access "
+  pt-BR: "Acesso do navegador"
+  en: "Browser access"
 browser.access_text:
   pt-BR: "%{site} pede os logins abaixo. Marque os que podem ser entregues:"
   en: "%{site} asks for the logins below. Tick the ones it may have:"
 browser.access_remember:
   pt-BR: "Lembrar para este site"
   en: "Remember for this site"
-browser.access_hint:
-  pt-BR: "Espaço: Marcar | Tab: Próximo | Enter: Liberar | Esc: Negar"
-  en: "Space: Tick | Tab: Next | Enter: Allow | Esc: Deny"
 browser.update_title:
-  pt-BR: " Atualizar senha "
-  en: " Update password "
+  pt-BR: "Atualizar senha"
+  en: "Update password"
 browser.update_text:
   pt-BR: "O navegador quer gravar uma nova senha de %{login} em %{name} (%{site}). Substituir a senha salva?"
   en: "The browser wants to save a new password for %{login} in %{name} (%{site}). Replace the saved password?"
 browser.conflict_title:
-  pt-BR: " Integração existente "
-  en: " Existing integration "
+  pt-BR: "Integração existente"
+  en: "Existing integration"
 browser.conflict_text:
   pt-BR: "%{browsers} já está configurado para outro programa (o KeePassXC?). Passar para o omapass?"
   en: "%{browsers} is already set up for another program (KeePassXC?). Hand it over to omapass?"
@@ -1116,3 +1047,147 @@ common.extra_urls_label:
 ui.info_extra_url:
   pt-BR: "URL adicional %{n}"
   en: "Additional URL %{n}"
+common.cancel:
+  pt-BR: "Cancelar"
+  en: "Cancel"
+common.yes:
+  pt-BR: "Sim"
+  en: "Yes"
+common.no:
+  pt-BR: "Não"
+  en: "No"
+common.create:
+  pt-BR: "Criar"
+  en: "Create"
+common.logout:
+  pt-BR: "Sair da conta"
+  en: "Log out"
+common.delete:
+  pt-BR: "Excluir"
+  en: "Delete"
+common.rename:
+  pt-BR: "Renomear"
+  en: "Rename"
+common.unlock:
+  pt-BR: "Desbloquear"
+  en: "Unlock"
+common.confirm:
+  pt-BR: "Confirmar"
+  en: "Confirm"
+common.login:
+  pt-BR: "Entrar"
+  en: "Log in"
+common.save:
+  pt-BR: "Salvar"
+  en: "Save"
+common.close:
+  pt-BR: "Fechar"
+  en: "Close"
+common.copy:
+  pt-BR: "Copiar"
+  en: "Copy"
+common.shortcuts_hint:
+  pt-BR: "? mostra os atalhos"
+  en: "? shows the shortcuts"
+ui.lock:
+  pt-BR: "Bloquear"
+  en: "Lock"
+pin.enable:
+  pt-BR: "Ativar"
+  en: "Enable"
+generator.use:
+  pt-BR: "Usar"
+  en: "Use"
+generator.regenerate:
+  pt-BR: "Gerar outra (Ctrl+R)"
+  en: "Generate another (Ctrl+R)"
+settings.section_general:
+  pt-BR: "Geral"
+  en: "General"
+settings.section_lock:
+  pt-BR: "Bloqueio"
+  en: "Locking"
+settings.section_icons:
+  pt-BR: "Ícones"
+  en: "Icons"
+settings.section_browser:
+  pt-BR: "Navegador"
+  en: "Browser"
+settings.section_generator:
+  pt-BR: "Gerador de senhas"
+  en: "Password generator"
+settings.wordlist_choose:
+  pt-BR: "Escolher…"
+  en: "Choose…"
+browser.connect:
+  pt-BR: "Conectar"
+  en: "Connect"
+browser.allow:
+  pt-BR: "Liberar"
+  en: "Allow"
+browser.deny:
+  pt-BR: "Negar"
+  en: "Deny"
+browser.update:
+  pt-BR: "Atualizar"
+  en: "Update"
+browser.replace:
+  pt-BR: "Substituir"
+  en: "Replace"
+ui.help_sheets_section:
+  pt-BR: "Nas janelas"
+  en: "In dialogs"
+ui.help_sheet_confirm:
+  pt-BR: "Confirmar, salvar ou copiar"
+  en: "Confirm, save or copy"
+ui.help_sheet_cancel:
+  pt-BR: "Cancelar e fechar"
+  en: "Cancel and close"
+ui.help_sheet_fields:
+  pt-BR: "Próximo ou anterior campo"
+  en: "Next or previous field"
+ui.help_sheet_generate:
+  pt-BR: "Gerar a senha, no formulário"
+  en: "Generate the password, in the form"
+ui.help_sheet_regenerate:
+  pt-BR: "Gerar outra, no gerador"
+  en: "Generate another, in the generator"
+ui.help_sheet_save_notes:
+  pt-BR: "Salvar de dentro das notas"
+  en: "Save from inside the notes"
+ui.help_sheet_open_url:
+  pt-BR: "Abrir a URL, nos detalhes"
+  en: "Open the URL, in the details"
+ui.help_sheet_yes_no:
+  pt-BR: "Responder sim ou não"
+  en: "Answer yes or no"
+pin.disable_title:
+  pt-BR: "Desativar o desbloqueio por PIN"
+  en: "Disable PIN unlock"
+pin.disable_text:
+  pt-BR: "O PIN guardado para este banco será apagado. Para usar de novo, será preciso digitar a senha mestra."
+  en: "The PIN stored for this database will be deleted. Using one again will take the master password."
+pin.disable:
+  pt-BR: "Desativar"
+  en: "Disable"
+help.filter:
+  pt-BR: "Filtrar atalhos"
+  en: "Filter shortcuts"
+help.no_match:
+  pt-BR: "Nenhum atalho com esse texto."
+  en: "No shortcut matches that."
+settings.path_pick:
+  pt-BR: "Escolher o diretório de busca de bancos"
+  en: "Choose the directory searched for databases"
+picker.no_bus:
+  pt-BR: "Sem D-Bus de sessão, o seletor de arquivos não abre."
+  en: "There's no session D-Bus, so the file chooser can't open."
+picker.failed:
+  pt-BR: "O seletor de arquivos não abriu (xdg-desktop-portal): %{error}"
+  en: "The file chooser didn't open (xdg-desktop-portal): %{error}"
+picker.no_file:
+  pt-BR: "O seletor de arquivos não entregou o arquivo."
+  en: "The file chooser couldn't hand over the file."
+ui.help_sheet_choose:
+  pt-BR: "Escolher o diretório ou a lista de palavras, nas configurações"
+  en: "Choose the directory or the wordlist, in the settings"

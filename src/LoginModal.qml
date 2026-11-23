@@ -21,13 +21,22 @@ Modal {
     signal codeSubmitted(string code)
 
     heading: i18n.t("bitwarden.login_title")
-    hint: busy ? i18n.t("bitwarden.logging_in")
-               : errorText.length > 0 ? errorText
-               : step === "deviceCode" ? i18n.t("bitwarden.device_code_hint")
-               : step === "code" ? i18n.t("bitwarden.code_hint")
-               : i18n.t("common.footer_confirm_cancel")
-    hintColor: errorText.length > 0 ? theme.alertError : theme.guidance
-    accentColor: errorText.length > 0 ? theme.alertError : theme.alertInfo
+    subtitle: step === "deviceCode" ? i18n.t("bitwarden.device_code_hint")
+            : step === "code" ? i18n.t("bitwarden.code_hint")
+            : ""
+    status: busy ? i18n.t("bitwarden.logging_in") : errorText
+    statusIsError: !busy && errorText.length > 0
+    acceptText: askingCode ? i18n.t("common.confirm") : i18n.t("common.login")
+    acceptEnabled: !busy
+
+    onAcceptRequested: {
+        if (root.askingCode) {
+            if (codeField.text.trim().length > 0)
+                root.codeSubmitted(codeField.text);
+        } else {
+            root.submitCredentials();
+        }
+    }
 
     capturesKeys: false
 

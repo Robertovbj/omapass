@@ -33,6 +33,26 @@ class Palette : public QObject {
     Q_PROPERTY(QColor windowBackground READ windowBackground NOTIFY changed)
     Q_PROPERTY(bool darkMode READ darkMode NOTIFY darkModeChanged)
 
+    // The roles Omarchy's own apps (Hype, Omajim) draw with, mixed from the
+    // theme so every theme gets them: the window's foreground and accent, a
+    // panel a shade off the background for cards and dialogs, a button fill,
+    // a hover tint of the accent, a border, muted text, and the ink that
+    // reads on the accent and on the selection.
+    Q_PROPERTY(QColor foreground READ foreground NOTIFY changed)
+    Q_PROPERTY(QColor accent READ accent NOTIFY changed)
+    Q_PROPERTY(QColor accentText READ accentText NOTIFY changed)
+    Q_PROPERTY(QColor accentHover READ accentHover NOTIFY changed)
+    Q_PROPERTY(QColor panel READ panel NOTIFY changed)
+    Q_PROPERTY(QColor button READ button NOTIFY changed)
+    Q_PROPERTY(QColor hover READ hover NOTIFY changed)
+    Q_PROPERTY(QColor border READ border NOTIFY changed)
+    Q_PROPERTY(QColor muted READ muted NOTIFY changed)
+    Q_PROPERTY(QColor selectionText READ selectionText NOTIFY changed)
+    Q_PROPERTY(QColor error READ error NOTIFY changed)
+    // Hyprland's window rounding, so corners inside match the window's own;
+    // 0 (sharp, Omarchy's default) until something says otherwise.
+    Q_PROPERTY(int radius READ radius NOTIFY radiusChanged)
+
 public:
     explicit Palette(const QHash<QString, QString> &overrides, QObject *parent = nullptr);
 
@@ -49,16 +69,30 @@ public:
     QColor alertError() const { return m_alertError; }
     QColor windowBackground() const { return m_windowBackground; }
     bool darkMode() const { return m_darkMode; }
+    QColor foreground() const { return m_base; }
+    QColor accent() const { return m_title; }
+    QColor accentText() const { return m_accentText; }
+    QColor accentHover() const { return m_accentHover; }
+    QColor panel() const { return m_panel; }
+    QColor button() const { return m_button; }
+    QColor hover() const { return m_hover; }
+    QColor border() const { return m_border; }
+    QColor muted() const { return m_muted; }
+    QColor selectionText() const { return m_selectionText; }
+    QColor error() const { return m_alertError; }
+    int radius() const { return m_radius; }
 
 public slots:
     // Called when the desktop's light/dark preference changes. Only decides
     // the built-in fallback palette — an Omarchy theme, when present, states
     // its own mode and wins.
     void setSystemDarkMode(bool darkMode);
+    void setRadius(int radius);
 
 signals:
     void changed();
     void darkModeChanged();
+    void radiusChanged();
 
 private:
     void reload();
@@ -78,6 +112,15 @@ private:
     QColor m_alertWarn;
     QColor m_alertError;
     QColor m_windowBackground;
+    QColor m_accentText;
+    QColor m_accentHover;
+    QColor m_panel;
+    QColor m_button;
+    QColor m_hover;
+    QColor m_border;
+    QColor m_muted;
+    QColor m_selectionText;
+    int m_radius = 0;
 
     bool m_darkMode = true;
     bool m_systemDarkMode = true;

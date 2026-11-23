@@ -23,6 +23,38 @@ TestCase {
         tagFor: function(item) { return "[" + item.kind + "]"; }
     }
 
+    SignalSpy {
+        id: helpSpy
+        target: pane
+        signalName: "helpRequested"
+    }
+
+    // ?, as in Omarchy's other apps, opens the shortcuts from the list; in
+    // the search box it is typed like any other character.
+    function test_question_mark_opens_the_shortcuts() {
+        helpSpy.clear();
+        pane.leaveSearch();
+        keyClick(Qt.Key_Question, Qt.ShiftModifier);
+        compare(helpSpy.count, 1);
+
+        pane.enterSearch();
+        keyClick(Qt.Key_Question, Qt.ShiftModifier);
+        compare(helpSpy.count, 1, "na busca o ? é texto");
+        pane.query = "";
+    }
+
+    // The header's icons run what they were given.
+    function test_header_action_runs_its_action() {
+        let ran = 0;
+        pane.headerActions = [{ "icon": "plus", "description": "Adicionar",
+                                "action": function() { ran += 1; } }];
+        const button = findChild(pane, "headerAction_plus");
+        verify(button !== null, "o cabeçalho desenhou o botão");
+        mouseClick(button);
+        compare(ran, 1);
+        pane.headerActions = [];
+    }
+
     function test_row_shows_the_label_not_the_key() {
         const text = findChild(pane, "rowText");
         const tag = findChild(pane, "rowTag");

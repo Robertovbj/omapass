@@ -47,8 +47,10 @@ Modal {
         onTriggered: root.refreshOtp()
     }
 
-    heading: i18n.t("common.entry_info_title")
-    hint: passBackend ? i18n.t("ui.info_footer_pass") : i18n.t("ui.info_footer_full")
+    heading: root.details.title || i18n.t("common.entry_info_title")
+    subtitle: i18n.t("common.entry_info_title")
+    cancelOnly: true
+    cancelText: i18n.t("common.close")
     cardWidth: Math.round(600 * s)
 
     onKeyPressed: function(event) {
@@ -80,31 +82,51 @@ Modal {
         // What `o` does on a field holding an address: open it.
         property var openAction: null
         property bool selectable: true
+        // A secret (the one-time code): monospace and larger.
+        property bool monospace: false
 
         width: parent.width
         spacing: Math.round(6 * root.s)
 
         Text {
             text: fieldColumn.label
-            color: text.activeFocus ? theme.annotation : theme.guidance
-            font.pixelSize: Math.round(12 * root.s)
+            color: text.activeFocus ? theme.foreground : theme.muted
+            font.pixelSize: Math.round(13 * root.s)
         }
 
+        // The field Tab is on is boxed in the accent, so Enter's target is
+        // plain to see.
         ScrollView {
+            id: valueBox
             width: parent.width
-            height: Math.round(22 * root.s) * fieldColumn.rows
+            height: Math.round((fieldColumn.monospace ? 26 : 22) * root.s) * fieldColumn.rows
+                    + topPadding + bottomPadding
+            padding: Math.round(8 * root.s)
+            leftPadding: Math.round(12 * root.s)
+            rightPadding: Math.round(12 * root.s)
+
+            Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
+
+            background: Rectangle {
+                color: theme.background
+                radius: Math.min(4, theme.radius)
+                border.width: 1
+                border.color: text.activeFocus ? theme.accent : theme.border
+            }
 
             TextEdit {
                 id: text
-                width: parent.width
+                width: valueBox.availableWidth
                 text: fieldColumn.value
-                color: theme.base
+                color: theme.foreground
                 readOnly: true
                 selectByMouse: fieldColumn.selectable
-                selectionColor: theme.annotation
-                selectedTextColor: theme.background
+                selectionColor: theme.selection
+                selectedTextColor: theme.selectionText
                 wrapMode: TextEdit.Wrap
-                font.pixelSize: Math.round(14 * root.s)
+                font.pixelSize: Math.round((fieldColumn.monospace ? 18 : 14) * root.s)
+                font.family: fieldColumn.monospace ? systemTheme.monoFamily : Qt.application.font.family
+                font.letterSpacing: fieldColumn.monospace ? 2 : 0
 
                 // Copying once the selection settles reproduces the TUI's
                 // select-to-copy without firing on every pixel of the drag.
@@ -210,6 +232,7 @@ Modal {
                    + i18n.t("ui.info_otp_seconds", { "seconds": root.otp.secondsLeft || 0 })
             value: root.otp.code || ""
             selectable: false
+            monospace: true
             copyAction: controller.copyShownOtp
             nextField: root.passBackend ? titleView.view : notesView.view
             previousField: root.passBackend ? titleView.view : root.lastUrlView()
@@ -218,10 +241,9 @@ Modal {
         // How much of the period is left, emptying towards the next code.
         Rectangle {
             width: parent.width
-            height: Math.max(2, Math.round(2 * root.s))
+            height: Math.max(3, Math.round(3 * root.s))
             radius: height / 2
-            color: theme.guidance
-            opacity: 0.25
+            color: theme.border
 
             Rectangle {
                 height: parent.height
@@ -229,7 +251,7 @@ Modal {
                 width: root.otp.period ? parent.width * root.otp.secondsLeft / root.otp.period : 0
                 // The last few seconds in the warning colour: a code copied
                 // then may be stale by the time it is pasted.
-                color: (root.otp.secondsLeft || 0) <= 5 ? theme.alertWarn : theme.annotation
+                color: (root.otp.secondsLeft || 0) <= 5 ? theme.alertWarn : theme.accent
             }
         }
     }

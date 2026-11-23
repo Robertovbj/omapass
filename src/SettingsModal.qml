@@ -20,8 +20,29 @@ Modal {
     signal submitted(var values)
 
     heading: i18n.t("settings.title")
-    hint: i18n.t("settings.footer")
+    acceptText: i18n.t("common.save")
     cardWidth: Math.round(620 * s)
+
+    onAcceptRequested: root.submit()
+
+    // A group's name over its settings, as Hype's overlay titles them.
+    component SectionLabel: Text {
+        width: parent ? parent.width : implicitWidth
+        topPadding: Math.round(8 * root.s)
+        color: theme.accent
+        font.pixelSize: Math.round(11 * root.s)
+        font.letterSpacing: 1
+        font.weight: Font.DemiBold
+        text: ""
+    }
+
+    // The notes under a setting.
+    component Note: Text {
+        width: parent ? parent.width : implicitWidth
+        color: theme.muted
+        wrapMode: Text.WordWrap
+        font.pixelSize: Math.round(12 * root.s)
+    }
 
     capturesKeys: false
 
@@ -40,13 +61,7 @@ Modal {
         root.wordlistInUse = values.wordlistInUse;
         root.configPath = values.configPath;
         wordlistField.text = values.wordlist;
-        refreshPaths();
         pathField.field.forceActiveFocus();
-    }
-
-    function refreshPaths() {
-        pathSuggestions.model = controller.directorySuggestions(pathField.text);
-        pathSuggestions.currentIndex = 0;
     }
 
     // The minutes field only shows while the lock is on; moveFocus skips it
@@ -70,47 +85,102 @@ Modal {
         });
     }
 
+    // Both choosers go through the desktop's portal, falling back to Qt's
+    // own dialogs where there is none.
+    function chooseFolder() {
+        if (filePicker.available)
+            filePicker.openFolder("settingsPath", i18n.t("settings.path_pick"));
+        else
+            folderDialog.open();
+    }
+
+    function chooseWordlist() {
+        if (filePicker.available)
+            filePicker.openFile("settingsWordlist", i18n.t("settings.wordlist_pick"),
+                                [{ "name": i18n.t("settings.wordlist_filter"), "patterns": ["*.txt", "*.wordlist"] },
+                                 { "name": i18n.t("settings.all_files"), "patterns": ["*"] }]);
+        else
+            wordlistDialog.open();
+    }
+
     // Picking a file copies it into omapass' own directory, so the list
     // keeps working even if the original is moved or deleted.
+    function useWordlist(file) {
+        const imported = controller.importWordlist(file);
+        if (imported.length > 0)
+            wordlistField.text = imported;
+    }
+
+    Connections {
+        target: filePicker
+        enabled: root.visible
+
+        function onPicked(purpose, path) {
+            if (path.length === 0)
+                return;
+            if (purpose === "settingsPath")
+                pathField.text = path;
+            else if (purpose === "settingsWordlist")
+                root.useWordlist(path);
+        }
+        function onFailed(purpose, error) {
+            if (purpose.startsWith("settings"))
+                controller.showMessage(error, true);
+        }
+    }
+
     FileDialog {
         id: wordlistDialog
         title: i18n.t("settings.wordlist_pick")
         nameFilters: [i18n.t("settings.wordlist_filter"), i18n.t("settings.all_files")]
+        onAccepted: root.useWordlist(selectedFile)
+    }
 
-        onAccepted: {
-            const imported = controller.importWordlist(selectedFile);
-            if (imported.length > 0)
-                wordlistField.text = imported;
-        }
+    FolderDialog {
+        id: folderDialog
+        title: i18n.t("settings.path_pick")
+        // A file:// URL; the setting is a plain path.
+        onAccepted: pathField.text = decodeURIComponent(String(selectedFolder).replace(/^file:\/\//, ""))
     }
 
     Shortcut {
         sequences: ["Ctrl+F"]
         enabled: root.visible
-        onActivated: wordlistDialog.open()
+        onActivated: root.chooseWordlist()
     }
 
-    Field {
-        id: pathField
-        width: parent.width
-        label: i18n.t("settings.path_label")
-
-        onTextChanged: root.refreshPaths()
-        onSubmitted: root.submit()
-        onCancelled: root.dismissed()
-        onNextRequested: root.focusNext(pathField)
-        onPreviousRequested: root.focusPrevious(pathField)
-        onListNext: pathSuggestions.next()
-        onListPrevious: pathSuggestions.previous()
+    Shortcut {
+        sequences: ["Ctrl+D"]
+        enabled: root.visible
+        onActivated: root.chooseFolder()
     }
 
-    SuggestionList {
-        id: pathSuggestions
-        width: parent.width
+    SectionLabel { text: i18n.t("settings.section_general").toUpperCase() }
 
-        onPicked: {
-            pathField.text = pathSuggestions.model[pathSuggestions.currentIndex];
-            root.refreshPaths();
+    // Typed in, or chosen in the desktop's folder chooser (also Ctrl+D).
+    Item {
+        width: parent.width
+        height: pathField.height
+
+        Field {
+            id: pathField
+            width: parent.width - pathButton.width - Math.round(8 * root.s)
+            label: i18n.t("settings.path_label")
+
+            onSubmitted: root.submit()
+            onCancelled: root.dismissed()
+            onNextRequested: root.focusNext(pathField)
+            onPreviousRequested: root.focusPrevious(pathField)
+        }
+
+        AppButton {
+            id: pathButton
+            objectName: "pathButton"
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: pathField.field.height
+            text: i18n.t("settings.wordlist_choose")
+            onClicked: root.chooseFolder()
         }
     }
 
@@ -123,6 +193,8 @@ Modal {
         onNextRequested: root.focusNext(recencyBox)
         onPreviousRequested: root.focusPrevious(recencyBox)
     }
+
+    SectionLabel { text: i18n.t("settings.section_lock").toUpperCase() }
 
     CheckOption {
         id: lockBox
@@ -146,6 +218,8 @@ Modal {
         onNextRequested: root.focusNext(lockField)
         onPreviousRequested: root.focusPrevious(lockField)
     }
+
+    SectionLabel { text: i18n.t("settings.section_icons").toUpperCase() }
 
     CheckOption {
         id: iconsBox
@@ -171,23 +245,20 @@ Modal {
         onPreviousRequested: root.focusPrevious(duckDuckGoBox)
     }
 
-    Text {
-        width: parent.width
+    Note {
         text: root.iconsVault.length > 0 ? i18n.t("settings.site_icons_stored")
                                          : i18n.t("settings.site_icons_default")
-        color: theme.guidance
-        wrapMode: Text.WordWrap
-        font.pixelSize: Math.round(11 * root.s)
     }
 
-    Text {
-        width: parent.width
+    Note {
         visible: iconsBox.checked
         text: duckDuckGoBox.checked ? i18n.t("settings.site_icons_privacy_duckduckgo")
                                     : i18n.t("settings.site_icons_privacy")
-        color: theme.guidance
-        wrapMode: Text.WordWrap
-        font.pixelSize: Math.round(11 * root.s)
+    }
+
+    SectionLabel {
+        visible: root.browserSupported
+        text: i18n.t("settings.section_browser").toUpperCase()
     }
 
     // Linux only for now; elsewhere there is nothing to turn on.
@@ -202,41 +273,50 @@ Modal {
         onPreviousRequested: root.focusPrevious(browserBox)
     }
 
-    Text {
-        width: parent.width
+    Note {
         visible: root.browserSupported && browserBox.checked
         text: i18n.t("settings.browser_hint")
-        color: theme.guidance
-        wrapMode: Text.WordWrap
-        font.pixelSize: Math.round(11 * root.s)
     }
 
-    Field {
-        id: wordlistField
-        width: parent.width
-        label: i18n.t("settings.wordlist_label")
+    SectionLabel { text: i18n.t("settings.section_generator").toUpperCase() }
 
-        onSubmitted: root.submit()
-        onCancelled: root.dismissed()
-        onNextRequested: root.focusNext(wordlistField)
-        onPreviousRequested: root.focusPrevious(wordlistField)
+    // The field and, beside it, the desktop's file chooser (also Ctrl+F).
+    Item {
+        width: parent.width
+        height: wordlistField.height
+
+        Field {
+            id: wordlistField
+            width: parent.width - wordlistButton.width - Math.round(8 * root.s)
+            label: i18n.t("settings.wordlist_label")
+
+            onSubmitted: root.submit()
+            onCancelled: root.dismissed()
+            onNextRequested: root.focusNext(wordlistField)
+            onPreviousRequested: root.focusPrevious(wordlistField)
+        }
+
+        AppButton {
+            id: wordlistButton
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: wordlistField.field.height
+            text: i18n.t("settings.wordlist_choose")
+            onClicked: root.chooseWordlist()
+        }
     }
 
-    Text {
-        width: parent.width
+    Note {
         text: root.wordlistInUse.length > 0
             ? i18n.t("settings.wordlist_in_use", { "path": root.wordlistInUse })
             : i18n.t("generator.no_wordlist")
-        color: root.wordlistInUse.length > 0 ? theme.guidance : theme.alertWarn
+        color: root.wordlistInUse.length > 0 ? theme.muted : theme.alertWarn
         wrapMode: Text.WrapAnywhere
-        font.pixelSize: Math.round(11 * root.s)
     }
 
-    Text {
-        width: parent.width
+    Note {
+        topPadding: Math.round(6 * root.s)
         text: i18n.t("settings.config_path", { "path": root.configPath })
-        color: theme.guidance
         wrapMode: Text.WrapAnywhere
-        font.pixelSize: Math.round(11 * root.s)
     }
 }

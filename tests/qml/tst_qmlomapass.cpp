@@ -11,6 +11,7 @@
 #include "fakewindow.h"
 #include "i18n.h"
 #include "palette.h"
+#include "portalfilepicker.h"
 #include "systemtheme.h"
 
 class Setup : public QObject {
@@ -26,6 +27,7 @@ public slots:
         engine->rootContext()->setContextProperty(QStringLiteral("theme"), &m_palette);
         engine->rootContext()->setContextProperty(QStringLiteral("systemTheme"), &m_systemTheme);
         engine->rootContext()->setContextProperty(QStringLiteral("i18n"), &m_strings);
+        engine->rootContext()->setContextProperty(QStringLiteral("filePicker"), &m_filePicker);
         // DatabasePage reads both of these the way it does in the running
         // application: `controller` for what to show, `window` for the text
         // scale and the Ctrl+C binding.
@@ -37,6 +39,7 @@ private:
     Palette m_palette{{}};
     SystemTheme m_systemTheme;
     Strings m_strings;
+    PortalFilePicker m_filePicker;
     FakeController m_controller;
     FakeWindow m_window;
 };

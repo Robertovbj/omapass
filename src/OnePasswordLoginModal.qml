@@ -21,13 +21,21 @@ Modal {
     signal codeSubmitted(string code)
 
     heading: i18n.t("onepassword.login_title")
-    hint: busy ? i18n.t("onepassword.logging_in")
-               : errorText.length > 0 ? errorText
-               : root.askingCode ? i18n.t("onepassword.code_hint")
-               : i18n.t("onepassword.login_footer")
-    hintColor: errorText.length > 0 ? theme.alertError : theme.guidance
-    accentColor: errorText.length > 0 ? theme.alertError : theme.alertInfo
+    subtitle: root.askingCode ? i18n.t("onepassword.code_hint") : ""
+    status: busy ? i18n.t("onepassword.logging_in") : errorText
+    statusIsError: !busy && errorText.length > 0
+    acceptText: root.askingCode ? i18n.t("common.confirm") : i18n.t("common.login")
+    acceptEnabled: !busy
     cardWidth: Math.round(520 * s)
+
+    onAcceptRequested: {
+        if (root.askingCode) {
+            if (codeField.text.trim().length > 0)
+                root.codeSubmitted(codeField.text);
+        } else {
+            root.submitCredentials();
+        }
+    }
 
     capturesKeys: false
 

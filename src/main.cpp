@@ -1,7 +1,6 @@
 #include <QCoreApplication>
 #include <QFile>
 #include <QFont>
-#include <QFontDatabase>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QQmlApplicationEngine>
@@ -21,7 +20,9 @@
 #include "generator.h"
 #include "i18n.h"
 #include "kdbx2pass.h"
+#include "hyprrounding.h"
 #include "palette.h"
+#include "portalfilepicker.h"
 #include "process.h"
 #include "sessionlock.h"
 #include "siteicons.h"
@@ -202,24 +203,19 @@ int main(int argc, char *argv[]) {
     SystemTheme systemTheme(&app);
     Palette palette(config.themeOverrides, &app);
     palette.setSystemDarkMode(systemTheme.darkMode());
+    HyprRounding rounding(&app);
+    QObject::connect(&rounding, &HyprRounding::radiusChanged, &palette, &Palette::setRadius);
     QObject::connect(&systemTheme, &SystemTheme::darkModeChanged, &palette,
                      &Palette::setSystemDarkMode);
 
-    // The whole interface inherits this one font, so nothing names a family
-    // of its own. "monospace" is the generic family fontconfig resolves, and
-    // `omarchy font set` writes exactly that rule into
-    // ~/.config/fontconfig/fonts.conf — so the desktop's chosen monospace is
-    // what omapass draws with. Its size follows the desktop text scale, which
-    // keeps the chrome (menus, dialogs) growing with the rest.
-#ifdef Q_OS_WIN
-    // No fontconfig here, so the generic family name means nothing: the
-    // system's own fixed-width font is the equivalent.
-    const QFont interfaceFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
-#else
-    const QFont interfaceFont(QStringLiteral("monospace"));
-#endif
-    const qreal basePointSize = interfaceFont.pointSizeF() > 0 ? interfaceFont.pointSizeF()
-                                                               : app.font().pointSizeF();
+    // The interface draws with the desktop's own interface font, like the
+    // rest of Omarchy's apps; only secrets (a generated password, a one-time
+    // code) name the monospace family, through `systemTheme.monoFamily`,
+    // where telling l from 1 from I matters. Its size follows the desktop
+    // text scale, which keeps the chrome (menus, dialogs) growing with the
+    // rest.
+    const QFont interfaceFont = app.font();
+    const qreal basePointSize = interfaceFont.pointSizeF() > 0 ? interfaceFont.pointSizeF() : 11.0;
     const auto applyInterfaceFont = [&app, interfaceFont, basePointSize](qreal textScale) {
         QFont scaled = interfaceFont;
         scaled.setPointSizeF(basePointSize * textScale);
@@ -241,6 +237,7 @@ int main(int argc, char *argv[]) {
     QObject::connect(&app, &QCoreApplication::aboutToQuit, &app, []() { Clipboard::clearPending(); });
 
     AppController controller(config);
+    PortalFilePicker filePicker;
     Strings strings;
 
     // `image://siteicon/<key>`: the list's site icons, read from the cache.
@@ -292,6 +289,7 @@ int main(int argc, char *argv[]) {
     engine.rootContext()->setContextProperty(QStringLiteral("theme"), &palette);
     engine.rootContext()->setContextProperty(QStringLiteral("systemTheme"), &systemTheme);
     engine.rootContext()->setContextProperty(QStringLiteral("i18n"), &strings);
+    engine.rootContext()->setContextProperty(QStringLiteral("filePicker"), &filePicker);
     // The engine owns the provider and goes before the controller does.
     engine.addImageProvider(QStringLiteral("siteicon"), new SiteIconProvider(controller.siteIcons()));
     engine.addImageProvider(QStringLiteral("entryicon"), new EntryIconProvider(controller.entryIcons()));

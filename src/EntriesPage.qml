@@ -43,7 +43,26 @@ FocusScope {
             return;
         }
         page.selectedEntry = entry;
-        iconDialog.open();
+        if (filePicker.available)
+            filePicker.openFile("entryIcon", i18n.t("ui.icon_pick_title"),
+                                [{ "name": i18n.t("ui.icon_filter"),
+                                   "patterns": ["*.png", "*.jpg", "*.jpeg", "*.ico", "*.webp", "*.gif", "*.bmp"] },
+                                 { "name": i18n.t("settings.all_files"), "patterns": ["*"] }]);
+        else
+            iconDialog.open();
+    }
+
+    Connections {
+        target: filePicker
+
+        function onPicked(purpose, path) {
+            if (purpose === "entryIcon" && path.length > 0)
+                controller.chooseEntryIcon(page.selectedEntry, path);
+        }
+        function onFailed(purpose, error) {
+            if (purpose === "entryIcon")
+                controller.showMessage(error, true);
+        }
     }
 
     FileDialog {
@@ -83,10 +102,7 @@ FocusScope {
     // Every backend can have a PIN of its own, so the shortcut works
     // wherever a database is open.
     function togglePin() {
-        if (controller.pinConfigured)
-            controller.disablePin();
-        else
-            page.mode = "pin";
+        page.mode = controller.pinConfigured ? "pinDisable" : "pin";
     }
 
     // Copying or opening needs an entry under the cursor; the controller
@@ -128,15 +144,29 @@ FocusScope {
         ]
         onQueryChanged: controller.query = query
 
+        heading: controller.vaultLabel
+        headerActions: [
+            { "icon": "plus", "description": i18n.t("ui.help_add_entry"),
+              "action": function() { page.openAddForm(); } },
+            { "icon": "dice", "description": i18n.t("generator.help"),
+              "action": function() { page.mode = "generate"; } },
+            { "icon": "key", "description": controller.pinConfigured ? i18n.t("pin.disable_title")
+                                                                     : i18n.t("pin.setup_title"),
+              "action": function() { page.togglePin(); } },
+            { "icon": "settings", "description": i18n.t("settings.help"),
+              "action": function() { window.settingsOpen = true; } },
+            { "icon": "lock", "description": i18n.t("ui.lock"),
+              "action": function() { controller.lock(); } }
+        ]
+
         footerText: controller.hasMessage ? controller.message
                   : controller.busy ? i18n.t("app.working")
                   : controller.syncing ? i18n.t("bitwarden.syncing")
-                  : page.mode === "list" ? (searchMode ? i18n.t("ui.footer_search")
-                                                       : i18n.t("ui.footer_normal"))
                   : ""
         footerColor: controller.hasMessage
-            ? (controller.messageIsError ? theme.alertError : theme.alertInfo)
-            : theme.guidance
+            ? (controller.messageIsError ? theme.error : theme.alertInfo)
+            : theme.muted
+        footerHint: i18n.t("common.shortcuts_hint")
 
         onActivated: function(index) {
             const entry = page.currentEntry();
@@ -236,6 +266,23 @@ FocusScope {
         onClosed: pane.claimKeyboard()
     }
 
+    // Turning the PIN off asks first: it is quick to undo, but undoing it
+    // means typing the master password again.
+    ConfirmModal {
+        objectName: "pinDisable"
+        visible: page.mode === "pinDisable"
+        heading: i18n.t("pin.disable_title")
+        question: i18n.t("pin.disable_text")
+        acceptText: i18n.t("pin.disable")
+        destructive: true
+
+        onAccepted: {
+            controller.disablePin();
+            page.mode = "list";
+        }
+        onDismissed: page.mode = "list"
+    }
+
     PinSetupModal {
         visible: page.mode === "pin"
         busy: controller.busy
@@ -300,6 +347,8 @@ FocusScope {
 
     ConfirmModal {
         visible: page.mode === "confirmDelete"
+        acceptText: i18n.t("common.delete")
+        destructive: true
         question: i18n.t("ui.confirm_delete", { "entry": page.selectedEntry })
 
         onAccepted: {
@@ -313,31 +362,43 @@ FocusScope {
         visible: page.mode === "help"
         sections: [
             {
-                "title": i18n.t("help.nav_section"),
-                "items": [["j/k, ↑/↓", i18n.t("help.move_selection")],
-                          ["gg / G", i18n.t("help.go_top_bottom")],
-                          ["CTRL-U/D", i18n.t("help.half_page")],
-                          ["CTRL-N/P", i18n.t("help.next_prev")]]
+                "title": i18n.t("help.actions_section"),
+                "items": [["Enter", i18n.t("ui.help_copy_password")],
+                          ["Ctrl+B", i18n.t("ui.help_copy_username")],
+                          ["Ctrl+L", i18n.t("ui.help_copy_url")],
+                          ["Ctrl+Shift+L", i18n.t("ui.help_open_url")],
+                          ["Ctrl+T", i18n.t("ui.help_copy_otp")],
+                          ["Tab", i18n.t("ui.help_view_details")],
+                          [i18n.t("common.space_key"), i18n.t("ui.help_open_menu")],
+                          ["Ctrl+A", i18n.t("ui.help_add_entry")],
+                          ["Ctrl+E", i18n.t("ui.help_edit_entry")],
+                          ["Ctrl+X", i18n.t("ui.help_delete_entry")],
+                          ["Ctrl+G", i18n.t("generator.help")],
+                          ["Ctrl+I", i18n.t("pin.help")]]
             },
             {
-                "title": i18n.t("help.actions_section"),
-                "items": [["ENTER", i18n.t("ui.help_copy_password")],
-                          ["CTRL-B", i18n.t("ui.help_copy_username")],
-                          ["CTRL-L", i18n.t("ui.help_copy_url")],
-                          ["CTRL-SHIFT-L", i18n.t("ui.help_open_url")],
-                          ["CTRL-T", i18n.t("ui.help_copy_otp")],
-                          ["TAB", i18n.t("ui.help_view_details")],
-                          [i18n.t("common.space_key"), i18n.t("ui.help_open_menu")],
-                          ["CTRL-A", i18n.t("ui.help_add_entry")],
-                          ["CTRL-E", i18n.t("ui.help_edit_entry")],
-                          ["CTRL-X", i18n.t("ui.help_delete_entry")],
-                          ["CTRL-G", i18n.t("generator.help")],
-                          ["CTRL-I", i18n.t("pin.help")]]
+                "title": i18n.t("help.nav_section"),
+                "items": [["j / k", i18n.t("help.move_selection")],
+                          ["g g / G", i18n.t("help.go_top_bottom")],
+                          ["Ctrl+U / Ctrl+D", i18n.t("help.half_page")],
+                          ["Ctrl+N / Ctrl+P", i18n.t("help.next_prev")]]
             },
             {
                 "title": i18n.t("help.search_section"),
-                "items": [["/, f, i", i18n.t("help.enter_search")],
-                          ["ESC", i18n.t("ui.help_exit_search")]]
+                "items": [["/ f i", i18n.t("help.enter_search")],
+                          ["Esc", i18n.t("ui.help_exit_search")]]
+            },
+            {
+                "title": i18n.t("ui.help_sheets_section"),
+                "items": [["Enter", i18n.t("ui.help_sheet_confirm")],
+                          ["Esc", i18n.t("ui.help_sheet_cancel")],
+                          ["Tab / Shift+Tab", i18n.t("ui.help_sheet_fields")],
+                          ["Ctrl+G", i18n.t("ui.help_sheet_generate")],
+                          ["Ctrl+R", i18n.t("ui.help_sheet_regenerate")],
+                          ["Ctrl+Enter", i18n.t("ui.help_sheet_save_notes")],
+                          ["o", i18n.t("ui.help_sheet_open_url")],
+                          ["Ctrl+D / Ctrl+F", i18n.t("ui.help_sheet_choose")],
+                          ["y / n", i18n.t("ui.help_sheet_yes_no")]]
             },
             {
                 "title": i18n.t("ui.help_mouse_section"),
@@ -347,10 +408,10 @@ FocusScope {
             },
             {
                 "title": i18n.t("help.general_section"),
-                "items": [["CTRL+?", i18n.t("help.this_help")],
-                          ["CTRL-O", i18n.t("settings.help")],
-                          ["ESC, q", i18n.t("ui.help_lock")],
-                          ["CTRL-C, CTRL-Q", i18n.t("help.quit_app")]]
+                "items": [["? / Ctrl+?", i18n.t("help.this_help")],
+                          ["Ctrl+O", i18n.t("settings.help")],
+                          ["Esc / q", i18n.t("ui.help_lock")],
+                          ["Ctrl+Q / Ctrl+C", i18n.t("help.quit_app")]]
             }
         ]
 

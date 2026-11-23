@@ -85,15 +85,27 @@ TestCase {
         keyClick(Qt.Key_Backtab);
         const passphrase = modal.tabOrder[0];
         compare(focused(), passphrase);
+        // The mode is a pair of tabs: Space (or →) moves to the passphrase.
         keyClick(Qt.Key_Space);
-        verify(passphrase.checked);
+        verify(modal.passphrase);
 
-        // passphrase toggle → words → separator → passphrase toggle
+        // mode tabs → words → separator → mode tabs
         keyClick(Qt.Key_Tab);
         compare(focused(), modal.tabOrder[9]);
         keyClick(Qt.Key_Tab);
         compare(focused(), modal.tabOrder[10]);
         keyClick(Qt.Key_Tab);
         compare(focused(), passphrase);
+    }
+
+    // ← and → move between the two tabs; the password comes back with ←.
+    function test_mode_tabs_follow_the_arrows() {
+        open();
+        tryVerify(function() { return focused() === modal.tabOrder[1]; }, 3000);
+        keyClick(Qt.Key_Backtab);
+        keyClick(Qt.Key_Right);
+        verify(modal.passphrase);
+        keyClick(Qt.Key_Left);
+        verify(!modal.passphrase);
     }
 }

@@ -19,7 +19,16 @@ Item {
     readonly property int rowHeight: Math.round(26 * s)
 
     visible: list.count > 0
-    height: visible ? Math.min(list.count, visibleRows) * rowHeight : 0
+    height: visible ? Math.min(list.count, visibleRows) * rowHeight + frame.border.width * 2 + 8 : 0
+
+    Rectangle {
+        id: frame
+        anchors.fill: parent
+        color: theme.background
+        radius: Math.min(4, theme.radius)
+        border.width: 1
+        border.color: theme.border
+    }
 
     function next() {
         if (list.count === 0)
@@ -36,6 +45,7 @@ Item {
     ListView {
         id: list
         anchors.fill: parent
+        anchors.margins: 4 + frame.border.width
         model: root.model
         clip: true
         currentIndex: root.currentIndex
@@ -43,7 +53,11 @@ Item {
         keyNavigationEnabled: false
         boundsBehavior: Flickable.StopAtBounds
 
-        ScrollBar.vertical: ScrollBar {}
+        ScrollBar.vertical: AppScrollBar { view: list }
+
+        SmoothWheel {
+            view: list
+        }
 
         delegate: Rectangle {
             required property int index
@@ -51,8 +65,11 @@ Item {
 
             width: list.width
             height: root.rowHeight
-            radius: Math.round(4 * root.s)
-            color: root.currentIndex === index ? theme.selection : "transparent"
+            radius: Math.min(3, theme.radius)
+            color: root.currentIndex === index ? theme.selection
+                 : rowHover.hovered ? theme.hover : "transparent"
+
+            HoverHandler { id: rowHover }
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter
@@ -60,7 +77,7 @@ Item {
                 anchors.right: parent.right
                 anchors.leftMargin: Math.round(8 * root.s)
                 text: root.labelFor(modelData)
-                color: theme.base
+                color: root.currentIndex === index ? theme.selectionText : theme.foreground
                 elide: Text.ElideMiddle
                 font.pixelSize: Math.round(13 * root.s)
             }

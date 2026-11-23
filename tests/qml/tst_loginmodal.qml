@@ -76,4 +76,34 @@ TestCase {
         compare(submitted.count, 0);
         tryVerify(function() { return server.field.focus; }, 3000);
     }
+
+    // The button does what Enter on the last field does.
+    function test_accept_button_submits_the_credentials() {
+        modal.step = "credentials";
+        modal.visible = true;
+        tryVerify(function() { return modal.opened; }, 3000);
+
+        findChild(modal, "emailField").text = "a@b.com";
+        findChild(modal, "passwordField").text = "segredo";
+        const accept = findChild(modal, "modalAccept");
+        verify(accept !== null && accept.visible);
+        mouseClick(accept);
+
+        compare(submitted.count, 1);
+        compare(submitted.signalArguments[0][1], "a@b.com");
+    }
+
+    // Cancel gives up the way Esc does.
+    function test_cancel_button_dismisses() {
+        modal.step = "credentials";
+        modal.visible = true;
+        tryVerify(function() { return modal.opened; }, 3000);
+
+        let dismissed = 0;
+        const count = function() { dismissed += 1; };
+        modal.dismissed.connect(count);
+        mouseClick(findChild(modal, "modalCancel"));
+        modal.dismissed.disconnect(count);
+        compare(dismissed, 1);
+    }
 }

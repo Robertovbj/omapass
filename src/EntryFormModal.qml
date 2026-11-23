@@ -15,8 +15,10 @@ Modal {
     signal generateRequested()
 
     heading: isEdit ? i18n.t("common.edit_entry_title") : i18n.t("common.new_entry_title")
-    hint: passBackend ? i18n.t("ui.footer_form_pass") : i18n.t("ui.footer_form_full")
+    acceptText: i18n.t("common.save")
     cardWidth: Math.round(560 * s)
+
+    onAcceptRequested: root.submit()
 
     capturesKeys: false
 
@@ -135,6 +137,7 @@ Modal {
         width: parent.width
         label: i18n.t("common.password_label")
         echoMode: revealPassword.checked ? TextInput.Normal : TextInput.Password
+        monospace: true
 
         onCancelled: root.dismissed()
         onSubmitted: root.submit()
@@ -161,6 +164,7 @@ Modal {
         objectName: "otpField"
         width: parent.width
         label: i18n.t("common.otp_label")
+        monospace: true
 
         onCancelled: root.dismissed()
         onSubmitted: root.submit()
@@ -203,29 +207,34 @@ Modal {
 
         Text {
             text: i18n.t("common.notes_label")
-            color: notesArea.activeFocus ? theme.annotation : theme.guidance
-            font.pixelSize: Math.round(12 * root.s)
+            color: notesArea.activeFocus ? theme.foreground : theme.muted
+            font.pixelSize: Math.round(13 * root.s)
         }
 
         ScrollView {
             width: parent.width
-            height: Math.round(80 * root.s)
+            height: Math.round(90 * root.s)
+            Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
+
+            background: Rectangle {
+                color: theme.background
+                radius: Math.min(4, theme.radius)
+                border.width: 1
+                border.color: notesArea.activeFocus ? theme.accent : theme.border
+            }
 
             TextArea {
                 id: notesArea
-                color: theme.base
+                color: theme.foreground
                 selectionColor: theme.selection
-                selectedTextColor: theme.base
+                selectedTextColor: theme.selectionText
                 wrapMode: TextArea.Wrap
                 font.pixelSize: Math.round(14 * root.s)
-
-                background: Rectangle {
-                    anchors.bottom: parent.bottom
-                    width: parent.width
-                    height: Math.max(1, Math.round(root.s))
-                    color: notesArea.activeFocus ? theme.annotation : theme.guidance
-                    opacity: notesArea.activeFocus ? 1.0 : 0.4
-                }
+                leftPadding: Math.round(12 * root.s)
+                rightPadding: Math.round(12 * root.s)
+                topPadding: Math.round(9 * root.s)
+                bottomPadding: Math.round(9 * root.s)
+                background: null
 
                 // Enter inserts a line break here, as it did in the TUI;
                 // Ctrl+Enter is what saves from inside the notes.

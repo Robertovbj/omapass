@@ -2,8 +2,9 @@
 
 [![CI](https://github.com/higorhgon/omapass/actions/workflows/ci.yml/badge.svg)](https://github.com/higorhgon/fpass/actions/workflows/ci.yml)
 
-Gerenciador de senhas em C++ com interface Qt Quick. Segue o tema do Omarchy, a
-fonte monoespaçada do sistema e o modo claro/escuro automaticamente. Funciona com
+Gerenciador de senhas em C++ com interface Qt Quick, no visual dos apps do Omarchy (Hype,
+Omajim). Segue as cores do tema do Omarchy, os cantos das janelas do Hyprland, a fonte do sistema
+e o modo claro/escuro. Senhas e códigos aparecem em fonte monoespaçada. Funciona com
 quatro backends: KeePass/KeePassXC (o `.kdbx` é lido e gravado pelo próprio
 omapass, sem programa externo), [pass](https://www.passwordstore.org/) (via
 `gpg`), Bitwarden (direto na API do servidor, seja bitwarden.com ou um

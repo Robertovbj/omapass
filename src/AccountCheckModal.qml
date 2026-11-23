@@ -12,9 +12,8 @@ Modal {
 
     signal cancelled()
 
-    accentColor: theme.alertInfo
     heading: i18n.t("db_app.account_check_title")
-    hint: i18n.t("db_app.account_check_hint")
+    cancelOnly: true
     cardWidth: Math.round(460 * s)
 
     onKeyPressed: function(event) {
@@ -29,8 +28,7 @@ Modal {
         objectName: "accountCheckText"
         width: parent.width
         text: i18n.t("db_app.account_check_body", {"account": root.accountName})
-        color: theme.base
-        horizontalAlignment: Text.AlignHCenter
+        color: theme.foreground
         wrapMode: Text.WordWrap
         font.pixelSize: Math.round(14 * root.s)
     }

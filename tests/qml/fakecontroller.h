@@ -142,6 +142,10 @@ public:
         emit copied();
     }
     Q_INVOKABLE void forgetShownOtp() {}
+    Q_INVOKABLE QStringList matchingGroups(const QString &) const { return {}; }
+    // PinSetupModal's warning under the PIN, and what it says is wrong.
+    Q_INVOKABLE QString pinWeakWarning(const QString &) const { return QString(); }
+    Q_INVOKABLE QString validatePin(const QString &, const QString &, bool) const { return QString(); }
 
     // What GeneratorModal reads on opening and calls on every change. The
     // password is not the point there, only that the sheet can be walked.

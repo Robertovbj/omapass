@@ -1,8 +1,8 @@
 import QtQuick
 import QtQuick.Controls
 
-// A labelled single-line field. The label takes the annotation colour while
-// the field has focus, which is how the TUI marked the active box.
+// A labelled single-line field in Hype's style: a muted label above a box on
+// the window's background, whose border takes the accent while focused.
 Item {
     id: root
 
@@ -12,6 +12,9 @@ Item {
     property alias placeholderText: input.placeholderText
     property alias field: input
     readonly property bool active: input.activeFocus
+    // The value is a secret (a password, a code): in the monospace family,
+    // where l, 1 and I differ once it is revealed.
+    property bool monospace: false
 
     signal submitted()
     signal cancelled()
@@ -23,37 +26,39 @@ Item {
 
     readonly property real s: systemTheme.textScale
 
-    implicitHeight: labelText.height + Math.round(6 * s) + input.height
+    implicitHeight: (labelText.visible ? labelText.height + Math.round(6 * s) : 0) + input.height
     height: implicitHeight
 
     Text {
         id: labelText
         anchors.top: parent.top
-        text: root.label
-        color: root.active ? theme.annotation : theme.guidance
-        font.pixelSize: Math.round(12 * root.s)
+        visible: text.length > 0
+        text: root.label.trim()
+        color: root.active ? theme.foreground : theme.muted
+        font.pixelSize: Math.round(13 * root.s)
     }
 
     TextField {
         id: input
-        anchors.top: labelText.bottom
-        anchors.topMargin: Math.round(6 * root.s)
+        anchors.top: labelText.visible ? labelText.bottom : parent.top
+        anchors.topMargin: labelText.visible ? Math.round(6 * root.s) : 0
         width: parent.width
-        height: Math.round(34 * root.s)
-        color: theme.base
-        placeholderTextColor: theme.guidance
+        height: Math.round(38 * root.s)
+        color: theme.foreground
+        placeholderTextColor: theme.muted
         selectionColor: theme.selection
-        selectedTextColor: theme.base
-        font.pixelSize: Math.round(15 * root.s)
-        leftPadding: 0
-        rightPadding: 0
+        selectedTextColor: theme.selectionText
+        font.pixelSize: Math.round(14 * root.s)
+        font.family: root.monospace ? systemTheme.monoFamily : Qt.application.font.family
+        leftPadding: Math.round(12 * root.s)
+        rightPadding: Math.round(12 * root.s)
+        opacity: enabled ? 1 : 0.6
 
         background: Rectangle {
-            anchors.bottom: parent.bottom
-            width: parent.width
-            height: Math.max(1, Math.round(root.s))
-            color: root.active ? theme.annotation : theme.guidance
-            opacity: root.active ? 1.0 : 0.4
+            color: theme.background
+            radius: Math.min(4, theme.radius)
+            border.width: 1
+            border.color: root.active ? theme.accent : theme.border
         }
 
         Keys.onPressed: function(event) {

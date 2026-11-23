@@ -1,6 +1,12 @@
 <RCC>
     <qresource prefix="/">
         <file alias="Main.qml">Main.qml</file>
+        <file alias="AppIcon.qml">AppIcon.qml</file>
+        <file alias="AppButton.qml">AppButton.qml</file>
+        <file alias="IconButton.qml">IconButton.qml</file>
+        <file alias="Segmented.qml">Segmented.qml</file>
+        <file alias="SmoothWheel.qml">SmoothWheel.qml</file>
+        <file alias="AppScrollBar.qml">AppScrollBar.qml</file>
         <file alias="DatabasePage.qml">DatabasePage.qml</file>
         <file alias="EntriesPage.qml">EntriesPage.qml</file>
         <file alias="ListPane.qml">ListPane.qml</file>

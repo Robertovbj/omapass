@@ -16,6 +16,7 @@ SOURCES += \
     ../../src/config.cpp \
     ../../src/i18n.cpp \
     ../../src/palette.cpp \
+    ../../src/portalfilepicker.cpp \
     ../../src/systemtheme.cpp
 
 HEADERS += \
@@ -24,6 +25,7 @@ HEADERS += \
     ../../src/config.h \
     ../../src/i18n.h \
     ../../src/palette.h \
+    ../../src/portalfilepicker.h \
     ../../src/systemtheme.h
 
 RESOURCES += ../../src/resources.qrc

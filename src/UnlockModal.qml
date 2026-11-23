@@ -17,13 +17,22 @@ Modal {
     signal submitted(string password)
     signal pinSubmitted(string pin)
 
-    accentColor: errorText.length > 0 ? theme.alertError : theme.alertInfo
-    heading: i18n.t("db_app.unlock_title", { "db": databaseName })
-    hint: busy ? i18n.t("db_app.unlocking")
-               : errorText.length > 0 ? errorText
-               : usingPin ? i18n.t("pin.footer")
-               : i18n.t("common.footer_confirm_cancel")
-    hintColor: errorText.length > 0 ? theme.alertError : theme.guidance
+    heading: i18n.t("db_app.unlock_title")
+    subtitle: databaseName
+    status: busy ? i18n.t("db_app.unlocking")
+          : errorText.length > 0 ? errorText
+          : usingPin ? i18n.t("pin.footer")
+          : ""
+    statusIsError: !busy && errorText.length > 0
+    acceptText: i18n.t("common.unlock")
+    acceptEnabled: !busy
+
+    onAcceptRequested: {
+        if (root.usingPin)
+            root.pinSubmitted(pinField.text);
+        else
+            root.submitted(passwordField.text);
+    }
 
     capturesKeys: false
 

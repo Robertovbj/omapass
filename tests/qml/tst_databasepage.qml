@@ -75,4 +75,28 @@ TestCase {
         compare(choice.options[1], i18n.t("bitwarden.method_yubikey"));
         controller.loginStep = "";
     }
+
+    // Clicking a kind of database opens its sheet. The same click once
+    // reached the dimmed backdrop as well, which read it as a click outside
+    // and sent the page straight back to the list.
+    function test_clicking_a_kind_opens_its_sheet() {
+        controller.emitScanning(false);
+        controller.emitDatabases(testCase.bancos);
+        page.mode = "chooseType";
+        const choice = findChild(page, "typeChoice");
+        tryVerify(function() { return choice.opened; }, 3000);
+        let keepass = null;
+        tryVerify(function() {
+            keepass = findChild(choice.contentItem, "choice0");
+            return keepass !== null && keepass.visible;
+        }, 3000);
+        wait(300);
+
+        mouseClick(keepass);
+        tryCompare(page, "mode", "createDb", 3000);
+        wait(300);
+        compare(page.mode, "createDb", "o clique não fecha a janela que acabou de abrir");
+
+        page.mode = "list";
+    }
 }

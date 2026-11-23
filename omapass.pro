@@ -58,7 +58,9 @@ HEADERS += \
     src/onepasswordlogin.h \
     src/onepasswordvault.h \
     src/opjson.h \
+    src/hyprrounding.h \
     src/palette.h \
+    src/portalfilepicker.h \
     src/passstore.h \
     src/passvault.h \
     src/pin.h \
@@ -101,7 +103,9 @@ SOURCES += \
     src/onepasswordlogin.cpp \
     src/onepasswordvault.cpp \
     src/opjson.cpp \
+    src/hyprrounding.cpp \
     src/palette.cpp \
+    src/portalfilepicker.cpp \
     src/passstore.cpp \
     src/passvault.cpp \
     src/pin.cpp \

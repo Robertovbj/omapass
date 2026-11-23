@@ -1,6 +1,7 @@
 import QtQuick
 
-// A yes/no question, answered with y or n exactly as in the TUI.
+// A yes/no question, answered with y or n exactly as in the TUI, or with the
+// buttons. Enter and Esc both take the answer that loses nothing.
 Modal {
     id: root
 
@@ -8,10 +9,12 @@ Modal {
 
     signal accepted()
 
-    accentColor: theme.important
     heading: i18n.t("common.confirm_title")
-    hint: i18n.t("common.yes_no_hint")
+    acceptText: i18n.t("common.yes")
+    cancelText: i18n.t("common.no")
     cardWidth: Math.round(460 * s)
+
+    onAcceptRequested: root.accepted()
 
     onKeyPressed: function(event) {
         switch (event.key) {
@@ -33,8 +36,7 @@ Modal {
     Text {
         width: parent.width
         text: root.question
-        color: theme.base
-        horizontalAlignment: Text.AlignHCenter
+        color: theme.foreground
         wrapMode: Text.WordWrap
         font.pixelSize: Math.round(14 * root.s)
     }

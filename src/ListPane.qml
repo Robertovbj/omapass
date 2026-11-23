@@ -1,23 +1,32 @@
 import QtQuick
 import QtQuick.Controls
 
-// The search line, the list and the hint footer — the shape both stages of
-// omapass share — together with the whole keyboard vocabulary. The pages above
-// decide what each gesture means; nothing here knows about vaults.
+// The header, the search box, the list and the status line (the shape both
+// stages of omapass share, laid out like Omajim's window) together with the
+// whole keyboard vocabulary. The pages above decide what each gesture means;
+// nothing here knows about vaults.
 FocusScope {
     id: pane
 
     property string searchPlaceholder: ""
     property var model: []
+    // The header: what is open (centre) and the actions offered as icons
+    // (right), each { "icon", "description", "action": function }.
+    property string heading: ""
+    property string subheading: ""
+    property var headerActions: []
+    // The status line: what just happened on the left (a copy, an error),
+    // a reminder of where the shortcuts are on the right.
     property string footerText: ""
-    property color footerColor: theme.guidance
+    property color footerColor: theme.muted
+    property string footerHint: ""
     property bool searchMode: true
     property bool acceptsKeys: true
     // A question from the browser sits over every page, whatever the page
     // thinks is on top: while one is up, the keyboard is the question's.
     readonly property bool browserAsking: controller.browser.prompt.kind !== undefined
     readonly property bool ownsKeys: acceptsKeys && !browserAsking
-    // Bracketed tag drawn before a row's text, or "" for none.
+    // Tag drawn as a badge before a row's text, or "" for none.
     property var tagFor: function(item) { return ""; }
     // Optional table layout: [{ "key": "name", "title": "Nome", "weight": 3 }…].
     // Each row shows modelData[key] in the column; without columns a row is
@@ -72,12 +81,12 @@ FocusScope {
 
     FontMetrics {
         id: cellMetrics
-        font.pixelSize: Math.round(15 * pane.s)
+        font.pixelSize: Math.round(14 * pane.s)
     }
     FontMetrics {
         id: headerMetrics
-        font.pixelSize: Math.round(13 * pane.s)
-        font.bold: true
+        font.pixelSize: Math.round(12 * pane.s)
+        font.weight: Font.DemiBold
     }
 
     property alias query: searchInput.text
@@ -100,7 +109,7 @@ FocusScope {
     signal quitRequested()
 
     readonly property real s: systemTheme.textScale
-    readonly property int rowHeight: Math.round(30 * s)
+    readonly property int rowHeight: Math.round(34 * s)
 
     property bool lastKeyWasG: false
 
@@ -193,32 +202,117 @@ FocusScope {
     Item {
         id: content
         anchors.fill: parent
-        anchors.margins: Math.round(24 * pane.s)
+        anchors.leftMargin: Math.round(20 * pane.s)
+        anchors.rightMargin: Math.round(20 * pane.s)
+        anchors.bottomMargin: Math.round(10 * pane.s)
 
         Item {
-            id: searchRow
+            id: headerBar
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
-            height: Math.round(38 * pane.s)
+            height: Math.round(58 * pane.s)
+
+            Text {
+                id: appName
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                text: "omapass"
+                color: theme.accent
+                font.pixelSize: Math.round(22 * pane.s)
+                font.weight: Font.Bold
+            }
+
+            Column {
+                anchors.centerIn: parent
+                width: Math.max(0, parent.width - 2 * Math.max(appName.width, actionsRow.width)
+                                - Math.round(32 * pane.s))
+                spacing: Math.round(2 * pane.s)
+
+                Text {
+                    objectName: "headerTitle"
+                    width: parent.width
+                    visible: text.length > 0
+                    text: pane.heading
+                    color: theme.foreground
+                    horizontalAlignment: Text.AlignHCenter
+                    elide: Text.ElideMiddle
+                    font.pixelSize: Math.round(13 * pane.s)
+                    font.weight: Font.DemiBold
+                }
+
+                Text {
+                    width: parent.width
+                    visible: text.length > 0
+                    text: pane.subheading
+                    color: theme.muted
+                    horizontalAlignment: Text.AlignHCenter
+                    elide: Text.ElideRight
+                    font.pixelSize: Math.round(12 * pane.s)
+                }
+            }
+
+            Row {
+                id: actionsRow
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Math.round(2 * pane.s)
+
+                Repeater {
+                    model: pane.headerActions
+
+                    IconButton {
+                        required property var modelData
+                        objectName: "headerAction_" + modelData.icon
+                        iconName: modelData.icon
+                        description: modelData.description
+                        onClicked: modelData.action()
+                    }
+                }
+            }
+
+            Rectangle {
+                anchors.bottom: parent.bottom
+                width: parent.width
+                height: 1
+                color: theme.border
+            }
+        }
+
+        Item {
+            id: searchRow
+            anchors.top: headerBar.bottom
+            anchors.topMargin: Math.round(14 * pane.s)
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: Math.round(40 * pane.s)
 
             TextField {
                 id: searchInput
                 anchors.fill: parent
                 placeholderText: pane.searchPlaceholder
-                placeholderTextColor: theme.guidance
-                color: theme.base
-                font.pixelSize: Math.round(17 * pane.s)
+                placeholderTextColor: theme.muted
+                color: theme.foreground
+                font.pixelSize: Math.round(14 * pane.s)
                 selectionColor: theme.selection
-                selectedTextColor: theme.base
-                leftPadding: 0
-                rightPadding: 0
+                selectedTextColor: theme.selectionText
+                leftPadding: Math.round(40 * pane.s)
+                rightPadding: Math.round(12 * pane.s)
                 background: Rectangle {
-                    anchors.bottom: parent.bottom
-                    width: parent.width
-                    height: Math.max(1, Math.round(pane.s))
-                    color: pane.searchMode ? theme.annotation : theme.guidance
-                    opacity: pane.searchMode ? 1.0 : 0.4
+                    color: theme.background
+                    radius: Math.min(4, theme.radius)
+                    border.width: 1
+                    border.color: searchInput.activeFocus ? theme.accent : theme.border
+
+                    AppIcon {
+                        anchors.left: parent.left
+                        anchors.leftMargin: Math.round(12 * pane.s)
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Math.round(18 * pane.s)
+                        height: width
+                        name: "search"
+                        color: searchInput.activeFocus ? theme.foreground : theme.muted
+                    }
                 }
 
                 Keys.onPressed: function(event) {
@@ -262,8 +356,8 @@ FocusScope {
             anchors.bottom: footer.top
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.topMargin: Math.round(14 * pane.s)
-            anchors.bottomMargin: Math.round(14 * pane.s)
+            anchors.topMargin: Math.round(12 * pane.s)
+            anchors.bottomMargin: Math.round(8 * pane.s)
 
             // One handler for the whole list area, rows included: the empty
             // part has to open the menu as well (with nothing in the list
@@ -298,19 +392,20 @@ FocusScope {
                     model: pane.columns
                     Text {
                         objectName: "columnHeader"
-                        width: pane.columnWidth(index, listArea.width) 
+                        width: pane.columnWidth(index, listArea.width)
                         anchors.verticalCenter: parent.verticalCenter
                         text: modelData.title
-                        color: theme.annotation
+                        color: theme.muted
                         elide: Text.ElideRight
-                        font.pixelSize: Math.round(13 * pane.s)
-                        font.bold: true
+                        font.pixelSize: Math.round(12 * pane.s)
+                        font.weight: Font.DemiBold
                     }
                 }
             }
 
             ListView {
                 id: list
+                objectName: "entryList"
                 anchors.top: header.bottom
                 anchors.bottom: parent.bottom
                 anchors.left: parent.left
@@ -329,17 +424,24 @@ FocusScope {
                     list.currentIndex = list.count > 0 ? 0 : -1;
                 })
 
-                ScrollBar.vertical: ScrollBar {}
+                ScrollBar.vertical: AppScrollBar { objectName: "listScrollBar"; view: list }
+
+                // A notch goes 120 px, and further when turned fast, instead
+                // of the few rows Flickable's own wheel moves.
+                SmoothWheel {
+                    view: list
+                }
 
                 delegate: Rectangle {
                     id: row
                     width: list.width
                     height: pane.rowHeight
-                    radius: Math.round(4 * pane.s)
-                    color: list.currentIndex === index ? theme.selection
-                         : hover.hovered ? Qt.rgba(theme.selection.r, theme.selection.g,
-                                                   theme.selection.b, 0.4)
+                    radius: Math.min(4, theme.radius)
+                    color: row.current ? theme.selection
+                         : hover.hovered ? theme.hover
                          : "transparent"
+
+                    readonly property bool current: list.currentIndex === index
 
                     readonly property string itemText: typeof modelData === "string" ? modelData
                         : modelData.label !== undefined ? modelData.label
@@ -396,9 +498,12 @@ FocusScope {
                                     x: cellIcon.visible ? cellIcon.width + Math.round(6 * pane.s) : 0
                                     width: parent.width - x
                                     text: row.cell(modelData.key)
-                                    color: modelData.key === "name" ? theme.base : theme.guidance
+                                    color: row.current ? theme.selectionText
+                                         : modelData.key === "name" ? theme.foreground : theme.muted
+                                    opacity: row.current && modelData.key !== "name" ? 0.8 : 1
                                     elide: Text.ElideRight
-                                    font.pixelSize: Math.round(15 * pane.s)
+                                    font.pixelSize: Math.round(14 * pane.s)
+                                    font.weight: modelData.key === "name" ? Font.Medium : Font.Normal
                                 }
                             }
                         }
@@ -413,22 +518,35 @@ FocusScope {
                         anchors.rightMargin: Math.round(10 * pane.s)
                         spacing: Math.round(8 * pane.s)
 
-                        Text {
-                            objectName: "rowTag"
+                        Rectangle {
+                            id: tagBadge
                             visible: row.tag.length > 0
-                            text: row.tag
-                            color: theme.annotation
-                            font.pixelSize: Math.round(15 * pane.s)
+                            width: tagText.implicitWidth + Math.round(14 * pane.s)
+                            height: Math.round(20 * pane.s)
+                            radius: Math.min(3, theme.radius)
+                            color: "transparent"
+                            border.width: 1
+                            border.color: row.current ? Qt.rgba(theme.selectionText.r, theme.selectionText.g,
+                                                                          theme.selectionText.b, 0.4) : theme.border
                             anchors.verticalCenter: parent.verticalCenter
+
+                            Text {
+                                id: tagText
+                                objectName: "rowTag"
+                                anchors.centerIn: parent
+                                text: row.tag
+                                color: row.current ? theme.selectionText : theme.muted
+                                font.pixelSize: Math.round(11 * pane.s)
+                            }
                         }
 
                         Text {
                             objectName: "rowText"
                             width: parent.width - (row.tag.length > 0 ? x : 0)
                             text: row.itemText
-                            color: theme.base
+                            color: row.current ? theme.selectionText : theme.foreground
                             elide: Text.ElideMiddle
-                            font.pixelSize: Math.round(15 * pane.s)
+                            font.pixelSize: Math.round(14 * pane.s)
                             anchors.verticalCenter: parent.verticalCenter
                         }
                     }
@@ -449,16 +567,34 @@ FocusScope {
             }
         }
 
-        Text {
+        Item {
             id: footer
             anchors.bottom: parent.bottom
             anchors.left: parent.left
             anchors.right: parent.right
-            text: pane.footerText
-            color: pane.footerColor
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            font.pixelSize: Math.round(13 * pane.s)
+            height: Math.max(footerMessage.implicitHeight, footerHintText.implicitHeight)
+
+            Text {
+                id: footerMessage
+                objectName: "footerText"
+                anchors.left: parent.left
+                anchors.right: footerHintText.left
+                anchors.rightMargin: Math.round(16 * pane.s)
+                anchors.verticalCenter: parent.verticalCenter
+                text: pane.footerText
+                color: pane.footerColor
+                elide: Text.ElideRight
+                font.pixelSize: Math.round(12 * pane.s)
+            }
+
+            Text {
+                id: footerHintText
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                text: pane.footerHint
+                color: theme.muted
+                font.pixelSize: Math.round(12 * pane.s)
+            }
         }
     }
 
@@ -509,6 +645,10 @@ FocusScope {
             case Qt.Key_F:
             case Qt.Key_I:
                 pane.enterSearch();
+                break;
+            // ?, as in Omarchy's other apps; Ctrl+? works from the search too.
+            case Qt.Key_Question:
+                pane.helpRequested();
                 break;
             case Qt.Key_G:
                 if (event.modifiers & Qt.ShiftModifier) {

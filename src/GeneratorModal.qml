@@ -11,6 +11,7 @@ Modal {
     id: root
 
     property bool fillMode: false
+    readonly property bool passphrase: modeTabs.currentIndex === 1
     property string password: ""
     property bool passphraseAvailable: false
     // Set while the fields are being filled from the stored options, so
@@ -20,8 +21,11 @@ Modal {
     signal accepted(string password)
 
     heading: i18n.t("generator.title")
-    hint: fillMode ? i18n.t("generator.footer_use") : i18n.t("generator.footer_copy")
+    acceptText: fillMode ? i18n.t("generator.use") : i18n.t("common.copy")
+    acceptEnabled: root.password.length > 0
     cardWidth: Math.round(560 * s)
+
+    onAcceptRequested: root.accepted(root.password)
 
     capturesKeys: false
 
@@ -30,7 +34,7 @@ Modal {
         root.passphraseAvailable = options.passphraseAvailable;
 
         root.loading = true;
-        passphraseBox.checked = options.passphrase && options.passphraseAvailable;
+        modeTabs.currentIndex = options.passphrase && options.passphraseAvailable ? 1 : 0;
         lengthField.text = String(options.length);
         lowerBox.checked = options.lower;
         upperBox.checked = options.upper;
@@ -49,7 +53,7 @@ Modal {
 
     function currentOptions() {
         return {
-            "passphrase": passphraseBox.checked,
+            "passphrase": root.passphrase,
             "length": parseInt(lengthField.text) || 0,
             "lower": lowerBox.checked,
             "upper": upperBox.checked,
@@ -67,7 +71,7 @@ Modal {
     // hides (and the passphrase toggle when there is no wordlist) are
     // skipped by moveFocus.
     readonly property var tabOrder: [
-        passphraseBox, lengthField, lowerBox, upperBox, numbersBox, specialBox,
+        modeTabs, lengthField, lowerBox, upperBox, numbersBox, specialBox,
         similarBox, excludeField, customField, wordsField, separatorField
     ]
 
@@ -89,30 +93,60 @@ Modal {
         onActivated: root.regenerate()
     }
 
-    Text {
-        width: parent.width
-        text: root.password
-        color: theme.title
-        wrapMode: Text.WrapAnywhere
-        font.pixelSize: Math.round(18 * root.s)
-        font.bold: true
-    }
-
-    CheckOption {
-        id: passphraseBox
+    // A password or a passphrase, as two tabs over the options for each.
+    Segmented {
+        id: modeTabs
+        objectName: "generatorMode"
         visible: root.passphraseAvailable
-        text: i18n.t("generator.mode_passphrase")
-        onCheckedChanged: root.regenerate()
+        options: [i18n.t("generator.mode_password"), i18n.t("generator.mode_passphrase")]
+        onCurrentIndexChanged: root.regenerate()
         onSubmitted: root.accepted(root.password)
         onCancelled: root.dismissed()
-        onNextRequested: root.focusNext(passphraseBox)
-        onPreviousRequested: root.focusPrevious(passphraseBox)
+        onNextRequested: root.focusNext(modeTabs)
+        onPreviousRequested: root.focusPrevious(modeTabs)
     }
+
+    // What Enter copies (or uses), in the monospace family where l, 1 and I
+    // differ, with a button to draw another.
+    Rectangle {
+        width: parent.width
+        height: Math.max(passwordText.implicitHeight, regenerateButton.height) + Math.round(20 * root.s)
+        color: theme.background
+        radius: Math.min(4, theme.radius)
+        border.width: 1
+        border.color: theme.border
+
+        Text {
+            id: passwordText
+            objectName: "generatedPassword"
+            anchors.left: parent.left
+            anchors.right: regenerateButton.left
+            anchors.leftMargin: Math.round(14 * root.s)
+            anchors.rightMargin: Math.round(8 * root.s)
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.password
+            color: theme.foreground
+            wrapMode: Text.WrapAnywhere
+            font.family: systemTheme.monoFamily
+            font.pixelSize: Math.round(18 * root.s)
+        }
+
+        IconButton {
+            id: regenerateButton
+            anchors.right: parent.right
+            anchors.rightMargin: Math.round(6 * root.s)
+            anchors.verticalCenter: parent.verticalCenter
+            iconName: "dice"
+            description: i18n.t("generator.regenerate")
+            onClicked: root.regenerate()
+        }
+    }
+
 
     Field {
         id: lengthField
         width: parent.width
-        visible: !passphraseBox.checked
+        visible: !root.passphrase
         label: i18n.t("generator.length_label")
         field.inputMethodHints: Qt.ImhDigitsOnly
 
@@ -125,8 +159,8 @@ Modal {
 
     Column {
         width: parent.width
-        visible: !passphraseBox.checked
-        spacing: Math.round(2 * root.s)
+        visible: !root.passphrase
+        spacing: 0
 
         CheckOption {
             id: lowerBox
@@ -182,7 +216,7 @@ Modal {
     Field {
         id: excludeField
         width: parent.width
-        visible: !passphraseBox.checked
+        visible: !root.passphrase
         label: i18n.t("generator.exclude_label")
 
         onTextChanged: root.regenerate()
@@ -195,7 +229,7 @@ Modal {
     Field {
         id: customField
         width: parent.width
-        visible: !passphraseBox.checked
+        visible: !root.passphrase
         label: i18n.t("generator.custom_label")
 
         onTextChanged: root.regenerate()
@@ -208,7 +242,7 @@ Modal {
     Field {
         id: wordsField
         width: parent.width
-        visible: passphraseBox.checked
+        visible: root.passphrase
         label: i18n.t("generator.words_label")
         field.inputMethodHints: Qt.ImhDigitsOnly
 
@@ -222,7 +256,7 @@ Modal {
     Field {
         id: separatorField
         width: parent.width
-        visible: passphraseBox.checked
+        visible: root.passphrase
         label: i18n.t("generator.separator_label")
         // A space reads as an empty field; the placeholder says which it is.
         placeholderText: i18n.t("generator.separator_space")

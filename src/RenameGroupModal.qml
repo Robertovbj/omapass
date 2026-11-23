@@ -10,8 +10,10 @@ Modal {
     signal submitted(string name)
 
     heading: i18n.t("ui.rename_group_title")
-    hint: i18n.t("ui.footer_rename")
+    acceptText: i18n.t("common.rename")
     cardWidth: Math.round(440 * s)
+
+    onAcceptRequested: root.submitted(nameField.text)
 
     capturesKeys: false
 

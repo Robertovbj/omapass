@@ -51,17 +51,26 @@ FocusScope {
 
         searchPlaceholder: i18n.t("db_app.filter_title")
         model: controller.databases
-        tagFor: function(item) { return "[" + item.kind + "]"; }
+        tagFor: function(item) { return item.kind; }
         onQueryChanged: controller.databaseQuery = query
+
+        heading: i18n.t("db_app.available_dbs_title")
+        headerActions: [
+            { "icon": "plus", "description": i18n.t("db_app.help_create_new_db"),
+              "action": function() { page.mode = "chooseType"; } },
+            { "icon": "settings", "description": i18n.t("settings.help"),
+              "action": function() { window.settingsOpen = true; } },
+            { "icon": "keyboard", "description": i18n.t("common.shortcuts_title"),
+              "action": function() { page.mode = "help"; } }
+        ]
 
         footerText: controller.hasMessage ? controller.message
                   : controller.scanning ? i18n.t("db_app.scanning")
-                  : page.mode === "list" ? (searchMode ? i18n.t("db_app.footer_search")
-                                                       : i18n.t("db_app.footer_normal"))
                   : ""
         footerColor: controller.hasMessage
-            ? (controller.messageIsError ? theme.alertError : theme.alertInfo)
-            : theme.guidance
+            ? (controller.messageIsError ? theme.error : theme.alertInfo)
+            : theme.muted
+        footerHint: i18n.t("common.shortcuts_hint")
 
         onActivated: function(index) { controller.selectDatabase(index); }
         onAddRequested: page.mode = "chooseType"
@@ -77,7 +86,7 @@ FocusScope {
 
     ConfirmModal {
         visible: page.mode === "confirmCreate"
-        accentColor: theme.alertWarn
+        acceptText: i18n.t("common.create")
         question: i18n.t("db_app.no_db_found_confirm")
 
         onAccepted: page.mode = "chooseType"
@@ -88,6 +97,7 @@ FocusScope {
     // installed simply drops out without shifting what the others do.
     ChoiceModal {
         id: typeChoice
+        objectName: "typeChoice"
 
         readonly property var choices: {
             const list = [{"label": "KeePassXC (.kdbx)", "action": "createDb"},
@@ -100,8 +110,7 @@ FocusScope {
 
         visible: page.mode === "chooseType"
         heading: i18n.t("db_app.new_db_title")
-        hint: i18n.t("db_app.footer_choose_type")
-        cardWidth: Math.round(360 * window.s)
+        cardWidth: Math.round(400 * window.s)
         options: choices.map(function(choice) { return choice.label; })
 
         onChosen: function(index) {
@@ -180,8 +189,8 @@ FocusScope {
 
         visible: controller.loginStep === "method"
         heading: i18n.t("bitwarden.method_title")
-        hint: controller.busy ? i18n.t("bitwarden.logging_in") : i18n.t("db_app.footer_choose_type")
-        cardWidth: Math.round(360 * window.s)
+        status: controller.busy ? i18n.t("bitwarden.logging_in") : ""
+        cardWidth: Math.round(400 * window.s)
         options: methods.map(function(method) { return labels[method]; })
 
         onChosen: function(index) { controller.chooseBitwardenMethod(methods[index]); }
@@ -190,7 +199,8 @@ FocusScope {
 
     ConfirmModal {
         visible: page.mode === "confirmLogout"
-        accentColor: theme.alertWarn
+        acceptText: i18n.t("common.logout")
+        destructive: true
         question: i18n.t("bitwarden.logout_confirm")
 
         onAccepted: {
@@ -202,7 +212,8 @@ FocusScope {
 
     ConfirmModal {
         visible: page.mode === "confirmLogoutOp"
-        accentColor: theme.alertWarn
+        acceptText: i18n.t("common.logout")
+        destructive: true
         question: i18n.t("onepassword.logout_confirm")
 
         onAccepted: {
@@ -241,27 +252,27 @@ FocusScope {
         sections: [
             {
                 "title": i18n.t("help.nav_section"),
-                "items": [["j/k, ↑/↓", i18n.t("help.move_selection")],
-                          ["gg / G", i18n.t("help.go_top_bottom")],
-                          ["CTRL-U/D", i18n.t("help.half_page")],
-                          ["CTRL-N/P", i18n.t("help.next_prev")]]
+                "items": [["j / k", i18n.t("help.move_selection")],
+                          ["g g / G", i18n.t("help.go_top_bottom")],
+                          ["Ctrl+U / Ctrl+D", i18n.t("help.half_page")],
+                          ["Ctrl+N / Ctrl+P", i18n.t("help.next_prev")]]
             },
             {
                 "title": i18n.t("help.actions_section"),
-                "items": [["ENTER", i18n.t("db_app.help_select_db")],
-                          ["CTRL-A", i18n.t("db_app.help_create_new_db")],
-                          ["CTRL-X", i18n.t("db_app.help_logout")]]
+                "items": [["Enter", i18n.t("db_app.help_select_db")],
+                          ["Ctrl+A", i18n.t("db_app.help_create_new_db")],
+                          ["Ctrl+X", i18n.t("db_app.help_logout")]]
             },
             {
                 "title": i18n.t("help.search_section"),
-                "items": [["/, f, i", i18n.t("help.enter_search")],
-                          ["ESC", i18n.t("db_app.help_exit_search")]]
+                "items": [["/ f i", i18n.t("help.enter_search")],
+                          ["Esc", i18n.t("db_app.help_exit_search")]]
             },
             {
                 "title": i18n.t("help.general_section"),
-                "items": [["CTRL+?", i18n.t("help.this_help")],
-                          ["CTRL-O", i18n.t("settings.help")],
-                          ["CTRL-C, CTRL-Q", i18n.t("help.quit_app")]]
+                "items": [["? / Ctrl+?", i18n.t("help.this_help")],
+                          ["Ctrl+O", i18n.t("settings.help")],
+                          ["Ctrl+Q / Ctrl+C", i18n.t("help.quit_app")]]
             }
         ]
 

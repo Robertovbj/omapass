@@ -18,12 +18,15 @@ class SystemTheme : public QObject {
     // omapass interface sizes itself against the text scale directly.
     Q_PROPERTY(bool darkMode READ darkMode NOTIFY darkModeChanged)
     Q_PROPERTY(qreal textScale READ textScale NOTIFY textScaleChanged)
+    // The family secrets are shown in: the desktop's monospace one.
+    Q_PROPERTY(QString monoFamily READ monoFamily CONSTANT)
 
 public:
     explicit SystemTheme(QObject *parent = nullptr);
 
     bool darkMode() const { return m_darkMode; }
     qreal textScale() const { return m_textScale; }
+    static QString monoFamily();
 
 signals:
     void darkModeChanged(bool darkMode);
