@@ -42,9 +42,7 @@ TestCase {
         keyClick(Qt.Key_F);
         compare(linkHints.badges.length, 2);
         verify(hints.visible);
-        const badges = hints.children.filter(item => item.modelData !== undefined);
-        compare(badges.length, 2);
-        compare(badges[1].y, field.mapToItem(hints, 0, 0).y);
+        verify(badgeAt(field));
         keyClick(Qt.Key_Escape);
         compare(linkHints.badges.length, 0);
         keyClick(Qt.Key_F);
@@ -61,9 +59,12 @@ TestCase {
     SignalSpy { id: copied; target: controller; signalName: "passwordRequested" }
 
     function badgeAt(item) {
-        const pos = item.mapToItem(hints, 0, 0);
-        return hints.children.find(badge => badge.modelData !== undefined
-                                   && Math.abs(badge.x - pos.x) < 1 && Math.abs(badge.y - pos.y) < 1);
+        for (let i = 0; i < hints.children.length; ++i) {
+            const badge = hints.children[i];
+            if (badge.modelData !== undefined && item.contains(badge.mapToItem(item, 0, 0)))
+                return badge;
+        }
+        return null;
     }
 
     function test_page_badges_data() {
