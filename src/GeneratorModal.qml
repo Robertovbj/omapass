@@ -5,8 +5,11 @@ import QtQuick.Controls
 // answers in milliseconds — so every change to the options regenerates right
 // away and what you see is what you get.
 //
-// Opened from the entry list it copies; opened from the entry form it fills
-// the password field, which is what `fillMode` switches.
+// Opened from the entry form it fills the password field, which is what
+// `fillMode` switches. Anywhere else (with or without a database open) it
+// copies and stays open: the clipboard is wiped after a few seconds, and a
+// password pasted into a site that then has to be typed again would be lost
+// if the sheet had gone with it.
 //
 // The options are KeePassXC's: the letter and number classes, the symbols in
 // its six groups, extended ASCII, characters to draw from as well, and
@@ -20,6 +23,8 @@ Modal {
     property real entropy: 0
     property string quality: ""
     property bool passphraseAvailable: false
+    // The password on show is the one last copied.
+    property bool copied: false
     // Set while the fields are being filled from the stored options, so
     // their onTextChanged does not regenerate once per field.
     property bool loading: false
@@ -28,10 +33,24 @@ Modal {
 
     heading: i18n.t("generator.title")
     acceptText: fillMode ? i18n.t("generator.use") : i18n.t("common.copy")
+    cancelText: fillMode ? i18n.t("common.cancel") : i18n.t("common.close")
     acceptEnabled: root.password.length > 0
     cardWidth: Math.round(600 * s)
 
-    onAcceptRequested: root.accepted(root.password)
+    onAcceptRequested: root.submit()
+
+    // Enter and the main button: hand the password to the form, or copy it
+    // and leave the sheet open.
+    function submit() {
+        if (root.password.length === 0)
+            return;
+        if (root.fillMode) {
+            root.accepted(root.password);
+            return;
+        }
+        controller.copySecret(root.password);
+        root.copied = true;
+    }
 
     firstField: root.passphrase ? wordsField.field : lengthField.field
 
@@ -48,6 +67,7 @@ Modal {
         const options = controller.generatorOptions();
         root.passphraseAvailable = options.passphraseAvailable;
 
+        root.copied = false;
         root.loading = true;
         modeTabs.currentIndex = options.passphrase && options.passphraseAvailable ? 1 : 0;
         lengthField.text = String(options.length);
@@ -104,7 +124,7 @@ Modal {
                 item.checkedChanged.connect(root.regenerate);
             else
                 item.textChanged.connect(root.regenerate);
-            item.submitted.connect(function() { root.accepted(root.password); });
+            item.submitted.connect(root.submit);
             item.cancelled.connect(root.takeKeyboard);
             item.nextRequested.connect(function() { root.focusNext(item); });
             item.previousRequested.connect(function() { root.focusPrevious(item); });
@@ -116,6 +136,7 @@ Modal {
             return;
 
         const result = controller.generate(currentOptions());
+        root.copied = false;
         root.password = result.password || "";
         root.entropy = result.entropy || 0;
         root.quality = result.quality || "";
@@ -135,7 +156,7 @@ Modal {
         visible: root.passphraseAvailable
         options: [i18n.t("generator.mode_password"), i18n.t("generator.mode_passphrase")]
         onCurrentIndexChanged: root.regenerate()
-        onSubmitted: root.accepted(root.password)
+        onSubmitted: root.submit()
         onCancelled: root.takeKeyboard()
         onNextRequested: root.focusNext(modeTabs)
         onPreviousRequested: root.focusPrevious(modeTabs)
@@ -217,6 +238,16 @@ Modal {
             })
             color: theme.muted
             elide: Text.ElideRight
+            font.pixelSize: Math.round(12 * root.s)
+        }
+
+        Text {
+            objectName: "generatorCopied"
+            width: parent.width
+            visible: root.copied
+            text: i18n.t("generator.copied_stays")
+            color: theme.alertInfo
+            wrapMode: Text.WordWrap
             font.pixelSize: Math.round(12 * root.s)
         }
     }

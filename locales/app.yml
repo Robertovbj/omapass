@@ -230,6 +230,9 @@ generator.quality_excellent:
 generator.copied:
   pt-BR: "Senha gerada copiada!"
   en: "Generated password copied!"
+generator.copied_stays:
+  pt-BR: "Copiada. A área de transferência é limpa em alguns segundos, mas a senha fica aqui até você fechar."
+  en: "Copied. The clipboard is cleared in a few seconds, but the password stays here until you close this."
 generator.error:
   pt-BR: "Não foi possível gerar a senha."
   en: "Could not generate the password."

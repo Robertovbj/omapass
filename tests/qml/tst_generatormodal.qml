@@ -118,4 +118,43 @@ TestCase {
         keyClick(Qt.Key_Left);
         verify(!modal.passphrase);
     }
+
+    SignalSpy {
+        id: acceptedSpy
+        target: modal
+        signalName: "accepted"
+    }
+
+    // Copying leaves the sheet open, so a password the clipboard has
+    // already forgotten can still be read and copied again.
+    function test_copy_keeps_the_sheet_open() {
+        open();
+        acceptedSpy.clear();
+        const before = controller.copiedSecrets;
+        keyClick(Qt.Key_Tab);
+        tryVerify(function() { return focused() === modal.tabOrder[1]; }, 3000);
+
+        keyClick(Qt.Key_Return);
+        compare(controller.copiedSecrets, before + 1, "Enter copia");
+        verify(modal.opened, "e o gerador continua aberto");
+        verify(modal.copied, "avisando que copiou");
+        compare(acceptedSpy.count, 0);
+        compare(modal.cancelText, i18n.t("common.close"));
+    }
+
+    // From the entry form the sheet still hands the password over and closes.
+    function test_fill_mode_hands_the_password_over() {
+        modal.fillMode = true;
+        open();
+        acceptedSpy.clear();
+        const before = controller.copiedSecrets;
+        keyClick(Qt.Key_Tab);
+        tryVerify(function() { return focused() === modal.tabOrder[1]; }, 3000);
+
+        keyClick(Qt.Key_Return);
+        compare(acceptedSpy.count, 1);
+        compare(acceptedSpy.signalArguments[0][0], "senha-de-teste");
+        compare(controller.copiedSecrets, before, "sem copiar");
+        modal.fillMode = false;
+    }
 }
