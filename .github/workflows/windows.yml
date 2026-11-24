@@ -7,6 +7,12 @@ name: Windows
 # dependências para manter.
 on:
   workflow_call:
+    inputs:
+      empacotar:
+        description: "Gerar zip, instalador e subir artefatos (usado na release)"
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   windows:
@@ -96,6 +102,7 @@ jobs:
           fi
 
       - name: Gera o zip (portátil)
+        if: ${{ inputs.empacotar }}
         run: |
           cd dist
           zip -qr "$PASTA.zip" "$PASTA"
@@ -104,6 +111,7 @@ jobs:
       # O instalador pergunta a pasta (Arquivos de Programas por padrão) e
       # oferece os atalhos como opções. O Inno Setup vem do Chocolatey.
       - name: Gera o instalador
+        if: ${{ inputs.empacotar }}
         shell: pwsh
         run: |
           choco install innosetup -y --no-progress
@@ -114,6 +122,7 @@ jobs:
           Get-ChildItem dist | Format-Table Name, Length
 
       - name: Confere o instalador (instala, confere os atalhos, desinstala)
+        if: ${{ inputs.empacotar }}
         shell: pwsh
         run: |
           $setup = (Get-ChildItem dist -Filter *-setup.exe).FullName
@@ -144,6 +153,7 @@ jobs:
           "desinstalado"
 
       - uses: actions/upload-artifact@v4
+        if: ${{ inputs.empacotar }}
         with:
           name: omapass-windows-x64
           path: |

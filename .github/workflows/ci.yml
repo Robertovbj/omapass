@@ -56,7 +56,9 @@ jobs:
       - name: Compila
         run: ./bin/build
 
-  # O mesmo build que o release publica, para que a compilação no Windows não
-  # quebre sem aviso.
+  # Compila e confere que o omapass.exe sobe no Windows, sem gerar zip,
+  # instalador nem artefatos (isso fica só no release.yml).
   windows:
     uses: ./.github/workflows/windows.yml
+    with:
+      empacotar: false
