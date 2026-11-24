@@ -472,6 +472,7 @@ private slots:
     void twoOpenDatabases() {
         QTemporaryDir dir;
         AppConfig config;
+        config.autoSearch = true;
         config.searchPath = dir.path();
         config.recencyEnabled = false;
         const QString personal = dir.filePath("personal.kdbx");
