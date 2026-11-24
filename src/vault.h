@@ -89,8 +89,11 @@ public:
     // The same search in its two halves, so a caller can show the first as
     // soon as it is known: files on disk (kdbx, pass) never wait for the
     // account backends, which run external programs (`op`) and can take
-    // seconds or hang.
-    static QVector<DbRef> findLocalDatabases(const QString &searchPath);
+    // seconds or hang. When `autoSearch` is false, only databases created by
+    // omapass and explicitly registered ones are returned.
+    static QVector<DbRef> findLocalDatabases(const QString &searchPath,
+                                             bool autoSearch = true,
+                                             const QVector<DbRef> &registered = {});
     static QVector<DbRef> findAccountDatabases();
 
     static bool createKeepassDatabase(const QString &name, const Secret &password,

@@ -11,4 +11,9 @@ export PATH="$HERE/usr/bin:$PATH"
 # one) link libraries that travel here too, and nothing patched their search
 # path — so it is given to them.
 export LD_LIBRARY_PATH="$HERE/usr/lib:${LD_LIBRARY_PATH:-}"
+case "$(basename "${ARGV0:-$0}")" in
+    omapass-ssh-askpass|ssh-askpass)
+        exec "$HERE/usr/bin/omapass" --ssh-askpass "$@"
+        ;;
+esac
 exec "$HERE/usr/bin/omapass" "$@"

@@ -7,6 +7,7 @@
 #include <optional>
 
 struct AppConfig {
+    bool autoSearch = false;
     QString searchPath;
     bool recencyEnabled = true;
     QString themeName = QStringLiteral("default");

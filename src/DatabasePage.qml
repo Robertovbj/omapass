@@ -10,7 +10,7 @@ FocusScope {
     // not "there is nothing": offering to create a database there would be
     // answering a question nobody has asked yet.
     function defaultMode() {
-        return (controller.anyDatabaseFound || controller.scanning) ? "list" : "confirmCreate";
+        return (controller.anyDatabaseFound || controller.scanning || page.unlocking) ? "list" : "confirmCreate";
     }
 
     property string mode: page.defaultMode()
@@ -90,13 +90,48 @@ FocusScope {
         }
     }
 
-    ConfirmModal {
+    Modal {
         visible: page.mode === "confirmCreate"
+        heading: i18n.t("common.confirm_title")
         acceptText: i18n.t("common.create")
-        question: i18n.t("db_app.no_db_found_confirm")
+        cancelText: i18n.t("common.no")
+        cardWidth: Math.round(480 * window.s)
 
-        onAccepted: page.mode = "chooseType"
+        onAcceptRequested: page.mode = "chooseType"
         onDismissed: Qt.quit()
+
+        onKeyPressed: function(event) {
+            switch (event.key) {
+            case Qt.Key_Y:
+                page.mode = "chooseType";
+                break;
+            case Qt.Key_N:
+            case Qt.Key_Escape:
+                Qt.quit();
+                break;
+            default:
+                return;
+            }
+            event.accepted = true;
+        }
+
+        Text {
+            width: parent.width
+            text: i18n.t("db_app.no_db_found_confirm")
+            color: theme.foreground
+            wrapMode: Text.WordWrap
+            font.pixelSize: Math.round(14 * window.s)
+        }
+
+        AppButton {
+            visible: !controller.autoSearch
+            width: parent.width
+            text: i18n.t("db_app.enable_auto_search")
+            onClicked: {
+                page.mode = "list";
+                controller.enableAutoSearch();
+            }
+        }
     }
 
     // Built as a list rather than written out, so a backend whose CLI is not
@@ -140,6 +175,7 @@ FocusScope {
         errorText: controller.unlockError
 
         onSubmitted: function(name, password) { controller.createKeepassDatabase(name, password); }
+        onExistingSelected: function(path) { controller.openExistingKeepassDatabase(path); }
         onDismissed: page.mode = "chooseType"
     }
 
@@ -149,6 +185,7 @@ FocusScope {
         errorText: controller.unlockError
 
         onSubmitted: function(directory, keyId) { controller.createPassStore(directory, keyId); }
+        onExistingSelected: function(path) { controller.openExistingPassStore(path); }
         onDismissed: page.mode = "chooseType"
     }
 

@@ -248,7 +248,7 @@ FocusScope {
                 entryActions.push("copyOtp");
             const result = [entryActions.concat(["edit", "delete", "info"])];
             if (Object.keys(sshOptions).length > 0)
-                result.push(["addSsh", "removeSsh", "configureSsh"]);
+                result.push([sshOptions.inAgent ? "removeSsh" : "addSsh", "configureSsh"]);
             result.push(["chooseIcon", "clearIcon"]);
             return result;
         }

@@ -243,6 +243,8 @@ void writeDefaultConfig(const QString &path) {
 
     QTextStream out(&file);
     out << "[general]\n"
+        << "# Automatically scan `path` for .kdbx files and pass stores at startup.\n"
+        << "auto_search = false\n"
         << "path = \"~/\"\n"
         << "recency = true\n"
         << "theme = \"default\"\n"
@@ -281,6 +283,8 @@ AppConfig load(const QString &file) {
     config.searchPath = home();
 
     const QHash<QString, QString> raw = readFlatToml(file);
+
+    config.autoSearch = raw.value(QStringLiteral("general.auto_search")) == QLatin1String("true");
 
     QString path = raw.value(QStringLiteral("general.path"));
     if (!path.isEmpty()) {

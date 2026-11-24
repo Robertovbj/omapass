@@ -4,7 +4,10 @@
 #include "process.h"
 
 #include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QStandardPaths>
+#include <QTextStream>
 
 #include <utility>
 
@@ -73,6 +76,28 @@ bool SshAgent::supported() {
 
 QString SshAgent::publicIdentity(const Secret &key) {
     return derivePublicKey(key);
+}
+
+bool SshAgent::isIdentityLoaded(const QString &publicKeyLine) {
+    if (!canResolveIdentity())
+        return false;
+    const QString identity = publicKey(publicKeyLine);
+    if (identity.isEmpty())
+        return false;
+    QStringList keys;
+    return identities(&keys) && keys.contains(identity);
+}
+
+bool SshAgent::isLoaded(const QString &id, const Secret &key) const {
+    if (!canResolveIdentity())
+        return false;
+    QString identity = m_added.value(id);
+    if (identity.isEmpty() && !key.isEmpty())
+        identity = derivePublicKey(key);
+    if (identity.isEmpty())
+        return false;
+    QStringList keys;
+    return identities(&keys) && keys.contains(identity);
 }
 
 QString SshAgent::add(const QString &id, const Secret &key, const SshKeyOptions &options) {
@@ -170,4 +195,205 @@ QString SshAgent::clear() {
         }
     }
     return m_added.isEmpty() ? QString() : I18n::t(QStringLiteral("ssh.remove_failed"));
+}
+
+namespace {
+
+QString agentEnvDPath(const QString &homeDir) {
+    return homeDir + QStringLiteral("/.config/environment.d/90-omapass-ssh-agent.conf");
+}
+
+QString agentUwsmEnvPath(const QString &homeDir) {
+    return homeDir + QStringLiteral("/.config/uwsm/env.d/20-omapass-ssh-agent");
+}
+
+QString agentFallbackUnitPath(const QString &homeDir) {
+    return homeDir + QStringLiteral("/.config/systemd/user/omapass-ssh-agent.service");
+}
+
+bool hasSystemSshAgentSocket() {
+    return QFileInfo::exists(QStringLiteral("/usr/lib/systemd/user/ssh-agent.socket"))
+        || QFileInfo::exists(QStringLiteral("/etc/systemd/user/ssh-agent.socket"));
+}
+
+bool detectUwsmSession(const QString &homeDir) {
+    return QDir(homeDir + QStringLiteral("/.config/uwsm")).exists()
+        || !qEnvironmentVariable("UWSM_FINALIZE_VARNAMES").isEmpty()
+        || !QStandardPaths::findExecutable(QStringLiteral("uwsm")).isEmpty();
+}
+
+bool writeConfigFile(const QString &path, const QString &content, QString *error) {
+    const QFileInfo info(path);
+    if (!QDir().mkpath(info.absolutePath())) {
+        if (error)
+            *error = QStringLiteral("Could not create directory: ") + info.absolutePath();
+        return false;
+    }
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        if (error)
+            *error = QStringLiteral("Could not write ") + path + QStringLiteral(": ") + file.errorString();
+        return false;
+    }
+    QTextStream out(&file);
+    out << content;
+    return true;
+}
+
+}
+
+bool SshAgent::setupSupported() {
+#ifdef Q_OS_LINUX
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool SshAgent::isSetupInstalled() {
+    return isSetupInstalled(QDir::homePath());
+}
+
+bool SshAgent::isSetupInstalled(const QString &homeDir) {
+    return QFileInfo::exists(agentEnvDPath(homeDir))
+        || QFileInfo::exists(agentUwsmEnvPath(homeDir))
+        || QFileInfo::exists(agentFallbackUnitPath(homeDir));
+}
+
+bool SshAgent::installSetup(QStringList *writtenFiles, QString *error) {
+    if (!setupSupported()) {
+        if (error)
+            *error = I18n::t(QStringLiteral("ssh.agent_setup_unsupported"));
+        return false;
+    }
+    if (QStandardPaths::findExecutable(QStringLiteral("ssh-agent")).isEmpty()) {
+        if (error)
+            *error = I18n::t(QStringLiteral("ssh.agent_binary_missing"));
+        return false;
+    }
+    const QString homeDir = QDir::homePath();
+    return installSetup(homeDir, hasSystemSshAgentSocket(), detectUwsmSession(homeDir),
+                        true, writtenFiles, error);
+}
+
+bool SshAgent::installSetup(const QString &homeDir, bool hasSystemSocket, bool includeUwsm,
+                            bool runSystemctl, QStringList *writtenFiles, QString *error) {
+    QStringList written;
+
+    const QString envD = agentEnvDPath(homeDir);
+    const QString envDContent = QStringLiteral(
+        "# Managed by omapass\n"
+        "SSH_AUTH_SOCK=${XDG_RUNTIME_DIR}/ssh-agent.socket\n");
+    if (!writeConfigFile(envD, envDContent, error))
+        return false;
+    written.append(envD);
+
+    if (includeUwsm) {
+        const QString uwsm = agentUwsmEnvPath(homeDir);
+        const QString uwsmContent = QStringLiteral(
+            "# Managed by omapass\n"
+            "export SSH_AUTH_SOCK=\"${XDG_RUNTIME_DIR}/ssh-agent.socket\"\n");
+        if (!writeConfigFile(uwsm, uwsmContent, error))
+            return false;
+        written.append(uwsm);
+    }
+
+    QString unitToEnable = QStringLiteral("ssh-agent.socket");
+    if (!hasSystemSocket) {
+        const QString sshAgentBin = QStandardPaths::findExecutable(QStringLiteral("ssh-agent"));
+        const QString execBin = sshAgentBin.isEmpty() ? QStringLiteral("/usr/bin/ssh-agent") : sshAgentBin;
+        const QString unitPath = agentFallbackUnitPath(homeDir);
+        const QString unitContent = QStringLiteral(
+            "# Managed by omapass\n"
+            "[Unit]\n"
+            "Description=OpenSSH key agent (omapass)\n"
+            "\n"
+            "[Service]\n"
+            "Type=simple\n"
+            "ExecStart=") + execBin + QStringLiteral(" -D -a %t/ssh-agent.socket\n"
+            "SuccessExitStatus=2\n"
+            "\n"
+            "[Install]\n"
+            "WantedBy=default.target\n");
+        if (!writeConfigFile(unitPath, unitContent, error))
+            return false;
+        written.append(unitPath);
+        unitToEnable = QStringLiteral("omapass-ssh-agent.service");
+    }
+
+    if (runSystemctl) {
+        const QString systemctl = QStandardPaths::findExecutable(QStringLiteral("systemctl"));
+        if (!systemctl.isEmpty()) {
+            if (!hasSystemSocket)
+                runProcess(systemctl, {QStringLiteral("--user"), QStringLiteral("daemon-reload")}, {}, {}, 2000);
+            runProcess(systemctl,
+                       {QStringLiteral("--user"), QStringLiteral("enable"), QStringLiteral("--now"),
+                        unitToEnable},
+                       {}, {}, 3000);
+            const QString runtimeDir = qEnvironmentVariable("XDG_RUNTIME_DIR");
+            if (!runtimeDir.isEmpty()) {
+                runProcess(systemctl,
+                           {QStringLiteral("--user"), QStringLiteral("set-environment"),
+                            QStringLiteral("SSH_AUTH_SOCK=") + runtimeDir + QStringLiteral("/ssh-agent.socket")},
+                           {}, {}, 2000);
+            }
+        }
+    }
+
+    if (writtenFiles)
+        *writtenFiles = written;
+    return true;
+}
+
+bool SshAgent::uninstallSetup(QStringList *removedFiles, QString *error) {
+    return uninstallSetup(QDir::homePath(), true, removedFiles, error);
+}
+
+bool SshAgent::uninstallSetup(const QString &homeDir, bool runSystemctl,
+                              QStringList *removedFiles, QString *error) {
+    const bool hadFallbackUnit = QFileInfo::exists(agentFallbackUnitPath(homeDir));
+
+    if (runSystemctl) {
+        const QString systemctl = QStandardPaths::findExecutable(QStringLiteral("systemctl"));
+        if (!systemctl.isEmpty()) {
+            const QString unit = hadFallbackUnit
+                ? QStringLiteral("omapass-ssh-agent.service")
+                : QStringLiteral("ssh-agent.socket");
+            runProcess(systemctl,
+                       {QStringLiteral("--user"), QStringLiteral("disable"), QStringLiteral("--now"), unit},
+                       {}, {}, 3000);
+            runProcess(systemctl,
+                       {QStringLiteral("--user"), QStringLiteral("unset-environment"),
+                        QStringLiteral("SSH_AUTH_SOCK")},
+                       {}, {}, 2000);
+        }
+    }
+
+    QStringList removed;
+    const auto tryRemove = [&removed, error](const QString &path) {
+        if (!QFileInfo::exists(path))
+            return true;
+        if (!QFile::remove(path)) {
+            if (error)
+                *error = QStringLiteral("Could not remove ") + path;
+            return false;
+        }
+        removed.append(path);
+        return true;
+    };
+
+    if (!tryRemove(agentEnvDPath(homeDir))
+        || !tryRemove(agentUwsmEnvPath(homeDir))
+        || !tryRemove(agentFallbackUnitPath(homeDir)))
+        return false;
+
+    if (runSystemctl && hadFallbackUnit) {
+        const QString systemctl = QStandardPaths::findExecutable(QStringLiteral("systemctl"));
+        if (!systemctl.isEmpty())
+            runProcess(systemctl, {QStringLiteral("--user"), QStringLiteral("daemon-reload")}, {}, {}, 2000);
+    }
+
+    if (removedFiles)
+        *removedFiles = removed;
+    return true;
 }

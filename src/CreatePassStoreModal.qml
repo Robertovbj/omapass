@@ -1,7 +1,8 @@
 import QtQuick
+import QtQuick.Dialogs
 
-// Initialises a new pass store: where it lives, and which of the GPG keys
-// already in the keyring it encrypts to. omapass never generates GPG keys.
+// Initialises a new pass store, or registers an existing pass directory chosen
+// through the desktop portal. omapass never generates GPG keys.
 Modal {
     id: root
 
@@ -10,6 +11,7 @@ Modal {
     property var keys: []
 
     signal submitted(string directory, string keyId)
+    signal existingSelected(string path)
 
     heading: i18n.t("db_app.new_pass_store_title")
     status: errorText
@@ -49,6 +51,33 @@ Modal {
         if (root.keys.length === 0)
             return;
         root.submitted(directoryField.text, root.keys[keys.currentIndex].id);
+    }
+
+    function chooseExistingDir() {
+        if (filePicker.available)
+            filePicker.openFolder("createPassExisting", i18n.t("db_app.open_existing_pass_pick"));
+        else
+            existingFolderDialog.open();
+    }
+
+    Connections {
+        target: filePicker
+        enabled: root.visible
+
+        function onPicked(purpose, path) {
+            if (purpose === "createPassExisting" && path.length > 0)
+                root.existingSelected(path);
+        }
+        function onFailed(purpose, error) {
+            if (purpose === "createPassExisting")
+                controller.showMessage(error, true);
+        }
+    }
+
+    FolderDialog {
+        id: existingFolderDialog
+        title: i18n.t("db_app.open_existing_pass_pick")
+        onAccepted: root.existingSelected(String(selectedFolder))
     }
 
     Field {
@@ -143,5 +172,12 @@ Modal {
             }
             event.accepted = true;
         }
+    }
+
+    AppButton {
+        width: parent.width
+        enabled: !root.busy
+        text: i18n.t("db_app.open_existing_pass")
+        onClicked: root.chooseExistingDir()
     }
 }

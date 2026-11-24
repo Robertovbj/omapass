@@ -13,6 +13,8 @@ Modal {
     property string wordlistInUse: ""
     property string configPath: ""
     property bool browserSupported: false
+    property bool sshAgentSetupSupported: false
+    property bool sshAskpassSupported: false
     // The open vault's name when the icon boxes are its own choice; empty
     // when they edit the default.
     property string iconsVault: ""
@@ -44,10 +46,11 @@ Modal {
         font.pixelSize: Math.round(12 * root.s)
     }
 
-    firstField: pathField.field
+    firstField: autoSearchBox
 
     onShown: {
         const values = controller.settings();
+        autoSearchBox.checked = values.autoSearch;
         pathField.text = values.path;
         recencyBox.checked = values.recency;
         lockBox.checked = values.lockEnabled;
@@ -57,22 +60,28 @@ Modal {
         root.iconsVault = values.iconsVault || "";
         browserBox.checked = values.browserIntegration;
         root.browserSupported = values.browserSupported;
+        sshAgentBox.checked = values.sshAgentSetup;
+        root.sshAgentSetupSupported = values.sshAgentSetupSupported;
+        sshAskpassBox.checked = values.sshAskpass;
+        root.sshAskpassSupported = values.sshAskpassSupported;
         root.wordlist = values.wordlist;
         root.wordlistInUse = values.wordlistInUse;
         root.configPath = values.configPath;
         wordlistField.text = values.wordlist;
     }
 
-    // The minutes field only shows while the lock is on; moveFocus skips it
-    // otherwise.
-    readonly property var tabOrder: [pathField, recencyBox, lockBox, lockField, iconsBox,
-                                     duckDuckGoBox, browserBox, wordlistField]
+    // The search path and minutes fields only show while their toggles are on;
+    // moveFocus skips invisible controls automatically.
+    readonly property var tabOrder: [autoSearchBox, pathField, recencyBox, lockBox, lockField,
+                                     iconsBox, duckDuckGoBox, browserBox, sshAgentBox,
+                                     sshAskpassBox, wordlistField]
 
     function focusNext(from) { root.moveFocus(root.tabOrder, from, 1); }
     function focusPrevious(from) { root.moveFocus(root.tabOrder, from, -1); }
 
     function submit() {
         root.submitted({
+            "autoSearch": autoSearchBox.checked,
             "path": pathField.text,
             "recency": recencyBox.checked,
             "lockEnabled": lockBox.checked,
@@ -80,7 +89,9 @@ Modal {
             "wordlist": wordlistField.text,
             "siteIcons": iconsBox.checked,
             "siteIconsDuckDuckGo": duckDuckGoBox.checked,
-            "browserIntegration": browserBox.checked
+            "browserIntegration": browserBox.checked,
+            "sshAgentSetup": sshAgentBox.checked,
+            "sshAskpass": sshAskpassBox.checked
         });
     }
 
@@ -150,14 +161,25 @@ Modal {
 
     Shortcut {
         sequences: ["Ctrl+D"]
-        enabled: root.visible
+        enabled: root.visible && autoSearchBox.checked
         onActivated: root.chooseFolder()
     }
 
     SectionLabel { text: i18n.t("settings.section_general").toUpperCase() }
 
+    CheckOption {
+        id: autoSearchBox
+        text: i18n.t("settings.auto_search")
+
+        onSubmitted: root.submit()
+        onCancelled: root.takeKeyboard()
+        onNextRequested: root.focusNext(autoSearchBox)
+        onPreviousRequested: root.focusPrevious(autoSearchBox)
+    }
+
     // Typed in, or chosen in the desktop's folder chooser (also Ctrl+D).
     Item {
+        visible: autoSearchBox.checked
         width: parent.width
         height: pathField.height
 
@@ -275,6 +297,43 @@ Modal {
     Note {
         visible: root.browserSupported && browserBox.checked
         text: i18n.t("settings.browser_hint")
+    }
+
+    SectionLabel {
+        visible: root.sshAgentSetupSupported || root.sshAskpassSupported
+        text: i18n.t("settings.section_ssh").toUpperCase()
+    }
+
+    CheckOption {
+        id: sshAgentBox
+        visible: root.sshAgentSetupSupported
+        text: i18n.t("settings.ssh_agent")
+
+        onSubmitted: root.submit()
+        onCancelled: root.takeKeyboard()
+        onNextRequested: root.focusNext(sshAgentBox)
+        onPreviousRequested: root.focusPrevious(sshAgentBox)
+    }
+
+    Note {
+        visible: root.sshAgentSetupSupported && sshAgentBox.checked
+        text: i18n.t("settings.ssh_agent_hint")
+    }
+
+    CheckOption {
+        id: sshAskpassBox
+        visible: root.sshAskpassSupported
+        text: i18n.t("settings.ssh_askpass")
+
+        onSubmitted: root.submit()
+        onCancelled: root.takeKeyboard()
+        onNextRequested: root.focusNext(sshAskpassBox)
+        onPreviousRequested: root.focusPrevious(sshAskpassBox)
+    }
+
+    Note {
+        visible: root.sshAskpassSupported && sshAskpassBox.checked
+        text: i18n.t("settings.ssh_askpass_hint")
     }
 
     SectionLabel { text: i18n.t("settings.section_generator").toUpperCase() }

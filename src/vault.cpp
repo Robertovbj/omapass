@@ -133,25 +133,48 @@ QString Vault::displayName(const DbRef &ref) {
     return QFileInfo(ref.path).fileName();
 }
 
-QVector<DbRef> Vault::findLocalDatabases(const QString &searchPath) {
+QVector<DbRef> Vault::findLocalDatabases(const QString &searchPath, bool autoSearch,
+                                         const QVector<DbRef> &registered) {
     QVector<DbRef> databases;
     const QString fd = findFdExecutable();
 
-    QStringList kdbx = findFiles(fd, QStringLiteral(".kdbx$"), searchPath, false);
-    kdbx += findFiles(fd, QStringLiteral(".kdbx$"), keepassDatabaseDir(), false);
+    QStringList kdbx = findFiles(fd, QStringLiteral(".kdbx$"), keepassDatabaseDir(), false);
+    if (autoSearch)
+        kdbx += findFiles(fd, QStringLiteral(".kdbx$"), searchPath, false);
+
+    QStringList stores;
+    if (autoSearch) {
+        stores = findPassStores(fd, searchPath);
+
+        // The conventional location is always considered when scanning, even
+        // when `path` was customised to somewhere that does not contain it.
+        const QString defaultStore = QDir::homePath() + QStringLiteral("/.password-store");
+        if (PassStore::isStore(defaultStore) && !stores.contains(defaultStore))
+            stores.append(defaultStore);
+    }
+
+    for (const DbRef &ref : registered) {
+        const QString normalized = QDir::cleanPath(QFileInfo(ref.path).absoluteFilePath());
+        if (ref.kind == VaultKind::Keepass) {
+            if (QFileInfo::exists(normalized) && QFileInfo(normalized).isFile())
+                kdbx.append(normalized);
+        } else if (ref.kind == VaultKind::Pass) {
+            if (PassStore::isStore(normalized))
+                stores.append(normalized);
+        }
+    }
+
+    for (QString &path : kdbx)
+        path = QDir::cleanPath(QFileInfo(path).absoluteFilePath());
     kdbx.sort();
     kdbx.removeDuplicates();
     for (const QString &path : kdbx)
         databases.append({path, VaultKind::Keepass});
 
-    QStringList stores = findPassStores(fd, searchPath);
-
-    // The conventional location is always considered, even when `path` was
-    // customised to somewhere that does not contain it.
-    const QString defaultStore = QDir::homePath() + QStringLiteral("/.password-store");
-    if (PassStore::isStore(defaultStore) && !stores.contains(defaultStore))
-        stores.append(defaultStore);
-
+    for (QString &root : stores)
+        root = QDir::cleanPath(QFileInfo(root).absoluteFilePath());
+    stores.sort();
+    stores.removeDuplicates();
     for (const QString &root : stores)
         databases.append({root, VaultKind::Pass});
 

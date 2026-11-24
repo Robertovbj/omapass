@@ -39,6 +39,7 @@ SOURCES += \
     tst_sessionlock.cpp \
     tst_siteicons.cpp \
     tst_sshagent.cpp \
+    tst_sshaskpass.cpp \
     tst_totp.cpp \
     ../src/appcontroller.cpp \
     ../src/bitwardenlogin.cpp \
@@ -78,6 +79,7 @@ SOURCES += \
     ../src/sessionlock.cpp \
     ../src/siteicons.cpp \
     ../src/sshagent.cpp \
+    ../src/sshaskpass.cpp \
     ../src/totp.cpp \
     ../src/vault.cpp
 
@@ -121,6 +123,7 @@ HEADERS += \
     ../src/sessionlock.h \
     ../src/siteicons.h \
     ../src/sshagent.h \
+    ../src/sshaskpass.h \
     ../src/totp.h \
     ../src/vault.h
 

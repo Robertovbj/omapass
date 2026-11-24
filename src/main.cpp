@@ -27,6 +27,8 @@
 #include "process.h"
 #include "sessionlock.h"
 #include "siteicons.h"
+#include "sshagent.h"
+#include "sshaskpass.h"
 #include "systemtheme.h"
 
 #ifdef Q_OS_WIN
@@ -93,6 +95,15 @@ void printHelp(QTextStream &out) {
         << "  -v, --version      " << I18n::t(QStringLiteral("cli.help_version")) << '\n'
         << "  -h, --help         " << I18n::t(QStringLiteral("cli.help_help")) << '\n'
         << "  --doctor           " << I18n::t(QStringLiteral("cli.help_doctor")) << '\n'
+        << "  --ssh-askpass      " << I18n::t(QStringLiteral("cli.help_ssh_askpass")) << '\n'
+        << "  --install-ssh-agent\n"
+        << "                     " << I18n::t(QStringLiteral("cli.help_install_ssh_agent")) << '\n'
+        << "  --uninstall-ssh-agent\n"
+        << "                     " << I18n::t(QStringLiteral("cli.help_uninstall_ssh_agent")) << '\n'
+        << "  --install-ssh-askpass\n"
+        << "                     " << I18n::t(QStringLiteral("cli.help_install_ssh_askpass")) << '\n'
+        << "  --uninstall-ssh-askpass\n"
+        << "                     " << I18n::t(QStringLiteral("cli.help_uninstall_ssh_askpass")) << '\n'
         << "  --kdbx2pass        " << I18n::t(QStringLiteral("cli.help_kdbx2pass_1")) << '\n'
         << "                     " << I18n::t(QStringLiteral("cli.help_kdbx2pass_2")) << '\n';
 }
@@ -120,6 +131,58 @@ int runCommandLine(int argc, char *argv[], const QStringList &args, bool *handle
 
     if (command == QStringLiteral("--doctor")) {
         printDoctor(out);
+        return 0;
+    }
+
+    if (command == QStringLiteral("--install-ssh-agent")) {
+        QStringList written;
+        QString error;
+        if (!SshAgent::installSetup(&written, &error)) {
+            err << "omapass --install-ssh-agent: " << error << '\n';
+            return 1;
+        }
+        out << I18n::t(QStringLiteral("ssh.agent_setup_installed")) << '\n';
+        for (const QString &file : std::as_const(written))
+            out << "  " << file << '\n';
+        return 0;
+    }
+
+    if (command == QStringLiteral("--uninstall-ssh-agent")) {
+        QStringList removed;
+        QString error;
+        if (!SshAgent::uninstallSetup(&removed, &error)) {
+            err << "omapass --uninstall-ssh-agent: " << error << '\n';
+            return 1;
+        }
+        out << I18n::t(QStringLiteral("ssh.agent_setup_uninstalled")) << '\n';
+        for (const QString &file : std::as_const(removed))
+            out << "  " << file << '\n';
+        return 0;
+    }
+
+    if (command == QStringLiteral("--install-ssh-askpass")) {
+        QStringList written;
+        QString error;
+        if (!SshAskpass::install(&written, &error)) {
+            err << "omapass --install-ssh-askpass: " << error << '\n';
+            return 1;
+        }
+        out << I18n::t(QStringLiteral("ssh.askpass_installed")) << '\n';
+        for (const QString &file : std::as_const(written))
+            out << "  " << file << '\n';
+        return 0;
+    }
+
+    if (command == QStringLiteral("--uninstall-ssh-askpass")) {
+        QStringList removed;
+        QString error;
+        if (!SshAskpass::uninstall(&removed, &error)) {
+            err << "omapass --uninstall-ssh-askpass: " << error << '\n';
+            return 1;
+        }
+        out << I18n::t(QStringLiteral("ssh.askpass_uninstalled")) << '\n';
+        for (const QString &file : std::as_const(removed))
+            out << "  " << file << '\n';
         return 0;
     }
 
@@ -152,6 +215,8 @@ int main(int argc, char *argv[]) {
             args.append(QString::fromLocal8Bit(argv[i]));
         if (BrowserProxy::isProxyInvocation(args))
             return BrowserProxy::run(argc, argv);
+        if (SshAskpass::isInvocation(args))
+            return SshAskpass::run(argc, argv, args);
     }
 
     Config::ensureConfigExists();
@@ -163,11 +228,16 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < argc; ++i)
         args.append(QString::fromLocal8Bit(argv[i]));
 
-    if (args.size() > 1 && args.at(1).startsWith(QLatin1Char('-'))) {
-        bool handled = false;
-        const int status = runCommandLine(argc, argv, args, &handled);
-        if (handled)
-            return status;
+    QString initialDatabase;
+    if (args.size() > 1) {
+        if (args.at(1).startsWith(QLatin1Char('-'))) {
+            bool handled = false;
+            const int status = runCommandLine(argc, argv, args, &handled);
+            if (handled)
+                return status;
+        } else {
+            initialDatabase = args.at(1);
+        }
     }
 
     // Set before the application exists: Qt registers the app ID with the
@@ -238,6 +308,8 @@ int main(int argc, char *argv[]) {
     QObject::connect(&app, &QCoreApplication::aboutToQuit, &app, []() { Clipboard::clearPending(); });
 
     AppController controller(config);
+    if (!initialDatabase.isEmpty())
+        controller.openDatabasePath(initialDatabase);
     LinkHints linkHints;
     PortalFilePicker filePicker;
     Strings strings;

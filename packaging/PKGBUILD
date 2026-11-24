@@ -4,7 +4,8 @@
 # There are no releases yet; when there are, this becomes a plain `omapass`
 # with a source tarball and a fixed pkgver.
 
-pkgname=omapass-git
+pkgbase=omapass-git
+pkgname=('omapass-git' 'omapass-ssh-askpass-git')
 pkgver=r0
 pkgrel=1
 _botanver=3.14.1
@@ -13,22 +14,8 @@ arch=('x86_64')
 url="https://github.com/higorhgon/omapass"
 # BSD-2-Clause: o Botan vai embutido no binario
 license=('MIT' 'BSD-2-Clause')
-depends=('qt6-base' 'qt6-declarative' 'hicolor-icon-theme' 'zlib')
-makedepends=('git' 'qt6-tools' 'pkgconf' 'python')
-# Os CLIs dos backends sao opcionais de proposito: cada um habilita um tipo
-# de banco, e quem usa so o KeePass ou o Bitwarden (ambos falados direto,
-# sem programa externo) nao precisa de nenhum. `omapass --doctor` diz o que foi encontrado.
-optdepends=('1password-cli: contas 1Password'
-            'pass: criar password-stores pela interface'
-            'gnupg: bancos do pass'
-            'libsecret: desbloqueio por PIN'
-            'qt6-wayland: janela nativa em sessão Wayland (sem ele, via XWayland)'
-            'fd: varredura de bancos ~5x mais rápida numa home grande'
-            'wl-clipboard: limpeza automática do clipboard mais confiável em sessão Wayland'
-            'xdg-desktop-portal: modo claro/escuro e tamanho de texto do desktop')
-provides=('omapass')
-conflicts=('omapass')
-source=("$pkgname::git+$url.git"
+makedepends=('git' 'qt6-base' 'qt6-declarative' 'qt6-tools' 'pkgconf' 'python' 'zlib')
+source=("$pkgbase::git+$url.git"
         "https://botan.randombit.net/releases/Botan-$_botanver.tar.xz")
 sha256sums=('SKIP'
             '5b85cba0f014d344eb8e9919aee0a3bdc31e16acb05816410025be9bee1e0930')
@@ -60,7 +47,7 @@ _botan_modules=(
 )
 
 pkgver() {
-    cd "$srcdir/$pkgname"
+    cd "$srcdir/$pkgbase"
     printf 'r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
 }
 
@@ -85,7 +72,7 @@ build() {
     make install
 
     _use_static_botan
-    cd "$srcdir/$pkgname"
+    cd "$srcdir/$pkgbase"
     ./bin/build
 
     if readelf -d build/omapass | grep -q 'libbotan'; then
@@ -96,22 +83,39 @@ build() {
 
 check() {
     _use_static_botan
-    cd "$srcdir/$pkgname"
+    cd "$srcdir/$pkgbase"
     ./bin/test
 }
 
-package() {
+package_omapass-git() {
+    depends=('qt6-base' 'qt6-declarative' 'hicolor-icon-theme' 'zlib')
+    # Os CLIs dos backends sao opcionais de proposito: cada um habilita um tipo
+    # de banco, e quem usa so o KeePass ou o Bitwarden (ambos falados direto,
+    # sem programa externo) nao precisa de nenhum. `omapass --doctor` diz o que foi encontrado.
+    optdepends=('1password-cli: contas 1Password'
+                'pass: criar password-stores pela interface'
+                'gnupg: bancos do pass'
+                'libsecret: desbloqueio por PIN'
+                'omapass-ssh-askpass-git: registrar o omapass como /usr/lib/ssh/ssh-askpass do OpenSSH'
+                'x11-ssh-askpass: alternativa leve para a janela de confirmação de chave SSH'
+                'qt6-wayland: janela nativa em sessão Wayland (sem ele, via XWayland)'
+                'fd: varredura de bancos ~5x mais rápida numa home grande'
+                'wl-clipboard: limpeza automática do clipboard mais confiável em sessão Wayland'
+                'xdg-desktop-portal: modo claro/escuro e tamanho de texto do desktop')
+    provides=('omapass')
+    conflicts=('omapass')
+
     # As bibliotecas do Qt tem simbolos versionados: o binario so roda com o
     # Qt com que foi compilado ou mais novo, entao o pacote exige essa versao
     local _qt
     _qt=$(qmake6 -query QT_VERSION | cut -d. -f1,2)
-    depends=("${depends[@]/#qt6-base/qt6-base>=$_qt}")
-    depends=("${depends[@]/#qt6-declarative/qt6-declarative>=$_qt}")
+    depends[0]="qt6-base>=$_qt"
+    depends[1]="qt6-declarative>=$_qt"
 
     # `make install` passa pelo ./bin/build de novo: sem isto o qmake
     # reencontraria o botan do sistema e religaria o binario contra ele
     _use_static_botan
-    cd "$srcdir/$pkgname"
+    cd "$srcdir/$pkgbase"
     make DESTDIR="$pkgdir" PREFIX=/usr install
     if readelf -d "$pkgdir/usr/bin/omapass" | grep -q 'libbotan'; then
         echo "omapass foi linkado contra o libbotan do sistema, nao o estatico" >&2
@@ -120,4 +124,15 @@ package() {
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
     install -Dm644 "$srcdir/Botan-$_botanver/license.txt" \
         "$pkgdir/usr/share/licenses/$pkgname/LICENSE-Botan"
+}
+
+package_omapass-ssh-askpass-git() {
+    pkgdesc="Registra o omapass como /usr/lib/ssh/ssh-askpass padrão para o OpenSSH"
+    depends=("omapass-git=$pkgver-$pkgrel")
+    provides=('omapass-ssh-askpass' 'x11-ssh-askpass')
+    conflicts=('omapass-ssh-askpass' 'x11-ssh-askpass')
+
+    install -d "$pkgdir/usr/lib/ssh"
+    ln -s /usr/bin/omapass-ssh-askpass "$pkgdir/usr/lib/ssh/ssh-askpass"
+    install -Dm644 "$srcdir/$pkgbase/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

@@ -4,6 +4,8 @@
 
 #include "config.h"
 #include "i18n.h"
+#include "appcontroller.h"
+#include "vault.h"
 
 class TestConfig : public QObject {
     Q_OBJECT
@@ -151,6 +153,56 @@ private slots:
         config = Config::load(path);
         QVERIFY(config.siteIcons);
         QVERIFY(config.siteIconsDuckDuckGo);
+    }
+
+    void autoSearchIsOptInAndRegisteredDatabasesStayVisible() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString cfgPath = dir.filePath(QStringLiteral("config.toml"));
+        Config::writeDefaultConfig(cfgPath);
+        AppConfig config = Config::load(cfgPath);
+        QVERIFY(!config.autoSearch);
+
+        QVERIFY(Config::writeValues(cfgPath, {{QStringLiteral("general.auto_search"), QStringLiteral("true")}}));
+        config = Config::load(cfgPath);
+        QVERIFY(config.autoSearch);
+
+        const QString kdbxPath = dir.filePath(QStringLiteral("vault.kdbx"));
+        QFile kdbxFile(kdbxPath);
+        QVERIFY(kdbxFile.open(QIODevice::WriteOnly));
+        kdbxFile.write("placeholder");
+        kdbxFile.close();
+
+        const QVector<DbRef> withoutAuto = Vault::findLocalDatabases(dir.path(), false, {});
+        QVERIFY(std::none_of(withoutAuto.cbegin(), withoutAuto.cend(),
+                             [&kdbxPath](const DbRef &r) { return r.path == kdbxPath; }));
+
+        const QVector<DbRef> withRegistered = Vault::findLocalDatabases(
+            dir.path(), false, {{kdbxPath, VaultKind::Keepass}});
+        QVERIFY(std::any_of(withRegistered.cbegin(), withRegistered.cend(),
+                            [&kdbxPath](const DbRef &r) { return r.path == kdbxPath; }));
+
+        const QVector<DbRef> withAuto = Vault::findLocalDatabases(dir.path(), true, {});
+        QVERIFY(std::any_of(withAuto.cbegin(), withAuto.cend(),
+                            [&kdbxPath](const DbRef &r) { return r.path == kdbxPath; }));
+    }
+
+    void openDatabasePathRegistersAndStartsUnlockPrompt() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString kdbxPath = dir.filePath(QStringLiteral("opened.kdbx"));
+        QFile kdbxFile(kdbxPath);
+        QVERIFY(kdbxFile.open(QIODevice::WriteOnly));
+        kdbxFile.write("placeholder");
+        kdbxFile.close();
+
+        AppConfig config;
+        config.autoSearch = false;
+        config.searchPath = dir.path();
+
+        AppController controller(config);
+        QVERIFY(controller.openDatabasePath(kdbxPath));
+        QCOMPARE(controller.pendingDatabase().value(QStringLiteral("path")).toString(), kdbxPath);
     }
 
     void translationsInterpolateArguments() {

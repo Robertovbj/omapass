@@ -31,6 +31,7 @@
         <file alias="OnePasswordLoginModal.qml">OnePasswordLoginModal.qml</file>
         <file alias="RenameGroupModal.qml">RenameGroupModal.qml</file>
         <file alias="SettingsModal.qml">SettingsModal.qml</file>
+        <file alias="SshAskpassWindow.qml">SshAskpassWindow.qml</file>
         <file alias="UnlockModal.qml">UnlockModal.qml</file>
         <file alias="locales/app.yml">../locales/app.yml</file>
         <file alias="omapass.png">../icons/omapass-256.png</file>

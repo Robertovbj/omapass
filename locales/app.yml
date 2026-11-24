@@ -24,6 +24,21 @@ cli.help_help:
 cli.help_doctor:
   pt-BR: "Mostra o que o omapass encontrou no sistema"
   en: "Show what omapass found on the system"
+cli.help_ssh_askpass:
+  pt-BR: "Abre o diálogo de confirmação/senha para o OpenSSH (SSH_ASKPASS)"
+  en: "Open the confirmation/passphrase dialog for OpenSSH (SSH_ASKPASS)"
+cli.help_install_ssh_agent:
+  pt-BR: "Habilita o ssh-agent do usuário e grava SSH_AUTH_SOCK (environment.d / uwsm)"
+  en: "Enable the user ssh-agent and write SSH_AUTH_SOCK (environment.d / uwsm)"
+cli.help_uninstall_ssh_agent:
+  pt-BR: "Remove a configuração de ssh-agent criada pelo omapass"
+  en: "Remove the ssh-agent configuration created by omapass"
+cli.help_install_ssh_askpass:
+  pt-BR: "Configura o omapass como SSH_ASKPASS na sessão do usuário (environment.d / uwsm)"
+  en: "Configure omapass as SSH_ASKPASS for the user session (environment.d / uwsm)"
+cli.help_uninstall_ssh_askpass:
+  pt-BR: "Remove a configuração de SSH_ASKPASS criada pelo omapass"
+  en: "Remove the SSH_ASKPASS configuration created by omapass"
 cli.doctor_missing:
   pt-BR: "não encontrado"
   en: "not found"
@@ -67,6 +82,9 @@ cli.kdbx2pass_usage:
 settings.title:
   pt-BR: "Configurações"
   en: "Settings"
+settings.auto_search:
+  pt-BR: "Buscar bancos (.kdbx e pass) automaticamente ao abrir"
+  en: "Automatically search for databases (.kdbx and pass) on startup"
 settings.path_label:
   pt-BR: "Diretório de busca de bancos"
   en: "Directory searched for databases"
@@ -118,6 +136,21 @@ settings.write_error:
 settings.help:
   pt-BR: "Configurações"
   en: "Settings"
+settings.section_ssh:
+  pt-BR: "SSH"
+  en: "SSH"
+settings.ssh_agent:
+  pt-BR: "Configurar e iniciar o ssh-agent na sessão do usuário (SSH_AUTH_SOCK)"
+  en: "Configure and start ssh-agent for the user session (SSH_AUTH_SOCK)"
+settings.ssh_agent_hint:
+  pt-BR: "Habilita o serviço ssh-agent do usuário e grava SSH_AUTH_SOCK em ~/.config/environment.d (e ~/.config/uwsm/env.d no Omarchy/UWSM). Faça logout/login para aplicar aos terminais já abertos."
+  en: "Enables the user ssh-agent service and writes SSH_AUTH_SOCK to ~/.config/environment.d (and ~/.config/uwsm/env.d on Omarchy/UWSM). Log out and back in to apply to existing terminals."
+settings.ssh_askpass:
+  pt-BR: "Usar o omapass como janela de confirmação SSH (SSH_ASKPASS)"
+  en: "Use omapass as the SSH confirmation dialog (SSH_ASKPASS)"
+settings.ssh_askpass_hint:
+  pt-BR: "Grava SSH_ASKPASS em ~/.config/environment.d (e ~/.config/uwsm/env.d no Omarchy/UWSM). Faça logout/login ou reinicie o ssh-agent para aplicar às sessões já abertas."
+  en: "Writes SSH_ASKPASS to ~/.config/environment.d (and ~/.config/uwsm/env.d on Omarchy/UWSM). Log out and back in or restart ssh-agent to apply to existing sessions."
 
 generator.title:
   pt-BR: "Gerar senha"
@@ -680,6 +713,27 @@ db_app.account_check_body:
 db_app.no_db_found_confirm:
   pt-BR: "Nenhum banco foi encontrado. Quer criar um agora?"
   en: "No database was found. Do you want to create one now?"
+db_app.enable_auto_search:
+  pt-BR: "Ativar busca automática de bancos"
+  en: "Enable automatic database search"
+db_app.open_existing_kdbx:
+  pt-BR: "Selecionar arquivo .kdbx existente…"
+  en: "Select existing .kdbx file…"
+db_app.open_existing_kdbx_pick:
+  pt-BR: "Selecionar banco KeePassXC (.kdbx)"
+  en: "Select KeePassXC database (.kdbx)"
+db_app.kdbx_filter:
+  pt-BR: "Bancos KeePassXC (*.kdbx)"
+  en: "KeePassXC databases (*.kdbx)"
+db_app.existing_kdbx_invalid:
+  pt-BR: "O arquivo .kdbx selecionado não foi encontrado."
+  en: "The selected .kdbx file could not be found."
+db_app.open_existing_pass:
+  pt-BR: "Selecionar diretório pass existente…"
+  en: "Select existing pass directory…"
+db_app.open_existing_pass_pick:
+  pt-BR: "Selecionar diretório do pass"
+  en: "Select pass directory"
 db_app.create_db_title:
   pt-BR: "Novo banco KeePassXC"
   en: "New KeePassXC database"
@@ -731,8 +785,8 @@ ui.type_login:
   pt-BR: "senha"
   en: "password"
 ui.type_ssh:
-  pt-BR: "SSH"
-  en: "SSH"
+  pt-BR: "ssh"
+  en: "ssh"
 ui.type_group:
   pt-BR: "grupo"
   en: "group"
@@ -1268,6 +1322,55 @@ ssh.public_hint:
 ssh.key_mismatch:
   pt-BR: "A chave pública precisa corresponder à chave privada."
   en: "The public key must match the private key."
+
+ssh.askpass_confirm_title:
+  pt-BR: "Confirmar uso da chave SSH"
+  en: "Confirm SSH key use"
+ssh.askpass_info_title:
+  pt-BR: "Aviso do SSH"
+  en: "SSH notice"
+ssh.askpass_passphrase_title:
+  pt-BR: "Autenticação SSH"
+  en: "SSH authentication"
+ssh.askpass_confirm_fallback:
+  pt-BR: "Permitir o uso desta chave SSH?"
+  en: "Allow use of this SSH key?"
+ssh.askpass_passphrase_fallback:
+  pt-BR: "Digite a frase secreta ou senha solicitada pelo SSH."
+  en: "Enter the passphrase or password requested by SSH."
+ssh.askpass_passphrase_placeholder:
+  pt-BR: "Frase secreta ou senha"
+  en: "Passphrase or password"
+ssh.askpass_allow:
+  pt-BR: "Permitir"
+  en: "Allow"
+ssh.askpass_deny:
+  pt-BR: "Recusar"
+  en: "Deny"
+ssh.askpass_ok:
+  pt-BR: "OK"
+  en: "OK"
+ssh.askpass_installed:
+  pt-BR: "SSH_ASKPASS configurado para o omapass (reinicie a sessão ou o ssh-agent para aplicar)."
+  en: "SSH_ASKPASS configured for omapass (restart your session or ssh-agent to apply)."
+ssh.askpass_uninstalled:
+  pt-BR: "Configuração de SSH_ASKPASS do omapass removida."
+  en: "Removed omapass SSH_ASKPASS configuration."
+ssh.askpass_unsupported:
+  pt-BR: "A configuração automática de SSH_ASKPASS está disponível apenas no Linux."
+  en: "Automatic SSH_ASKPASS configuration is only available on Linux."
+ssh.agent_setup_installed:
+  pt-BR: "ssh-agent configurado para a sessão do usuário (faça logout/login para aplicar aos terminais)."
+  en: "ssh-agent configured for the user session (log out and back in to apply to terminals)."
+ssh.agent_setup_uninstalled:
+  pt-BR: "Configuração de ssh-agent do omapass removida."
+  en: "Removed omapass ssh-agent configuration."
+ssh.agent_setup_unsupported:
+  pt-BR: "A configuração automática do ssh-agent está disponível apenas no Linux."
+  en: "Automatic ssh-agent configuration is only available on Linux."
+ssh.agent_binary_missing:
+  pt-BR: "O executável ssh-agent (OpenSSH) não foi encontrado no sistema."
+  en: "The ssh-agent executable (OpenSSH) was not found on the system."
 
 help.click_hints:
   pt-BR: "Mostrar letras para clicar"

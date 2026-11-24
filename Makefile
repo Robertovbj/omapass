@@ -3,6 +3,7 @@ DESTDIR ?=
 BINDIR := $(DESTDIR)$(PREFIX)/bin
 DATADIR := $(DESTDIR)$(PREFIX)/share
 DESKTOPDIR := $(DATADIR)/applications
+MIMEDIR := $(DATADIR)/mime/packages
 ICONDIR := $(DATADIR)/icons/hicolor/scalable/apps
 WORDLISTDIR := $(DATADIR)/omapass/wordlists
 
@@ -27,7 +28,9 @@ appimage:
 
 install: build
 	install -Dm755 $(BUILD_DIR)/$(TARGET) $(BINDIR)/$(TARGET)
+	ln -sf $(TARGET) $(BINDIR)/$(TARGET)-ssh-askpass
 	install -Dm644 $(TARGET).desktop $(DESKTOPDIR)/$(TARGET).desktop
+	install -Dm644 $(TARGET).xml $(MIMEDIR)/$(TARGET).xml
 	install -Dm644 icons/$(TARGET).svg $(ICONDIR)/$(TARGET).svg
 	install -Dm644 wordlists/eff_large.wordlist $(WORDLISTDIR)/eff_large.wordlist
 	install -Dm644 wordlists/pt-BR.wordlist $(WORDLISTDIR)/pt-BR.wordlist
@@ -35,7 +38,9 @@ install: build
 
 uninstall:
 	rm -f $(BINDIR)/$(TARGET)
+	rm -f $(BINDIR)/$(TARGET)-ssh-askpass
 	rm -f $(DESKTOPDIR)/$(TARGET).desktop
+	rm -f $(MIMEDIR)/$(TARGET).xml
 	rm -f $(ICONDIR)/$(TARGET).svg
 	rm -f $(WORDLISTDIR)/eff_large.wordlist
 	rm -f $(WORDLISTDIR)/pt-BR.wordlist

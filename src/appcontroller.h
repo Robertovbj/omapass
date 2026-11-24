@@ -41,6 +41,7 @@ class AppController : public QObject, public BrowserApp {
 
     Q_PROPERTY(QVariantList databases READ databases NOTIFY databasesChanged)
     Q_PROPERTY(bool anyDatabaseFound READ anyDatabaseFound NOTIFY databasesChanged)
+    Q_PROPERTY(bool autoSearch READ autoSearch NOTIFY autoSearchChanged)
     // The search for databases is still running. The window is up and usable
     // meanwhile, so "nothing here" and "nothing found yet" have to be told
     // apart: only the first one offers to create a database.
@@ -107,6 +108,7 @@ public:
 
     QVariantList databases() const;
     bool anyDatabaseFound() const { return !m_databases.isEmpty(); }
+    bool autoSearch() const { return m_config.autoSearch; }
     bool scanning() const { return m_scanning; }
     bool checkingAccount() const { return m_checkingAccount; }
     QString checkingAccountName() const { return m_checkingAccountName; }
@@ -169,8 +171,12 @@ public:
     Q_INVOKABLE void lock();
     void lockAll();
 
-    // Database creation
+    // Database creation & registration
     Q_INVOKABLE void createKeepassDatabase(const QString &name, const QString &password);
+    Q_INVOKABLE void openExistingKeepassDatabase(const QString &fileUrlOrPath);
+    Q_INVOKABLE void openExistingPassStore(const QString &dirUrlOrPath);
+    Q_INVOKABLE bool openDatabasePath(const QString &pathOrUrl);
+    Q_INVOKABLE void enableAutoSearch();
     Q_INVOKABLE QVariantList gpgKeys() const;
     Q_INVOKABLE QStringList directorySuggestions(const QString &path) const;
     Q_INVOKABLE QString defaultPassStoreDirectory() const;
@@ -273,6 +279,7 @@ signals:
     void busyChanged();
     void syncingChanged();
     void databasesChanged();
+    void autoSearchChanged();
     void scanningChanged();
     void checkingAccountChanged();
     void pendingDatabaseChanged();

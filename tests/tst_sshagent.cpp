@@ -103,12 +103,17 @@ private slots:
 
         // A new instance has no record for a key left in the agent.
         QVERIFY(agent.add(second, key, {}).isEmpty());
+        QVERIFY(agent.isLoaded(second));
+        // Another entry with the same key is still detected as loaded in the agent.
+        QVERIFY(agent.isLoaded(QStringLiteral("duplicate-entry"), key));
         SshAgent restarted;
         QVERIFY(!restarted.tracks(second));
+        QVERIFY(restarted.isLoaded(second, key));
         QVERIFY(!restarted.add(second, key, {}).isEmpty());
         QVERIFY(restarted.clear().isEmpty());
         QVERIFY(listed().contains(second));
         QVERIFY(restarted.removeKey(key).isEmpty());
+        QVERIFY(!restarted.isLoaded(second, key));
         QCOMPARE(listed(), before);
         QVERIFY(restarted.add(second, key, {false, true, 0}).isEmpty());
         QVERIFY(!canSign());
@@ -130,6 +135,41 @@ private slots:
         QVERIFY(agent.clear().isEmpty());
 #endif
 #endif
+    }
+
+    void installsAndUninstallsAgentSetupFiles() {
+        QTemporaryDir home;
+        QVERIFY(home.isValid());
+        QVERIFY(!SshAgent::isSetupInstalled(home.path()));
+
+        QStringList written;
+        QString error;
+        // Without a system ssh-agent.socket: writes environment.d, uwsm/env.d,
+        // and the fallback user service.
+        QVERIFY(SshAgent::installSetup(home.path(), false, true, false, &written, &error));
+        QVERIFY(error.isEmpty());
+        QCOMPARE(written.size(), 3);
+        QVERIFY(SshAgent::isSetupInstalled(home.path()));
+
+        QFile envFile(home.filePath(QStringLiteral(".config/environment.d/90-omapass-ssh-agent.conf")));
+        QVERIFY(envFile.open(QIODevice::ReadOnly | QIODevice::Text));
+        QVERIFY(QString::fromUtf8(envFile.readAll())
+                    .contains(QStringLiteral("SSH_AUTH_SOCK=${XDG_RUNTIME_DIR}/ssh-agent.socket")));
+
+        QFile uwsmFile(home.filePath(QStringLiteral(".config/uwsm/env.d/20-omapass-ssh-agent")));
+        QVERIFY(uwsmFile.open(QIODevice::ReadOnly | QIODevice::Text));
+        QVERIFY(QString::fromUtf8(uwsmFile.readAll())
+                    .contains(QStringLiteral("export SSH_AUTH_SOCK=\"${XDG_RUNTIME_DIR}/ssh-agent.socket\"")));
+
+        QFile unitFile(home.filePath(QStringLiteral(".config/systemd/user/omapass-ssh-agent.service")));
+        QVERIFY(unitFile.open(QIODevice::ReadOnly | QIODevice::Text));
+        QVERIFY(QString::fromUtf8(unitFile.readAll()).contains(QStringLiteral("-D -a %t/ssh-agent.socket")));
+
+        QStringList removed;
+        QVERIFY(SshAgent::uninstallSetup(home.path(), false, &removed, &error));
+        QVERIFY(error.isEmpty());
+        QCOMPARE(removed.size(), 3);
+        QVERIFY(!SshAgent::isSetupInstalled(home.path()));
     }
 };
 

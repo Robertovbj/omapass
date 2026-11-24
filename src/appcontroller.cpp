@@ -9,6 +9,7 @@
 #include "iconchoice.h"
 #include "onepasswordvault.h"
 #include "passstore.h"
+#include "sshaskpass.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -45,6 +46,46 @@ constexpr int accountCheckNoticeMs = 200;
 const auto windowGeometrySetting = QStringLiteral("window/geometry");
 // The Bitwarden server last logged into, which the next login sheet offers.
 const auto lastServerSetting = QStringLiteral("bitwarden/lastServer");
+const auto registeredKeepassSetting = QStringLiteral("registeredDatabases/kdbx");
+const auto registeredPassSetting = QStringLiteral("registeredDatabases/pass");
+
+QString localPathFromInput(const QString &pathOrUrl) {
+    QString trimmed = pathOrUrl.trimmed();
+    if (trimmed.isEmpty())
+        return {};
+    const QUrl url(trimmed);
+    if (url.isValid() && url.isLocalFile())
+        trimmed = url.toLocalFile();
+    if (trimmed.startsWith(QStringLiteral("~/")))
+        trimmed = QDir::homePath() + trimmed.mid(1);
+    return QDir::cleanPath(QFileInfo(trimmed).absoluteFilePath());
+}
+
+QVector<DbRef> loadRegisteredDatabases() {
+    QSettings settings;
+    QVector<DbRef> refs;
+    for (const QString &path : settings.value(registeredKeepassSetting).toStringList()) {
+        if (!path.isEmpty())
+            refs.append({path, VaultKind::Keepass});
+    }
+    for (const QString &path : settings.value(registeredPassSetting).toStringList()) {
+        if (!path.isEmpty())
+            refs.append({path, VaultKind::Pass});
+    }
+    return refs;
+}
+
+void registerLocalDatabase(const QString &path, VaultKind kind) {
+    if (path.isEmpty())
+        return;
+    const QString key = kind == VaultKind::Pass ? registeredPassSetting : registeredKeepassSetting;
+    QSettings settings;
+    QStringList paths = settings.value(key).toStringList();
+    if (!paths.contains(path)) {
+        paths.append(path);
+        settings.setValue(key, paths);
+    }
+}
 
 // Outcome of a backend call run in the background.
 struct TaskResult {
@@ -627,6 +668,8 @@ bool AppController::passBackend() const {
 // the local files never wait for an account that needs the network.
 void AppController::refreshDatabases() {
     const QString path = m_config.searchPath;
+    const bool autoSearch = m_config.autoSearch;
+    const QVector<DbRef> registered = loadRegisteredDatabases();
     const quint64 generation = ++m_scanGeneration;
     m_scansOutstanding = 2;
     m_databaseQuery.clear();
@@ -649,7 +692,7 @@ void AppController::refreshDatabases() {
     };
 
     start(&m_localDatabases, &m_localScanTask,
-          [path]() { return Vault::findLocalDatabases(path); });
+          [path, autoSearch, registered]() { return Vault::findLocalDatabases(path, autoSearch, registered); });
     start(&m_accountDatabases, &m_accountScanTask,
           []() { return Vault::findAccountDatabases(); });
 }
@@ -1219,9 +1262,20 @@ QVariantMap AppController::sshKeyOptions(const QString &entry) const {
     if (!SshAgent::supported() || !m_vault || !key)
         return {};
     const auto options = sshOptions(m_vault.data(), *key);
+    const QString id = sshSettingsKey(m_vault.data(), *key);
+    bool inAgent = false;
+    if (m_sshAgent.tracks(id)) {
+        inAgent = m_sshAgent.isLoaded(id);
+    } else {
+        Secret privateKey;
+        QString error;
+        if (m_vault->fetchSshKey(entry, key->id, &privateKey, &error))
+            inAgent = m_sshAgent.isLoaded(id, privateKey);
+    }
     return {{QStringLiteral("addOnUnlock"), options.addOnUnlock},
             {QStringLiteral("confirm"), options.confirm},
-            {QStringLiteral("lifetimeSeconds"), options.lifetimeSeconds}};
+            {QStringLiteral("lifetimeSeconds"), options.lifetimeSeconds},
+            {QStringLiteral("inAgent"), inAgent}};
 }
 
 bool AppController::saveSshKeyOptions(const QString &entry, bool addOnUnlock, bool confirm,
@@ -1885,6 +1939,7 @@ void AppController::createPassStore(const QString &directory, const QString &key
             return;
         }
 
+        registerLocalDatabase(QDir::cleanPath(QFileInfo(dir).absoluteFilePath()), VaultKind::Pass);
         refreshDatabases();
         emit databaseCreated();
 
@@ -1896,6 +1951,77 @@ void AppController::createPassStore(const QString &directory, const QString &key
         emit pendingDatabaseChanged();
         setBusy(false);
     });
+}
+
+void AppController::openExistingKeepassDatabase(const QString &fileUrlOrPath) {
+    const QString path = localPathFromInput(fileUrlOrPath);
+    if (path.isEmpty())
+        return;
+
+    const QFileInfo info(path);
+    if (!info.exists() || !info.isFile()) {
+        setUnlockError(I18n::t(QStringLiteral("db_app.existing_kdbx_invalid")));
+        return;
+    }
+
+    registerLocalDatabase(path, VaultKind::Keepass);
+    setUnlockError(QString());
+    refreshDatabases();
+    emit databaseCreated();
+    askForPassword({path, VaultKind::Keepass});
+}
+
+void AppController::openExistingPassStore(const QString &dirUrlOrPath) {
+    const QString path = localPathFromInput(dirUrlOrPath);
+    if (path.isEmpty())
+        return;
+
+    if (!PassStore::isStore(path)) {
+        setUnlockError(I18n::t(QStringLiteral("pass.store_not_initialized"),
+                               QStringLiteral("path"), path));
+        return;
+    }
+
+    registerLocalDatabase(path, VaultKind::Pass);
+    setUnlockError(QString());
+    refreshDatabases();
+    emit databaseCreated();
+    askForPassword({path, VaultKind::Pass});
+}
+
+bool AppController::openDatabasePath(const QString &pathOrUrl) {
+    const QString path = localPathFromInput(pathOrUrl);
+    if (path.isEmpty())
+        return false;
+
+    const QFileInfo info(path);
+    if (info.exists() && info.isFile()) {
+        registerLocalDatabase(path, VaultKind::Keepass);
+        setUnlockError(QString());
+        refreshDatabases();
+        askForPassword({path, VaultKind::Keepass});
+        return true;
+    }
+    if (PassStore::isStore(path)) {
+        registerLocalDatabase(path, VaultKind::Pass);
+        setUnlockError(QString());
+        refreshDatabases();
+        askForPassword({path, VaultKind::Pass});
+        return true;
+    }
+    return false;
+}
+
+void AppController::enableAutoSearch() {
+    if (!Config::writeValues({{QStringLiteral("general.auto_search"), QStringLiteral("true")}})) {
+        showMessage(I18n::t(QStringLiteral("settings.write_error")), true);
+        return;
+    }
+    if (!m_config.autoSearch) {
+        m_config.autoSearch = true;
+        emit autoSearchChanged();
+    }
+    refreshDatabases();
 }
 
 bool AppController::onePasswordAvailable() const {
@@ -2249,7 +2375,8 @@ void AppController::setUnlockError(const QString &error) {
 }
 
 QVariantMap AppController::settings() const {
-    return {{QStringLiteral("path"), m_config.searchPath},
+    return {{QStringLiteral("autoSearch"), m_config.autoSearch},
+            {QStringLiteral("path"), m_config.searchPath},
             {QStringLiteral("recency"), m_config.recencyEnabled},
             {QStringLiteral("lockEnabled"), m_config.lockMinutes.has_value()},
             {QStringLiteral("lockMinutes"), m_config.lockMinutes.value_or(10)},
@@ -2263,6 +2390,10 @@ QVariantMap AppController::settings() const {
              m_vault.isNull() ? QString() : Vault::displayName({m_vault->path(), m_vault->kind()})},
             {QStringLiteral("browserIntegration"), m_config.browserIntegration},
             {QStringLiteral("browserSupported"), BrowserIntegration::supported()},
+            {QStringLiteral("sshAgentSetup"), SshAgent::isSetupInstalled()},
+            {QStringLiteral("sshAgentSetupSupported"), SshAgent::setupSupported()},
+            {QStringLiteral("sshAskpass"), SshAskpass::isInstalled()},
+            {QStringLiteral("sshAskpassSupported"), SshAskpass::integrationSupported()},
             {QStringLiteral("wordlistInUse"), Generator::wordlistPath()},
             {QStringLiteral("configPath"), Config::configDir() + QStringLiteral("/config.toml")}};
 }
@@ -2270,6 +2401,7 @@ QVariantMap AppController::settings() const {
 // Saved to config.toml and applied right away — the sheet only offers the
 // settings that can take effect without a restart.
 void AppController::saveSettings(const QVariantMap &values) {
+    const bool autoSearch = values.value(QStringLiteral("autoSearch")).toBool();
     QString path = values.value(QStringLiteral("path")).toString().trimmed();
     if (path.isEmpty())
         path = m_config.searchPath;
@@ -2286,8 +2418,13 @@ void AppController::saveSettings(const QVariantMap &values) {
     const bool duckDuckGo = siteIcons && values.value(QStringLiteral("siteIconsDuckDuckGo")).toBool();
     const bool browser = BrowserIntegration::supported()
         && values.value(QStringLiteral("browserIntegration")).toBool();
+    const bool sshAgentSetup = SshAgent::setupSupported()
+        && values.value(QStringLiteral("sshAgentSetup")).toBool();
+    const bool sshAskpass = SshAskpass::integrationSupported()
+        && values.value(QStringLiteral("sshAskpass")).toBool();
 
     QMap<QString, QString> toml;
+    toml.insert(QStringLiteral("general.auto_search"), autoSearch ? QStringLiteral("true") : QStringLiteral("false"));
     toml.insert(QStringLiteral("general.path"), Config::tomlString(path));
     toml.insert(QStringLiteral("general.recency"), recency ? QStringLiteral("true") : QStringLiteral("false"));
     toml.insert(QStringLiteral("general.lock_minutes"),
@@ -2308,10 +2445,14 @@ void AppController::saveSettings(const QVariantMap &values) {
         return;
     }
 
+    const bool autoSearchUpdated = autoSearch != m_config.autoSearch;
     const bool pathChanged = path != m_config.searchPath;
     const bool recencyChanged = recency != m_config.recencyEnabled;
 
+    m_config.autoSearch = autoSearch;
     m_config.searchPath = path;
+    if (autoSearchUpdated)
+        emit autoSearchChanged();
     m_config.recencyEnabled = recency;
     m_config.lockMinutes = lockEnabled ? std::optional<int>(lockMinutes) : std::nullopt;
     m_config.wordlist = wordlist;
@@ -2338,13 +2479,37 @@ void AppController::saveSettings(const QVariantMap &values) {
     applyLockSettings();
     if (recencyChanged)
         m_history = History(recency);
-    if (pathChanged || recencyChanged)
+    if (autoSearchUpdated || (autoSearch && pathChanged) || recencyChanged)
         refreshDatabases();
 
     if (iconError.isEmpty())
         showMessage(I18n::t(QStringLiteral("settings.saved")), false);
     else
         showMessage(iconError, true);
+
+    if (SshAgent::setupSupported() && sshAgentSetup != SshAgent::isSetupInstalled()) {
+        QString agentError;
+        const bool ok = sshAgentSetup
+            ? SshAgent::installSetup(nullptr, &agentError)
+            : SshAgent::uninstallSetup(nullptr, &agentError);
+        if (!ok)
+            showMessage(agentError, true);
+        else
+            showMessage(I18n::t(sshAgentSetup ? QStringLiteral("ssh.agent_setup_installed")
+                                              : QStringLiteral("ssh.agent_setup_uninstalled")), false);
+    }
+
+    if (SshAskpass::integrationSupported() && sshAskpass != SshAskpass::isInstalled()) {
+        QString askpassError;
+        const bool ok = sshAskpass
+            ? SshAskpass::install(nullptr, &askpassError)
+            : SshAskpass::uninstall(nullptr, &askpassError);
+        if (!ok)
+            showMessage(askpassError, true);
+        else
+            showMessage(I18n::t(sshAskpass ? QStringLiteral("ssh.askpass_installed")
+                                           : QStringLiteral("ssh.askpass_uninstalled")), false);
+    }
     // After the line above, so what turning it on says (the browsers it was
     // set up for, or why not) is what stays on the status line.
     const bool browserChanged = browser != m_config.browserIntegration;
