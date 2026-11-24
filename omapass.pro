@@ -23,9 +23,11 @@ TEMPLATE = app
 macx {
     TARGET = Omapass
     QMAKE_TARGET_BUNDLE_PREFIX = io.github.higorhgon
-    LIBS += -lz
+    LIBS += -lz -framework AppKit
+    OBJECTIVE_SOURCES += src/windowprivacy_mac.mm
 } else {
     PKGCONFIG += zlib
+    SOURCES += src/windowprivacy.cpp
 }
 
 HEADERS += \
@@ -74,7 +76,8 @@ HEADERS += \
     src/systemtheme.h \
     src/totp.h \
     src/updater.h \
-    src/vault.h
+    src/vault.h \
+    src/windowprivacy.h
 
 SOURCES += \
     src/main.cpp \

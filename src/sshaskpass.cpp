@@ -17,6 +17,7 @@
 #include "palette.h"
 #include "sessionlock.h"
 #include "systemtheme.h"
+#include "windowprivacy.h"
 
 #include <QFont>
 #include <QIcon>
@@ -361,6 +362,9 @@ int run(int argc, char *argv[], const QStringList &args) {
                     << QFile::exists(QStringLiteral(":/SshAskpassWindow.qml"));
         return 1;
     }
+
+    if (auto *window = qobject_cast<QWindow *>(engine.rootObjects().first()))
+        WindowPrivacy::excludeFromCapture(window);
 
     app.exec();
 

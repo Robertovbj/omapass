@@ -32,6 +32,7 @@
 #include "sshaskpass.h"
 #include "systemtheme.h"
 #include "updater.h"
+#include "windowprivacy.h"
 
 #ifdef Q_OS_WIN
 #define WIN32_LEAN_AND_MEAN
@@ -387,6 +388,9 @@ int main(int argc, char *argv[]) {
 #endif
         return -1;
     }
+
+    if (auto *window = qobject_cast<QWindow *>(engine.rootObjects().first()))
+        WindowPrivacy::excludeFromCapture(window);
 
     if (Updater::supported())
         QTimer::singleShot(3000, &updater, [&updater]() { updater.checkForUpdates(false); });
