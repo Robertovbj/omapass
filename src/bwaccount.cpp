@@ -384,7 +384,8 @@ QJsonObject BwAccount::cipherRequest(const QJsonObject &encrypted, const QString
 
     // Servers check that what they are given was encrypted by the account
     // sending it, so a client with stale keys cannot overwrite an item.
-    request.insert(QStringLiteral("encryptedFor"), userId);
+    if (!userId.isEmpty())
+        request.insert(QStringLiteral("encryptedFor"), userId);
     request.insert(QStringLiteral("name"), encryptedField(name, key));
     request.insert(QStringLiteral("notes"), encryptedField(data.notes, key));
     request.insert(QStringLiteral("folderId"), folderId.isEmpty() ? QJsonValue(QJsonValue::Null)
