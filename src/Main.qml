@@ -57,9 +57,78 @@ ApplicationWindow {
         onDismissed: window.settingsOpen = false
     }
 
+    property bool updateBannerDismissed: false
+
+    Rectangle {
+        id: updateBanner
+        visible: updater.supported && (updater.updateAvailable || updater.downloading)
+                 && !window.updateBannerDismissed
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: visible ? Math.round(44 * window.s) : 0
+        color: theme.panel
+        z: 10
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: 1
+            color: theme.border
+        }
+
+        Row {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.leftMargin: Math.round(14 * window.s)
+            anchors.rightMargin: Math.round(10 * window.s)
+            spacing: Math.round(8 * window.s)
+
+            Text {
+                width: parent.width - bannerActions.width - Math.round(8 * window.s)
+                anchors.verticalCenter: parent.verticalCenter
+                text: updater.downloading
+                    ? updater.statusText
+                    : i18n.t("update.available", { "version": updater.latestVersion })
+                color: updater.statusIsError ? theme.error : theme.foreground
+                font.pixelSize: Math.round(13 * window.s)
+                elide: Text.ElideRight
+            }
+
+            Row {
+                id: bannerActions
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Math.round(6 * window.s)
+
+                AppButton {
+                    visible: updater.updateAvailable && !updater.downloading
+                    primary: true
+                    implicitHeight: Math.round(28 * window.s)
+                    text: i18n.t("update.install_now")
+                    onClicked: updater.installUpdate()
+                }
+
+                AppButton {
+                    visible: !updater.downloading
+                    flat: true
+                    implicitHeight: Math.round(28 * window.s)
+                    leftPadding: Math.round(8 * window.s)
+                    rightPadding: Math.round(8 * window.s)
+                    text: "×"
+                    onClicked: window.updateBannerDismissed = true
+                }
+            }
+        }
+    }
+
     Loader {
         id: pageLoader
-        anchors.fill: parent
+        anchors.top: updateBanner.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
         function loadStage() {
             sourceComponent = null;
             sourceComponent = controller.stage === "databases" ? databasePage : entriesPage;

@@ -41,6 +41,7 @@ SOURCES += \
     tst_sshagent.cpp \
     tst_sshaskpass.cpp \
     tst_totp.cpp \
+    tst_updater.cpp \
     ../src/appcontroller.cpp \
     ../src/bitwardenlogin.cpp \
     ../src/entryrowsmodel.cpp \
@@ -81,6 +82,7 @@ SOURCES += \
     ../src/sshagent.cpp \
     ../src/sshaskpass.cpp \
     ../src/totp.cpp \
+    ../src/updater.cpp \
     ../src/vault.cpp
 
 HEADERS += \
@@ -125,6 +127,7 @@ HEADERS += \
     ../src/sshagent.h \
     ../src/sshaskpass.h \
     ../src/totp.h \
+    ../src/updater.h \
     ../src/vault.h
 
 RESOURCES += ../src/resources.qrc

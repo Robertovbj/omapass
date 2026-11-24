@@ -11,6 +11,7 @@
 #include <QQuickWindow>
 #include <QStandardPaths>
 #include <QTextStream>
+#include <QTimer>
 #include <QUrl>
 
 #include "appcontroller.h"
@@ -30,6 +31,7 @@
 #include "sshagent.h"
 #include "sshaskpass.h"
 #include "systemtheme.h"
+#include "updater.h"
 
 #ifdef Q_OS_WIN
 #define WIN32_LEAN_AND_MEAN
@@ -313,6 +315,7 @@ int main(int argc, char *argv[]) {
     LinkHints linkHints;
     PortalFilePicker filePicker;
     Strings strings;
+    Updater updater(&app);
 
     // `image://siteicon/<key>`: the list's site icons, read from the cache.
     class SiteIconProvider : public QQuickImageProvider {
@@ -365,6 +368,7 @@ int main(int argc, char *argv[]) {
     engine.rootContext()->setContextProperty(QStringLiteral("systemTheme"), &systemTheme);
     engine.rootContext()->setContextProperty(QStringLiteral("i18n"), &strings);
     engine.rootContext()->setContextProperty(QStringLiteral("filePicker"), &filePicker);
+    engine.rootContext()->setContextProperty(QStringLiteral("updater"), &updater);
     // The engine owns the provider and goes before the controller does.
     engine.addImageProvider(QStringLiteral("siteicon"), new SiteIconProvider(controller.siteIcons()));
     engine.addImageProvider(QStringLiteral("entryicon"), new EntryIconProvider(controller.entryIcons()));
@@ -383,6 +387,9 @@ int main(int argc, char *argv[]) {
 #endif
         return -1;
     }
+
+    if (Updater::supported())
+        QTimer::singleShot(3000, &updater, [&updater]() { updater.checkForUpdates(false); });
 
     return app.exec();
 }

@@ -1375,3 +1375,49 @@ ssh.agent_binary_missing:
 help.click_hints:
   pt-BR: "Mostrar letras para clicar"
   en: "Show click hints"
+
+update.section:
+  pt-BR: "Atualizações"
+  en: "Updates"
+update.current_version:
+  pt-BR: "Versão atual: v%{version}"
+  en: "Current version: v%{version}"
+update.check:
+  pt-BR: "Verificar atualizações"
+  en: "Check for updates"
+update.checking:
+  pt-BR: "Verificando atualizações…"
+  en: "Checking for updates…"
+update.up_to_date:
+  pt-BR: "Você já está na versão mais recente."
+  en: "You are already on the latest version."
+update.available:
+  pt-BR: "Nova versão disponível: v%{version}"
+  en: "New version available: v%{version}"
+update.install_now:
+  pt-BR: "Atualizar agora"
+  en: "Update now"
+update.downloading:
+  pt-BR: "Baixando atualização… %{percent}%"
+  en: "Downloading update… %{percent}%"
+update.check_failed:
+  pt-BR: "Não foi possível verificar atualizações: %{err}"
+  en: "Could not check for updates: %{err}"
+update.download_failed:
+  pt-BR: "Falha ao baixar a atualização: %{err}"
+  en: "Failed to download update: %{err}"
+update.invalid_response:
+  pt-BR: "Resposta inválida ao consultar a versão mais recente."
+  en: "Invalid response while checking the latest version."
+update.checksum_failed:
+  pt-BR: "A verificação SHA-256 do arquivo baixado falhou. Atualização cancelada."
+  en: "SHA-256 verification of the downloaded file failed. Update cancelled."
+update.not_writable:
+  pt-BR: "Sem permissão para substituir o arquivo do aplicativo neste diretório."
+  en: "No permission to replace the application file in this directory."
+update.install_failed:
+  pt-BR: "Não foi possível aplicar a atualização automaticamente."
+  en: "Could not apply the update automatically."
+update.dmg_opened:
+  pt-BR: "Imagem .dmg baixada e verificada. Arraste o Omapass para Aplicativos."
+  en: "Downloaded and verified .dmg image. Drag Omapass to Applications."

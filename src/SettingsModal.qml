@@ -377,4 +377,36 @@ Modal {
         text: i18n.t("settings.config_path", { "path": root.configPath })
         wrapMode: Text.WrapAnywhere
     }
+
+    SectionLabel {
+        visible: updater.supported
+        text: i18n.t("update.section").toUpperCase()
+    }
+
+    Note {
+        visible: updater.supported
+        text: updater.statusText.length > 0
+            ? updater.statusText
+            : i18n.t("update.current_version", { "version": updater.currentVersion })
+        color: updater.statusIsError ? theme.error : theme.muted
+    }
+
+    Row {
+        visible: updater.supported
+        spacing: Math.round(8 * root.s)
+
+        AppButton {
+            text: i18n.t("update.check")
+            enabled: !updater.checking && !updater.downloading
+            onClicked: updater.checkForUpdates(true)
+        }
+
+        AppButton {
+            visible: updater.updateAvailable
+            primary: true
+            text: i18n.t("update.install_now")
+            enabled: !updater.downloading
+            onClicked: updater.installUpdate()
+        }
+    }
 }

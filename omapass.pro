@@ -73,6 +73,7 @@ HEADERS += \
     src/sshaskpass.h \
     src/systemtheme.h \
     src/totp.h \
+    src/updater.h \
     src/vault.h
 
 SOURCES += \
@@ -121,6 +122,7 @@ SOURCES += \
     src/sshaskpass.cpp \
     src/systemtheme.cpp \
     src/totp.cpp \
+    src/updater.cpp \
     src/vault.cpp
 
 RESOURCES += src/resources.qrc
