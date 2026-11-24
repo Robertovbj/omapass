@@ -1,6 +1,6 @@
 # omapass
 
-[![CI](https://github.com/higorhgon/omapass/actions/workflows/ci.yml/badge.svg)](https://github.com/higorhgon/fpass/actions/workflows/ci.yml)
+[![CI](https://github.com/higorhgon/omapass/actions/workflows/ci.yml/badge.svg)](https://github.com/higorhgon/omapass/actions/workflows/ci.yml)
 
 Gerenciador de senhas em C++ com interface Qt Quick, no visual dos apps do Omarchy (Hype,
 Omajim). Segue as cores do tema do Omarchy, os cantos das janelas do Hyprland, a fonte do sistema
