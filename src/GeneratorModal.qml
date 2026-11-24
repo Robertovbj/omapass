@@ -85,7 +85,7 @@ Modal {
 
     function currentOptions() {
         const options = {
-            "passphrase": root.passphrase,
+            "passphrase": modeTabs.currentIndex === 1,
             "length": parseInt(lengthField.text) || 0,
             "extra": extraField.text,
             "exclude": excludeField.text,
