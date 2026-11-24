@@ -10,13 +10,17 @@ ApplicationWindow {
     readonly property bool isConfirm: askpass.mode === "confirm"
     readonly property bool isInfo: askpass.mode === "info"
     readonly property bool isPassphrase: askpass.mode === "passphrase"
+    readonly property int dialogWidth: Math.round(460 * s)
+    readonly property int dialogHeight: Math.max(Math.round(150 * s),
+                                                 Math.ceil(content.implicitHeight) + Math.round(40 * s))
     property bool decided: false
 
-    width: Math.round(460 * s)
-    minimumWidth: Math.round(360 * s)
-    height: Math.max(Math.round(160 * s), content.implicitHeight + Math.round(40 * s))
-    minimumHeight: height
-    maximumHeight: height
+    width: dialogWidth
+    minimumWidth: dialogWidth
+    maximumWidth: dialogWidth
+    height: dialogHeight
+    minimumHeight: dialogHeight
+    maximumHeight: dialogHeight
     visible: true
     flags: Qt.Dialog | Qt.WindowStaysOnTopHint
     color: theme.windowBackground

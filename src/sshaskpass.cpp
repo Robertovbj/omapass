@@ -304,10 +304,10 @@ int run(int argc, char *argv[], const QStringList &args) {
 
     const Request request = parseRequest(args, qEnvironmentVariable("SSH_ASKPASS_PROMPT"));
 
-    QGuiApplication::setDesktopFileName(QStringLiteral("omapass"));
+    QGuiApplication::setDesktopFileName(QStringLiteral("omapass-askpass"));
 
     QGuiApplication app(argc, argv);
-    app.setApplicationName(QStringLiteral("omapass"));
+    app.setApplicationName(QStringLiteral("omapass-askpass"));
     app.setOrganizationName(QStringLiteral("omapass"));
     app.setWindowIcon(QIcon::fromTheme(QStringLiteral("omapass"),
                                        QIcon(QStringLiteral(":/omapass.png"))));
