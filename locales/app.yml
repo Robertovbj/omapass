@@ -1268,3 +1268,7 @@ ssh.public_hint:
 ssh.key_mismatch:
   pt-BR: "A chave pública precisa corresponder à chave privada."
   en: "The public key must match the private key."
+
+help.click_hints:
+  pt-BR: "Mostrar letras para clicar"
+  en: "Show click hints"

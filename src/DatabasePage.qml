@@ -270,7 +270,8 @@ FocusScope {
             },
             {
                 "title": i18n.t("help.search_section"),
-                "items": [["/ f i", i18n.t("help.enter_search")],
+                "items": [["/ i", i18n.t("help.enter_search")],
+                          ["f", i18n.t("help.click_hints")],
                           ["Esc", i18n.t("db_app.help_exit_search")]]
             },
             {

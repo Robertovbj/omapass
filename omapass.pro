@@ -29,6 +29,7 @@ macx {
 }
 
 HEADERS += \
+    src/linkhints.h \
     src/appcontroller.h \
     src/bitwardenjson.h \
     src/bitwardenlogin.h \
@@ -75,6 +76,7 @@ HEADERS += \
 
 SOURCES += \
     src/main.cpp \
+    src/linkhints.cpp \
     src/appcontroller.cpp \
     src/bitwardenjson.cpp \
     src/bitwardenlogin.cpp \

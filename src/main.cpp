@@ -14,6 +14,7 @@
 #include <QUrl>
 
 #include "appcontroller.h"
+#include "linkhints.h"
 #include "browserproxy.h"
 #include "clipboard.h"
 #include "config.h"
@@ -237,6 +238,7 @@ int main(int argc, char *argv[]) {
     QObject::connect(&app, &QCoreApplication::aboutToQuit, &app, []() { Clipboard::clearPending(); });
 
     AppController controller(config);
+    LinkHints linkHints;
     PortalFilePicker filePicker;
     Strings strings;
 
@@ -282,6 +284,7 @@ int main(int argc, char *argv[]) {
         }
     });
 
+    engine.rootContext()->setContextProperty(QStringLiteral("linkHints"), &linkHints);
     engine.rootContext()->setContextProperty(QStringLiteral("controller"), &controller);
     // Deliberately not named "palette": Qt Quick Controls already give every
     // control a `palette` property, which would shadow the context property

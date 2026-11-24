@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/">
+        <file alias="HintLayer.qml">HintLayer.qml</file>
         <file alias="Main.qml">Main.qml</file>
         <file alias="AppIcon.qml">AppIcon.qml</file>
         <file alias="AppButton.qml">AppButton.qml</file>

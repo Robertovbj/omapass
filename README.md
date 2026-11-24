@@ -75,6 +75,9 @@ A extensão busca logins nos bancos abertos que você conectou ao navegador.
 Ao atualizar uma senha, ela grava no banco de origem da entrada. Para um login
 novo, usa o banco exibido se ele estiver conectado.
 
+Fora de um campo de texto, pressione `f` e digite as letras exibidas sobre o item
+que deseja clicar. `Esc` cancela. Para pesquisar na lista, use `/` ou `i`.
+
 Na tela de bancos, `Ctrl+A` cria um banco ou adiciona uma conta. `Ctrl+?` mostra todos os
 atalhos, e `Ctrl+O` abre as configurações.
 

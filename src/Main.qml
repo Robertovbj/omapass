@@ -84,6 +84,8 @@ ApplicationWindow {
         onLoaded: Qt.callLater(browserPrompt.refocus)
     }
 
+    HintLayer { parent: window.Overlay.overlay }
+
     BrowserPromptModal {
         id: browserPrompt
     }

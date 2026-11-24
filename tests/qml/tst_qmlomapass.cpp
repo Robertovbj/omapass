@@ -7,6 +7,7 @@
 #include <QQmlEngine>
 #include <QtQuickTest>
 
+#include "linkhints.h"
 #include "fakecontroller.h"
 #include "fakewindow.h"
 #include "i18n.h"
@@ -24,6 +25,7 @@ public slots:
     void qmlEngineAvailable(QQmlEngine *engine) {
         // The same names main.cpp gives them, so the components need no
         // changes to be testable.
+        engine->rootContext()->setContextProperty(QStringLiteral("linkHints"), &m_linkHints);
         engine->rootContext()->setContextProperty(QStringLiteral("theme"), &m_palette);
         engine->rootContext()->setContextProperty(QStringLiteral("systemTheme"), &m_systemTheme);
         engine->rootContext()->setContextProperty(QStringLiteral("i18n"), &m_strings);
@@ -36,6 +38,7 @@ public slots:
     }
 
 private:
+    LinkHints m_linkHints;
     Palette m_palette{{}};
     SystemTheme m_systemTheme;
     Strings m_strings;

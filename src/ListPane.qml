@@ -661,7 +661,6 @@ FocusScope {
                 pane.menuRequested(-1, -1);
                 break;
             case Qt.Key_Slash:
-            case Qt.Key_F:
             case Qt.Key_I:
                 pane.enterSearch();
                 break;

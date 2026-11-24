@@ -13,6 +13,7 @@ INCLUDEPATH += ../../src
 
 SOURCES += \
     tst_qmlomapass.cpp \
+    ../../src/linkhints.cpp \
     ../../src/config.cpp \
     ../../src/i18n.cpp \
     ../../src/palette.cpp \
@@ -22,6 +23,7 @@ SOURCES += \
 HEADERS += \
     fakecontroller.h \
     fakewindow.h \
+    ../../src/linkhints.h \
     ../../src/config.h \
     ../../src/i18n.h \
     ../../src/palette.h \
