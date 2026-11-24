@@ -15,6 +15,10 @@ ToolButton {
     implicitWidth: Math.round(34 * s)
     implicitHeight: Math.round(34 * s)
     padding: 0
+    // Hover is asked for, not left to the platform: Qt turns it off where the
+    // platform theme says hover effects are not used (qtengine on Omarchy,
+    // for one), and then `hovered` never changes.
+    hoverEnabled: true
     focusPolicy: Qt.NoFocus
     Accessible.name: description
     ToolTip.visible: hovered && description !== ""

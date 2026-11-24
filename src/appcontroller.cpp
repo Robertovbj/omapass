@@ -2568,17 +2568,33 @@ namespace {
 
 const auto generatorSetting = QStringLiteral("generator/");
 
+// The six symbol groups that took the place of a single "special" option.
+const QStringList symbolGroupKeys = {QStringLiteral("logograms"), QStringLiteral("punctuation"),
+                                     QStringLiteral("quotes"), QStringLiteral("dashes"),
+                                     QStringLiteral("math"), QStringLiteral("braces")};
+
 GeneratorOptions optionsFromMap(const QVariantMap &map) {
     const GeneratorOptions defaults;
     GeneratorOptions options;
-    options.passphrase = map.value(QStringLiteral("passphrase"), defaults.passphrase).toBool();
+    const auto flag = [&map](const char *key, bool fallback) {
+        return map.value(QString::fromLatin1(key), fallback).toBool();
+    };
+    options.passphrase = flag("passphrase", defaults.passphrase);
     options.length = map.value(QStringLiteral("length"), defaults.length).toInt();
-    options.lower = map.value(QStringLiteral("lower"), defaults.lower).toBool();
-    options.upper = map.value(QStringLiteral("upper"), defaults.upper).toBool();
-    options.numbers = map.value(QStringLiteral("numbers"), defaults.numbers).toBool();
-    options.special = map.value(QStringLiteral("special"), defaults.special).toBool();
-    options.excludeSimilar = map.value(QStringLiteral("excludeSimilar"), defaults.excludeSimilar).toBool();
+    options.lower = flag("lower", defaults.lower);
+    options.upper = flag("upper", defaults.upper);
+    options.numbers = flag("numbers", defaults.numbers);
+    options.logograms = flag("logograms", defaults.logograms);
+    options.punctuation = flag("punctuation", defaults.punctuation);
+    options.quotes = flag("quotes", defaults.quotes);
+    options.dashes = flag("dashes", defaults.dashes);
+    options.math = flag("math", defaults.math);
+    options.braces = flag("braces", defaults.braces);
+    options.extendedAscii = flag("extendedAscii", defaults.extendedAscii);
+    options.excludeSimilar = flag("excludeSimilar", defaults.excludeSimilar);
+    options.everyGroup = flag("everyGroup", defaults.everyGroup);
     options.exclude = map.value(QStringLiteral("exclude")).toString();
+    options.extra = map.value(QStringLiteral("extra")).toString();
     options.custom = map.value(QStringLiteral("custom")).toString();
     options.words = map.value(QStringLiteral("words"), defaults.words).toInt();
     options.separator = map.value(QStringLiteral("separator"), defaults.separator).toString();
@@ -2591,9 +2607,17 @@ QVariantMap optionsToMap(const GeneratorOptions &options) {
             {QStringLiteral("lower"), options.lower},
             {QStringLiteral("upper"), options.upper},
             {QStringLiteral("numbers"), options.numbers},
-            {QStringLiteral("special"), options.special},
+            {QStringLiteral("logograms"), options.logograms},
+            {QStringLiteral("punctuation"), options.punctuation},
+            {QStringLiteral("quotes"), options.quotes},
+            {QStringLiteral("dashes"), options.dashes},
+            {QStringLiteral("math"), options.math},
+            {QStringLiteral("braces"), options.braces},
+            {QStringLiteral("extendedAscii"), options.extendedAscii},
             {QStringLiteral("excludeSimilar"), options.excludeSimilar},
+            {QStringLiteral("everyGroup"), options.everyGroup},
             {QStringLiteral("exclude"), options.exclude},
+            {QStringLiteral("extra"), options.extra},
             {QStringLiteral("custom"), options.custom},
             {QStringLiteral("words"), options.words},
             {QStringLiteral("separator"), options.separator}};
@@ -2606,6 +2630,15 @@ QVariantMap optionsToMap(const GeneratorOptions &options) {
 QVariantMap AppController::generatorOptions() const {
     QSettings settings;
     QVariantMap map = optionsToMap(GeneratorOptions());
+    // Saved before the symbols were split into groups: the one "special"
+    // choice stands for all six.
+    const QString legacySpecial = generatorSetting + QStringLiteral("special");
+    if (settings.contains(legacySpecial)
+        && !settings.contains(generatorSetting + symbolGroupKeys.first())) {
+        const bool special = settings.value(legacySpecial).toBool();
+        for (const QString &key : symbolGroupKeys)
+            map.insert(key, special);
+    }
     for (auto it = map.begin(); it != map.end(); ++it)
         *it = settings.value(generatorSetting + it.key(), *it);
 
@@ -2617,17 +2650,15 @@ QVariantMap AppController::generatorOptions() const {
 // Generating takes about ten milliseconds, so it happens right here rather
 // than on a worker thread: the sheet regenerates on every change.
 QVariantMap AppController::generate(const QVariantMap &options) {
-    // Only with a vault open: generating is one step of putting a password
-    // somewhere, not a standalone tool.
-    if (m_vault.isNull())
-        return {};
-
+    // No database needed: a password can be made before deciding where to
+    // keep it, as KeePassXC's generator allows.
     const GeneratorOptions wanted = Generator::normalize(optionsFromMap(options));
 
     QSettings settings;
     const QVariantMap map = optionsToMap(wanted);
     for (auto it = map.cbegin(); it != map.cend(); ++it)
         settings.setValue(generatorSetting + it.key(), it.value());
+    settings.remove(generatorSetting + QStringLiteral("special"));
 
     Secret password;
     QString error;
@@ -2636,8 +2667,11 @@ QVariantMap AppController::generate(const QVariantMap &options) {
         return {};
     }
 
+    const double bits = Generator::entropyBits(wanted);
     QVariantMap result = map;
     result.insert(QStringLiteral("password"), password.toString());
+    result.insert(QStringLiteral("entropy"), bits);
+    result.insert(QStringLiteral("quality"), Generator::quality(bits));
     return result;
 }
 

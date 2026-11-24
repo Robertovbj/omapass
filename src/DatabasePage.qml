@@ -59,6 +59,8 @@ FocusScope {
         headerActions: [
             { "icon": "plus", "description": i18n.t("db_app.help_create_new_db"),
               "action": function() { page.mode = "chooseType"; } },
+            { "icon": "dice", "description": i18n.t("generator.help"),
+              "action": function() { page.mode = "generate"; } },
             { "icon": "settings", "description": i18n.t("settings.help"),
               "action": function() { window.settingsOpen = true; } },
             { "icon": "keyboard", "description": i18n.t("common.shortcuts_title"),
@@ -75,6 +77,7 @@ FocusScope {
 
         onActivated: function(index) { controller.selectDatabase(index); }
         onAddRequested: page.mode = "chooseType"
+        onGenerateRequested: page.mode = "generate"
         onDeleteRequested: {
             if (controller.isBitwardenDatabase(currentIndex))
                 page.mode = "confirmLogout";
@@ -290,6 +293,13 @@ FocusScope {
         }
     }
 
+    // Generating does not need a database: a password for a site can be
+    // made before deciding where (or whether) to keep it.
+    GeneratorModal {
+        visible: page.mode === "generate"
+        onDismissed: page.mode = "list"
+    }
+
     HelpModal {
         visible: page.mode === "help"
         sections: [
@@ -304,6 +314,7 @@ FocusScope {
                 "title": i18n.t("help.actions_section"),
                 "items": [["Enter", i18n.t("db_app.help_select_db")],
                           ["Ctrl+A", i18n.t("db_app.help_create_new_db")],
+                          ["Ctrl+G", i18n.t("generator.help")],
                           ["Ctrl+X", i18n.t("db_app.help_logout")]]
             },
             {

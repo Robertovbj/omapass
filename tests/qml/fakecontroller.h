@@ -59,6 +59,8 @@ class FakeController : public QObject {
     Q_OBJECT
 
     Q_PROPERTY(bool scanning MEMBER m_scanning NOTIFY scanningChanged)
+    // How many times GeneratorModal copied what it generated.
+    Q_PROPERTY(int copiedSecrets MEMBER m_copiedSecrets NOTIFY copied)
     Q_PROPERTY(bool anyDatabaseFound READ anyDatabaseFound NOTIFY databasesChanged)
     Q_PROPERTY(QVariantList databases MEMBER m_databases NOTIFY databasesChanged)
     Q_PROPERTY(QString databaseQuery MEMBER m_databaseQuery NOTIFY databasesChanged)
@@ -200,16 +202,30 @@ public:
             {QStringLiteral("lower"), true},
             {QStringLiteral("upper"), true},
             {QStringLiteral("numbers"), true},
-            {QStringLiteral("special"), false},
+            {QStringLiteral("logograms"), false},
+            {QStringLiteral("punctuation"), false},
+            {QStringLiteral("quotes"), false},
+            {QStringLiteral("dashes"), false},
+            {QStringLiteral("math"), false},
+            {QStringLiteral("braces"), false},
+            {QStringLiteral("extendedAscii"), false},
             {QStringLiteral("excludeSimilar"), false},
+            {QStringLiteral("everyGroup"), true},
             {QStringLiteral("exclude"), QString()},
+            {QStringLiteral("extra"), QString()},
             {QStringLiteral("custom"), QString()},
             {QStringLiteral("words"), 6},
             {QStringLiteral("separator"), QStringLiteral("-")},
         };
     }
+    Q_INVOKABLE void copySecret(const QString &) {
+        ++m_copiedSecrets;
+        emit copied();
+    }
     Q_INVOKABLE QVariantMap generate(const QVariantMap &) const {
-        return {{QStringLiteral("password"), QStringLiteral("senha-de-teste")}};
+        return {{QStringLiteral("password"), QStringLiteral("senha-de-teste")},
+                {QStringLiteral("entropy"), 82.0},
+                {QStringLiteral("quality"), QStringLiteral("good")}};
     }
 
 signals:
@@ -234,6 +250,7 @@ private:
     bool m_pinConfigured = false;
     bool m_syncing = false;
     bool m_scanning = true;
+    int m_copiedSecrets = 0;
     QVariantList m_databases;
     QString m_databaseQuery;
     bool m_busy = false;

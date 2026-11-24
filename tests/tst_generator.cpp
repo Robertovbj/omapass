@@ -5,6 +5,9 @@
 #include "generator.h"
 #include "config.h"
 
+#include <algorithm>
+#include <cmath>
+
 class TestGenerator : public QObject {
     Q_OBJECT
 
@@ -12,7 +15,8 @@ private slots:
     void generatorHonoursClassesLengthAndExclusions() {
         GeneratorOptions options;
         options.length = 40;
-        options.special = false;
+        options.logograms = options.punctuation = options.quotes = false;
+        options.dashes = options.math = options.braces = false;
         options.excludeSimilar = true;
         options.exclude = QStringLiteral("aeiou");
 
@@ -98,7 +102,9 @@ private slots:
         GeneratorOptions options;
         options.length = 2;
         options.words = 99;
-        options.lower = options.upper = options.numbers = options.special = false;
+        options.lower = options.upper = options.numbers = false;
+        options.logograms = options.punctuation = options.quotes = false;
+        options.dashes = options.math = options.braces = false;
 
         const GeneratorOptions bounded = Generator::normalize(options);
         QCOMPARE(bounded.length, 4);
@@ -108,8 +114,101 @@ private slots:
 
         GeneratorOptions custom;
         custom.custom = QStringLiteral("xyz");
-        custom.lower = custom.upper = custom.numbers = custom.special = false;
+        custom.lower = custom.upper = custom.numbers = false;
+        custom.logograms = custom.punctuation = custom.quotes = false;
+        custom.dashes = custom.math = custom.braces = false;
         QVERIFY(!Generator::normalize(custom).lower);
+
+        // Characters to choose from as well are something to draw from too.
+        GeneratorOptions extra = bounded;
+        extra.lower = false;
+        extra.extra = QStringLiteral("xyz");
+        QVERIFY(!Generator::normalize(extra).lower);
+    }
+
+    // The six symbol groups split the ASCII punctuation between them, as
+    // KeePassXC's do: all of them together are the old "special" class.
+    void generatorSymbolGroupsCoverThePunctuation() {
+        GeneratorOptions options;
+        options.lower = options.upper = options.numbers = false;
+        const QStringList groups = Generator::characterGroups(options);
+        QCOMPARE(groups.size(), 6);
+        QString all = groups.join(QString());
+        std::sort(all.begin(), all.end());
+        QCOMPARE(all, QStringLiteral("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"));
+
+        // Just one group: only its characters come out.
+        options.logograms = options.punctuation = options.quotes = options.dashes = false;
+        options.math = false;
+        Secret generated;
+        QString error;
+        QVERIFY(Generator::generate(options, &generated, &error));
+        for (const QChar c : generated.toString())
+            QVERIFY(QStringLiteral("{[()]}").contains(c));
+    }
+
+    void generatorExtendedAsciiIsLatin1() {
+        GeneratorOptions options;
+        options.lower = options.upper = options.numbers = false;
+        options.logograms = options.punctuation = options.quotes = false;
+        options.dashes = options.math = options.braces = false;
+        options.extendedAscii = true;
+        options.length = 64;
+
+        const QStringList groups = Generator::characterGroups(options);
+        QCOMPARE(groups.size(), 1);
+        QCOMPARE(groups.first().size(), 94);           // ¡ to ÿ, less the soft hyphen
+        QVERIFY(!groups.first().contains(QChar(0xAD)));
+
+        Secret generated;
+        QString error;
+        QVERIFY(Generator::generate(options, &generated, &error));
+        for (const QChar c : generated.toString())
+            QVERIFY(c.unicode() >= 0xA1 && c.unicode() <= 0xFF);
+    }
+
+    // "Also choose from" adds a group beside the classes, without repeating
+    // what a class already has; the custom set replaces them all.
+    void generatorExtraCharactersJoinTheClasses() {
+        GeneratorOptions options;
+        options.upper = options.numbers = false;
+        options.logograms = options.punctuation = options.quotes = false;
+        options.dashes = options.math = options.braces = false;
+        options.extra = QStringLiteral("ÆØÅaa");
+        const QStringList groups = Generator::characterGroups(options);
+        QCOMPARE(groups, QStringList({QStringLiteral("abcdefghijklmnopqrstuvwxyz"),
+                                      QStringLiteral("ÆØÅ")}));
+
+        // With every group required, both show up every time.
+        options.length = 4;
+        for (int round = 0; round < 20; ++round) {
+            Secret generated;
+            QString error;
+            QVERIFY(Generator::generate(options, &generated, &error));
+            const QString text = generated.toString();
+            bool lower = false, extra = false;
+            for (const QChar c : text) {
+                lower |= c.isLower() && c.unicode() < 0x80;
+                extra |= QStringLiteral("ÆØÅ").contains(c);
+            }
+            QVERIFY(lower && extra);
+        }
+    }
+
+    void generatorEntropyAndQuality() {
+        GeneratorOptions options;
+        options.length = 20;
+        options.upper = options.numbers = false;
+        options.logograms = options.punctuation = options.quotes = false;
+        options.dashes = options.math = options.braces = false;
+        // 26 letters: 20 × log2(26) ≈ 94 bits.
+        QVERIFY(qAbs(Generator::entropyBits(options) - 20 * std::log2(26.0)) < 0.001);
+        QCOMPARE(Generator::quality(Generator::entropyBits(options)), QStringLiteral("good"));
+
+        options.length = 8;
+        QCOMPARE(Generator::quality(Generator::entropyBits(options)), QStringLiteral("poor"));
+        QCOMPARE(Generator::quality(60), QStringLiteral("weak"));
+        QCOMPARE(Generator::quality(100), QStringLiteral("excellent"));
     }
 };
 

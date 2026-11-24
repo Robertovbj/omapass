@@ -224,7 +224,7 @@ FocusScope {
                 id: appName
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
-                text: "omapass"
+                text: "Omapass"
                 color: theme.accent
                 font.pixelSize: Math.round(22 * pane.s)
                 font.weight: Font.Bold

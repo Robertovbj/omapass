@@ -182,21 +182,57 @@ generator.upper:
 generator.numbers:
   pt-BR: "Números (0-9)"
   en: "Numbers (0-9)"
-generator.special:
-  pt-BR: "Símbolos (!@#$…)"
-  en: "Symbols (!@#$…)"
+generator.extended_ascii:
+  pt-BR: "ASCII estendido (À é ß ©…)"
+  en: "Extended ASCII (À é ß ©…)"
+generator.characters_label:
+  pt-BR: "Caracteres"
+  en: "Characters"
+generator.symbols_label:
+  pt-BR: "Símbolos"
+  en: "Symbols"
 generator.exclude_similar:
   pt-BR: "Evitar caracteres parecidos (l/1/I, O/0)"
   en: "Avoid look-alike characters (l/1/I, O/0)"
+generator.every_group:
+  pt-BR: "Usar pelo menos um caractere de cada grupo marcado"
+  en: "Use at least one character from every ticked group"
+generator.extra_label:
+  pt-BR: "Escolher também de"
+  en: "Also choose from"
 generator.exclude_label:
   pt-BR: "Excluir caracteres"
   en: "Exclude characters"
 generator.custom_label:
   pt-BR: "Conjunto personalizado (substitui as classes)"
   en: "Custom set (replaces the classes above)"
+generator.strength:
+  pt-BR: "Qualidade: %{quality} · %{size} · %{bits} bits de entropia"
+  en: "Quality: %{quality} · %{size} · %{bits} bits of entropy"
+generator.size_chars:
+  pt-BR: "%{count} caracteres"
+  en: "%{count} characters"
+generator.size_words:
+  pt-BR: "%{count} palavras"
+  en: "%{count} words"
+generator.quality_poor:
+  pt-BR: "ruim"
+  en: "poor"
+generator.quality_weak:
+  pt-BR: "fraca"
+  en: "weak"
+generator.quality_good:
+  pt-BR: "boa"
+  en: "good"
+generator.quality_excellent:
+  pt-BR: "excelente"
+  en: "excellent"
 generator.copied:
   pt-BR: "Senha gerada copiada!"
   en: "Generated password copied!"
+generator.copied_stays:
+  pt-BR: "Copiada. A área de transferência é limpa em alguns segundos, mas a senha fica aqui até você fechar."
+  en: "Copied. The clipboard is cleared in a few seconds, but the password stays here until you close this."
 generator.error:
   pt-BR: "Não foi possível gerar a senha."
   en: "Could not generate the password."

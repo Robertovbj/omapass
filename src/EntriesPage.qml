@@ -422,20 +422,15 @@ FocusScope {
         onDismissed: page.mode = "list"
     }
 
-    // The same sheet either copies what it generated or hands it to the form
-    // that asked for it, which stays open underneath.
+    // The same sheet either copies what it generated (and stays open) or
+    // hands it to the form that asked for it, which stays open underneath.
     GeneratorModal {
         visible: page.mode === "generate" || page.mode === "generateForForm"
         fillMode: page.mode === "generateForForm"
 
         onAccepted: function(password) {
-            if (page.mode === "generateForForm") {
-                formModal.setPassword(password);
-                page.mode = "form";
-            } else {
-                controller.copySecret(password);
-                page.mode = "list";
-            }
+            formModal.setPassword(password);
+            page.mode = "form";
         }
         onDismissed: page.mode = page.mode === "generateForForm" ? "form" : "list"
     }
