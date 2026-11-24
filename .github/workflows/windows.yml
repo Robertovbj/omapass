@@ -13,6 +13,13 @@ on:
         required: false
         type: boolean
         default: true
+  workflow_dispatch:
+    inputs:
+      empacotar:
+        description: "Gerar zip, instalador e subir artefatos"
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   windows:

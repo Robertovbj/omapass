@@ -1,0 +1,138 @@
+name: macOS
+
+# Build do omapass para macOS Intel (x64), reaproveitado pelo CI (só compilação,
+# com Qt e Botan em cache) e pelo workflow de release (gera e valida o DMG).
+on:
+  workflow_call:
+    inputs:
+      empacotar:
+        description: "Gerar DMG, validar abertura e subir artefato (usado na release)"
+        required: false
+        type: boolean
+        default: true
+  workflow_dispatch:
+    inputs:
+      empacotar:
+        description: "Gerar DMG e subir artefato"
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  macos:
+    runs-on: macos-15-intel
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache do Qt
+        id: cache-qt
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/qt
+          key: macos-x64-qt-6.10.3
+
+      - uses: actions/setup-python@v5
+        if: steps.cache-qt.outputs.cache-hit != 'true'
+        with:
+          python-version: "3.13"
+
+      - name: Instala o Qt para Intel
+        if: steps.cache-qt.outputs.cache-hit != 'true'
+        run: |
+          python -m pip install aqtinstall==3.3.0
+          aqt install-qt mac desktop 6.10.3 clang_64 -O "$RUNNER_TEMP/qt"
+
+      - name: Configura caminhos do Qt
+        run: |
+          qt="$RUNNER_TEMP/qt/6.10.3/macos"
+          echo "QT_PREFIX=$qt" >> "$GITHUB_ENV"
+          echo "QMAKE=$qt/bin/qmake" >> "$GITHUB_ENV"
+
+      - name: Cache do Botan estático
+        id: cache-botan
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/botan
+          key: macos-x64-botan-3.14.1-min-v1
+
+      - name: Compila o Botan estático
+        if: steps.cache-botan.outputs.cache-hit != 'true'
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "13.0"
+        run: |
+          if ! command -v pkg-config >/dev/null; then
+            brew install pkgconf
+          fi
+          cd "$RUNNER_TEMP"
+          curl -fL --retry 3 https://botan.randombit.net/releases/Botan-3.14.1.tar.xz -o botan.tar.xz
+          echo '5b85cba0f014d344eb8e9919aee0a3bdc31e16acb05816410025be9bee1e0930  botan.tar.xz' | shasum -a 256 -c
+          tar -xf botan.tar.xz
+          cd Botan-3.14.1
+          python3 configure.py --cc=clang --cpu=x86_64 --prefix="$RUNNER_TEMP/botan" \
+            --build-targets=static --minimized-build \
+            --enable-modules=aes,aes_hwaes,aes_vaes,aes_vperm,cbc,chacha,chacha_simd32,chacha_simd8x32,chacha_avx512,salsa20,salsa20_simd32,salsa20_simd8x32,salsa20_avx512,twofish,twofish_avx512,sha1,sha1_x86,sha1_simd,sha1_avx2,sha2_32,sha2_32_x86,sha2_32_simd,sha2_32_avx2,sha2_64,sha2_64_x86,sha2_64_avx2,sha2_64_avx512,hmac,hkdf,pbkdf2,argon2,argon2_simd64,argon2_simd4x64,argon2_avx512,rsa,eme_oaep,system_rng,sodium \
+            --without-documentation --no-install-python-module --with-pkg-config
+          make -j"$(getconf _NPROCESSORS_ONLN)"
+          make install
+          mkdir -p "$RUNNER_TEMP/botan/share/licenses"
+          cp license.txt "$RUNNER_TEMP/botan/share/licenses/LICENSE-Botan"
+
+      - name: Configura caminhos do Botan
+        run: |
+          if ! command -v pkg-config >/dev/null; then
+            brew install pkgconf
+          fi
+          echo "PKG_CONFIG_PATH=$RUNNER_TEMP/botan/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "BOTAN_LICENSE=$RUNNER_TEMP/botan/share/licenses/LICENSE-Botan" >> "$GITHUB_ENV"
+
+      - name: Compila (CI)
+        if: ${{ inputs.empacotar == false }}
+        run: |
+          mkdir -p build
+          cd build
+          "$QMAKE" ../omapass.pro QMAKE_APPLE_DEVICE_ARCHS=x86_64 QMAKE_MACOSX_DEPLOYMENT_TARGET=13.0
+          make -j"$(getconf _NPROCESSORS_ONLN)"
+
+      - name: Gera o DMG
+        if: ${{ inputs.empacotar != false }}
+        run: ./bin/dmg
+
+      - name: Confere que o app abre a partir do DMG
+        if: ${{ inputs.empacotar != false }}
+        run: |
+          mv "$QT_PREFIX" "$RUNNER_TEMP/qt-para-compilar"
+          volume="$RUNNER_TEMP/omapass-dmg"
+          mkdir -p "$volume" "$RUNNER_TEMP/omapass-home"
+          hdiutil attach -readonly -nobrowse -mountpoint "$volume" dist/*-macos-x64.dmg
+          pid=""
+          trap 'if [ -n "$pid" ]; then kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; fi; hdiutil detach "$volume" 2>/dev/null || true; if [ -d "$RUNNER_TEMP/qt-para-compilar" ]; then mv "$RUNNER_TEMP/qt-para-compilar" "$QT_PREFIX"; fi' EXIT
+          app="$volume/Omapass.app"
+          binary="$app/Contents/MacOS/Omapass"
+          test "$(readlink "$volume/Applications")" = /Applications
+          codesign --verify --deep --strict "$app"
+          HOME="$RUNNER_TEMP/omapass-home" "$binary" --doctor | grep -F "$app/Contents/Resources/wordlists/"
+          log="$RUNNER_TEMP/omapass.log"
+          HOME="$RUNNER_TEMP/omapass-home" QT_QUICK_BACKEND=software QML_IMPORT_TRACE=1 \
+            "$binary" > "$log" 2>&1 &
+          pid=$!
+          for tentativa in {1..30}; do
+            kill -0 "$pid" 2>/dev/null || break
+            grep -q 'qrc:/Main.qml.*QtQuick.Controls.Basic/qmldir' "$log" && break
+            sleep 1
+          done
+          sleep 5
+          if ! kill -0 "$pid" || ! grep -q 'qrc:/Main.qml.*QtQuick.Controls.Basic/qmldir' "$log"; then
+            tail -100 "$log"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ inputs.empacotar != false }}
+        with:
+          name: omapass-macos-x64
+          path: dist/*-macos-x64.dmg
+          if-no-files-found: error
+          retention-days: 7

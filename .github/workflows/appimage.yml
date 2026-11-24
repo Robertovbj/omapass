@@ -1,0 +1,67 @@
+name: AppImage
+
+# Gera o AppImage do omapass num container Ubuntu 24.04 LTS. Reaproveitado pelo
+# workflow de release e também disparável manualmente para testar isolado.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "Tag da release (em branco usa v<versão do main.cpp>)"
+        required: false
+        type: string
+        default: ""
+    outputs:
+      versao:
+        description: "Versão lida do src/main.cpp"
+        value: ${{ jobs.appimage.outputs.versao }}
+      tag:
+        description: "Tag final da release"
+        value: ${{ jobs.appimage.outputs.tag }}
+  workflow_dispatch:
+
+jobs:
+  appimage:
+    # Fixo, não `latest`: o AppImage herda a glibc de onde foi gerado, e uma
+    # troca silenciosa de runner reduziria em que máquinas ele roda.
+    runs-on: ubuntu-24.04
+
+    outputs:
+      versao: ${{ steps.pacote.outputs.versao }}
+      tag: ${{ steps.pacote.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # `make appimage` compila dentro do container Ubuntu LTS descrito em
+      # packaging/appimage.Dockerfile — o mesmo caminho de quem gera na
+      # própria máquina, então o arquivo publicado aqui é o que se obtém lá.
+      - name: Gera o AppImage
+        run: make appimage
+
+      - name: Descobre a versão e o arquivo
+        id: pacote
+        # A tag entra pelo ambiente, não interpolada no meio do script: um
+        # `${{ }}` de texto livre vira parte do shell antes de ele rodar.
+        env:
+          TAG_PEDIDA: ${{ inputs.tag }}
+        run: |
+          versao="$(sed -n 's/.*applicationVersion = QStringLiteral("\([^"]*\)").*/\1/p' src/main.cpp)"
+          arquivo="dist/omapass-$versao-x86_64.AppImage"
+          if [ ! -f "$arquivo" ]; then
+            echo "O AppImage esperado nao apareceu em $arquivo. O que ha em dist/:" >&2
+            ls -la dist/ >&2
+            exit 1
+          fi
+          tag="$TAG_PEDIDA"
+          [ -n "$tag" ] || tag="v$versao"
+          {
+            echo "versao=$versao"
+            echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omapass-linux-x64
+          path: dist/*.AppImage
+          if-no-files-found: error
+          retention-days: 7
