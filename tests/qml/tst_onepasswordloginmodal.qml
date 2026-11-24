@@ -27,12 +27,7 @@ TestCase {
         modal.visible = true;
         tryVerify(function() { return modal.opened; }, 3000);
 
-        // The address comes filled in, so the keyboard starts on the first
-        // field that still needs typing.
-        const email = findChild(modal, "emailField");
-        verify(email !== null, "o campo de e-mail existe");
-        tryVerify(function() { return email.field.focus; }, 3000,
-                  "o primeiro campo vazio toma o teclado ao abrir");
+        verify(!findChild(modal, "emailField").field.activeFocus);
 
         // What the controller does when op asks for the code.
         modal.busy = true;

@@ -37,7 +37,7 @@ Modal {
         }
     }
 
-    capturesKeys: false
+    firstField: root.askingCode ? codeField.field : addressField.field
 
     // Through Qt.callLater because the step, the busy flag and the modal's
     // own opening land in whatever order they land: focusing at the end of
@@ -50,12 +50,8 @@ Modal {
         if (root.step === "opCode") {
             codeField.text = "";
             codeField.field.forceActiveFocus();
-        } else if (addressField.text.length === 0) {
-            addressField.field.forceActiveFocus();
-        } else if (emailField.text.length === 0) {
-            emailField.field.forceActiveFocus();
         } else {
-            secretKeyField.field.forceActiveFocus();
+            root.takeKeyboard();
         }
     }
 
@@ -107,7 +103,7 @@ Modal {
         onSubmitted: emailField.field.forceActiveFocus()
         onNextRequested: emailField.field.forceActiveFocus()
         onPreviousRequested: passwordField.field.forceActiveFocus()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 
     Field {
@@ -121,7 +117,7 @@ Modal {
         onSubmitted: secretKeyField.field.forceActiveFocus()
         onNextRequested: secretKeyField.field.forceActiveFocus()
         onPreviousRequested: addressField.field.forceActiveFocus()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 
     Field {
@@ -136,7 +132,7 @@ Modal {
         onSubmitted: passwordField.field.forceActiveFocus()
         onNextRequested: passwordField.field.forceActiveFocus()
         onPreviousRequested: emailField.field.forceActiveFocus()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 
     Field {
@@ -151,7 +147,7 @@ Modal {
         onSubmitted: shorthandField.field.forceActiveFocus()
         onNextRequested: shorthandField.field.forceActiveFocus()
         onPreviousRequested: secretKeyField.field.forceActiveFocus()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 
     Field {
@@ -166,7 +162,7 @@ Modal {
         onSubmitted: root.submitCredentials()
         onNextRequested: addressField.field.forceActiveFocus()
         onPreviousRequested: passwordField.field.forceActiveFocus()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 
     Field {
@@ -178,6 +174,6 @@ Modal {
         enabled: !root.busy
 
         onSubmitted: if (text.trim().length > 0) root.codeSubmitted(text)
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 }

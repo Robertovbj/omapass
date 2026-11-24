@@ -41,43 +41,24 @@ Modal {
             root.integration.answerConflict(true);
     }
 
-    capturesKeys: asksYesNo
+    firstField: root.kind === "associate" ? nameField.field
+              : root.kind === "access" ? root.accessOrder[0] : null
 
     onShown: {
-        if (root.asksYesNo) {
-            // Can open before the page under it has loaded and taken the
-            // keyboard (the manifest question, at start-up).
-            root.takeKeyboard();
-        } else if (root.kind === "associate") {
+        if (root.kind === "associate")
             nameField.text = "";
-            nameField.field.forceActiveFocus();
-        } else if (root.kind === "access") {
-            rememberBox.checked = true;
-            // The boxes are made for the new question after this runs.
-            Qt.callLater(root.focusFirstEntry);
-        }
-    }
-
-    // Gives the keyboard back to the question without resetting it, after
-    // something underneath (a page that just loaded) took it.
-    function refocus() {
-        if (!root.visible)
-            return;
-        if (root.asksYesNo)
-            root.takeKeyboard();
-        else if (root.kind === "associate")
-            nameField.field.forceActiveFocus();
         else if (root.kind === "access")
-            root.focusFirstEntry();
+            rememberBox.checked = true;
+        refocus();
     }
 
-    function focusFirstEntry() {
-        if (root.kind !== "access")
+    function refocus() {
+        if (!visible)
             return;
-        if (entryBoxes.count > 0)
-            entryBoxes.itemAt(0).forceActiveFocus();
+        if (root.kind === "associate")
+            nameField.field.forceActiveFocus();
         else
-            rememberBox.forceActiveFocus();
+            root.takeKeyboard();
     }
 
     // A second question right after the first keeps the sheet up: the
@@ -121,6 +102,8 @@ Modal {
     }
 
     onKeyPressed: function(event) {
+        if (!root.asksYesNo)
+            return;
         switch (event.key) {
         case Qt.Key_Y:
             if (root.kind === "update")
@@ -160,7 +143,7 @@ Modal {
         placeholderText: "firefox-notebook"
 
         onSubmitted: root.submitName()
-        onCancelled: root.refuse()
+        onCancelled: root.takeKeyboard()
     }
 
     Text {
@@ -201,7 +184,7 @@ Modal {
                 : modelData.path
 
             onSubmitted: root.allowChecked()
-            onCancelled: root.refuse()
+            onCancelled: root.takeKeyboard()
             onNextRequested: root.moveFocus(root.accessOrder, entryBox, 1)
             onPreviousRequested: root.moveFocus(root.accessOrder, entryBox, -1)
         }
@@ -214,7 +197,7 @@ Modal {
         text: i18n.t("browser.access_remember")
 
         onSubmitted: root.allowChecked()
-        onCancelled: root.refuse()
+        onCancelled: root.takeKeyboard()
         onNextRequested: root.moveFocus(root.accessOrder, rememberBox, 1)
         onPreviousRequested: root.moveFocus(root.accessOrder, rememberBox, -1)
     }

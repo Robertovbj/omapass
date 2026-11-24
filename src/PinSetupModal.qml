@@ -22,7 +22,7 @@ Modal {
 
     onAcceptRequested: root.submit()
 
-    capturesKeys: false
+    firstField: passwordField.field
 
     onShown: {
         revealPassword.checked = false;
@@ -31,7 +31,6 @@ Modal {
         passwordField.text = "";
         pinField.text = "";
         confirmField.text = "";
-        passwordField.field.forceActiveFocus();
     }
 
     // Only digits go in while letters and symbols are not allowed.
@@ -72,7 +71,7 @@ Modal {
         onSubmitted: pinField.field.forceActiveFocus()
         onNextRequested: root.focusNext(passwordField)
         onPreviousRequested: root.focusPrevious(passwordField)
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 
     CheckOption {
@@ -81,7 +80,7 @@ Modal {
         enabled: !root.busy
 
         onSubmitted: root.submit()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
         onNextRequested: root.focusNext(revealPassword)
         onPreviousRequested: root.focusPrevious(revealPassword)
     }
@@ -99,7 +98,7 @@ Modal {
         onSubmitted: confirmField.field.forceActiveFocus()
         onNextRequested: root.focusNext(pinField)
         onPreviousRequested: root.focusPrevious(pinField)
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 
     Field {
@@ -114,7 +113,7 @@ Modal {
         onSubmitted: root.submit()
         onNextRequested: root.focusNext(confirmField)
         onPreviousRequested: root.focusPrevious(confirmField)
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 
     CheckOption {
@@ -123,7 +122,7 @@ Modal {
         enabled: !root.busy
 
         onSubmitted: root.submit()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
         onNextRequested: root.focusNext(revealPin)
         onPreviousRequested: root.focusPrevious(revealPin)
     }
@@ -144,7 +143,7 @@ Modal {
         }
 
         onSubmitted: root.submit()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
         onNextRequested: root.focusNext(allowText)
         onPreviousRequested: root.focusPrevious(allowText)
     }

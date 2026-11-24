@@ -15,7 +15,7 @@ Modal {
 
     onAcceptRequested: root.submitted(nameField.text)
 
-    capturesKeys: false
+    firstField: nameField.field
 
     onShown: {
         nameField.text = root.currentName;
@@ -29,6 +29,6 @@ Modal {
         label: i18n.t("common.title_label")
 
         onSubmitted: root.submitted(text)
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 }

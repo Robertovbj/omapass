@@ -4,7 +4,7 @@ import "qrc:/"
 
 // Logging into Bitwarden. The server comes filled in with where bw points
 // now (bitwarden.com unless it was set to a Vaultwarden or another server),
-// so the keyboard starts on the e-mail, and what is typed in the server
+// and what is typed in the server
 // field goes out with the credentials.
 TestCase {
     id: testCase
@@ -42,8 +42,7 @@ TestCase {
         compare(server.text, "https://vault.example.com");
 
         const email = findChild(modal, "emailField");
-        tryVerify(function() { return email.field.focus; }, 3000,
-                  "com o servidor preenchido, o teclado começa no e-mail");
+        verify(!email.field.activeFocus);
     }
 
     function test_server_goes_out_with_the_credentials() {

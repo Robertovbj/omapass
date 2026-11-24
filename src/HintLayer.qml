@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls
 
 Item {
-    id: layer
+    id: hintOverlay
     anchors.fill: parent
     z: 10000
     visible: linkHints.badges.length > 0
@@ -13,8 +13,8 @@ Item {
         model: linkHints.badges
         Rectangle {
             required property var modelData
-            x: Math.max(0, Math.min(modelData.x, layer.width - width))
-            y: Math.max(0, Math.min(modelData.y, layer.height - height))
+            x: Math.max(0, Math.min(modelData.x, hintOverlay.width - width))
+            y: Math.max(0, Math.min(modelData.y, hintOverlay.height - height))
             width: label.implicitWidth + 8
             height: label.implicitHeight + 2
             radius: Math.min(theme.radius, 3)

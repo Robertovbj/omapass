@@ -27,7 +27,7 @@ Modal {
 
     onAcceptRequested: root.submit()
 
-    capturesKeys: false
+    firstField: root.isEdit ? (root.inlineSshKey ? privateKey.field : passwordField.field) : groupField.field
 
     onClosed: {
         privateKey.text = "";
@@ -37,7 +37,6 @@ Modal {
     onShown: {
         if (resumeDraft) {
             resumeDraft = false;
-            passwordField.field.forceActiveFocus();
             return;
         }
         kinds.currentIndex = 0;
@@ -52,20 +51,10 @@ Modal {
         notesArea.text = root.fields.notes || "";
         otpField.text = root.fields.otp || "";
         refreshGroups();
-
-        // Group and title already came from the path, so editing starts on
-        // the password — the field that actually changes most often.
-        if (root.isEdit && root.inlineSshKey)
-            privateKey.field.forceActiveFocus();
-        else if (root.isEdit)
-            passwordField.field.forceActiveFocus();
-        else
-            groupField.field.forceActiveFocus();
     }
 
     function setPassword(password) {
         passwordField.text = password;
-        passwordField.field.forceActiveFocus();
     }
 
     function refreshGroups() {
@@ -123,7 +112,7 @@ Modal {
         onNextRequested: root.focusNext(kinds)
         onPreviousRequested: root.focusPrevious(kinds)
         onSubmitted: root.submit()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 
     Field {
@@ -132,7 +121,7 @@ Modal {
         label: i18n.t("common.group_label")
 
         onTextChanged: root.refreshGroups()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
         onListNext: groupSuggestions.next()
         onListPrevious: groupSuggestions.previous()
         onNextRequested: root.focusNext(groupField)
@@ -151,7 +140,7 @@ Modal {
         width: parent.width
         label: i18n.t("common.title_label")
 
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
         onSubmitted: root.submit()
         onNextRequested: root.focusNext(titleField)
         onPreviousRequested: root.focusPrevious(titleField)
@@ -163,7 +152,7 @@ Modal {
         visible: !root.passBackend && !root.inlineSshKey
         label: i18n.t("common.username_label")
 
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
         onSubmitted: root.submit()
         onNextRequested: root.focusNext(usernameField)
         onPreviousRequested: root.focusPrevious(usernameField)
@@ -177,7 +166,7 @@ Modal {
         echoMode: revealPassword.checked ? TextInput.Normal : TextInput.Password
         monospace: true
 
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
         onSubmitted: root.submit()
         onNextRequested: root.focusNext(passwordField)
         onPreviousRequested: root.focusPrevious(passwordField)
@@ -190,7 +179,7 @@ Modal {
         text: i18n.t("ui.show_password")
 
         onSubmitted: root.submit()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
         onNextRequested: root.focusNext(revealPassword)
         onPreviousRequested: root.focusPrevious(revealPassword)
     }
@@ -206,7 +195,7 @@ Modal {
         label: i18n.t("common.otp_label")
         monospace: true
 
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
         onSubmitted: root.submit()
         onNextRequested: root.focusNext(otpField)
         onPreviousRequested: root.focusPrevious(otpField)
@@ -218,7 +207,7 @@ Modal {
         visible: !root.passBackend && !root.inlineSshKey
         label: i18n.t("common.url_label")
 
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
         onSubmitted: root.submit()
         onNextRequested: root.focusNext(urlField)
         onPreviousRequested: root.focusPrevious(urlField)
@@ -234,7 +223,7 @@ Modal {
         label: i18n.t("common.extra_urls_label")
         placeholderText: "https://exemplo.com https://login.exemplo.com"
 
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
         onSubmitted: root.submit()
         onNextRequested: root.focusNext(extraUrlsField)
         onPreviousRequested: root.focusPrevious(extraUrlsField)
@@ -274,7 +263,7 @@ Modal {
                 placeholderTextColor: theme.muted
                 selectionColor: theme.selection
                 selectedTextColor: theme.selectionText
-                Keys.onEscapePressed: root.dismissed()
+                Keys.onEscapePressed: root.takeKeyboard()
                 Keys.onTabPressed: root.focusNext(keyField)
                 Keys.onBacktabPressed: root.focusPrevious(keyField)
             }
@@ -339,7 +328,7 @@ Modal {
                 // Ctrl+Enter is what saves from inside the notes.
                 Keys.onPressed: function(event) {
                     if (event.key === Qt.Key_Escape) {
-                        root.dismissed();
+                        root.takeKeyboard();
                         event.accepted = true;
                     } else if (event.key === Qt.Key_Tab) {
                         root.focusNext(notesArea);

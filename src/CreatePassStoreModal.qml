@@ -20,14 +20,13 @@ Modal {
     onAcceptRequested: root.submit()
     cardWidth: Math.round(560 * s)
 
-    capturesKeys: false
+    firstField: directoryField.field
 
     onShown: {
         root.keys = controller.gpgKeys();
         directoryField.text = controller.defaultPassStoreDirectory();
         refreshSuggestions();
         keys.currentIndex = 0;
-        directoryField.field.forceActiveFocus();
     }
 
     function refreshSuggestions() {
@@ -59,7 +58,7 @@ Modal {
         enabled: !root.busy
 
         onTextChanged: root.refreshSuggestions()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
         onListNext: suggestions.next()
         onListPrevious: suggestions.previous()
         onNextRequested: keyList.forceActiveFocus()
@@ -137,7 +136,7 @@ Modal {
                 root.submit();
                 break;
             case Qt.Key_Escape:
-                root.dismissed();
+                root.takeKeyboard();
                 break;
             default:
                 return;

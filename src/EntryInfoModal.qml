@@ -60,11 +60,10 @@ Modal {
         }
     }
 
-    capturesKeys: false
+    firstField: titleView.view
 
     onShown: {
         refreshOtp();
-        titleView.view.forceActiveFocus();
     }
 
     component InfoField: Column {
@@ -145,6 +144,8 @@ Modal {
                 Keys.onPressed: function(event) {
                     switch (event.key) {
                     case Qt.Key_Escape:
+                        root.takeKeyboard();
+                        break;
                     case Qt.Key_Q:
                         root.dismissed();
                         break;

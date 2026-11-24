@@ -49,6 +49,7 @@ FocusScope {
         acceptsKeys: !page.unlocking && !page.loggingIn && !controller.checkingAccount
                      && page.mode === "list"
 
+        searchMode: false
         searchPlaceholder: i18n.t("db_app.filter_title")
         model: controller.databases
         tagFor: function(item) { return item.kind; }

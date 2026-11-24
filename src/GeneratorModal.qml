@@ -27,7 +27,7 @@ Modal {
 
     onAcceptRequested: root.accepted(root.password)
 
-    capturesKeys: false
+    firstField: root.passphrase ? wordsField.field : lengthField.field
 
     onShown: {
         const options = controller.generatorOptions();
@@ -48,7 +48,6 @@ Modal {
         root.loading = false;
 
         regenerate();
-        lengthField.field.forceActiveFocus();
     }
 
     function currentOptions() {
@@ -101,7 +100,7 @@ Modal {
         options: [i18n.t("generator.mode_password"), i18n.t("generator.mode_passphrase")]
         onCurrentIndexChanged: root.regenerate()
         onSubmitted: root.accepted(root.password)
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
         onNextRequested: root.focusNext(modeTabs)
         onPreviousRequested: root.focusPrevious(modeTabs)
     }
@@ -154,7 +153,7 @@ Modal {
         onSubmitted: root.accepted(root.password)
         onNextRequested: root.focusNext(lengthField)
         onPreviousRequested: root.focusPrevious(lengthField)
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 
     Column {
@@ -167,7 +166,7 @@ Modal {
             text: i18n.t("generator.lower")
             onCheckedChanged: root.regenerate()
             onSubmitted: root.accepted(root.password)
-            onCancelled: root.dismissed()
+            onCancelled: root.takeKeyboard()
             onNextRequested: root.focusNext(lowerBox)
             onPreviousRequested: root.focusPrevious(lowerBox)
         }
@@ -177,7 +176,7 @@ Modal {
             text: i18n.t("generator.upper")
             onCheckedChanged: root.regenerate()
             onSubmitted: root.accepted(root.password)
-            onCancelled: root.dismissed()
+            onCancelled: root.takeKeyboard()
             onNextRequested: root.focusNext(upperBox)
             onPreviousRequested: root.focusPrevious(upperBox)
         }
@@ -187,7 +186,7 @@ Modal {
             text: i18n.t("generator.numbers")
             onCheckedChanged: root.regenerate()
             onSubmitted: root.accepted(root.password)
-            onCancelled: root.dismissed()
+            onCancelled: root.takeKeyboard()
             onNextRequested: root.focusNext(numbersBox)
             onPreviousRequested: root.focusPrevious(numbersBox)
         }
@@ -197,7 +196,7 @@ Modal {
             text: i18n.t("generator.special")
             onCheckedChanged: root.regenerate()
             onSubmitted: root.accepted(root.password)
-            onCancelled: root.dismissed()
+            onCancelled: root.takeKeyboard()
             onNextRequested: root.focusNext(specialBox)
             onPreviousRequested: root.focusPrevious(specialBox)
         }
@@ -207,7 +206,7 @@ Modal {
             text: i18n.t("generator.exclude_similar")
             onCheckedChanged: root.regenerate()
             onSubmitted: root.accepted(root.password)
-            onCancelled: root.dismissed()
+            onCancelled: root.takeKeyboard()
             onNextRequested: root.focusNext(similarBox)
             onPreviousRequested: root.focusPrevious(similarBox)
         }
@@ -223,7 +222,7 @@ Modal {
         onSubmitted: root.accepted(root.password)
         onNextRequested: root.focusNext(excludeField)
         onPreviousRequested: root.focusPrevious(excludeField)
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 
     Field {
@@ -236,7 +235,7 @@ Modal {
         onSubmitted: root.accepted(root.password)
         onNextRequested: root.focusNext(customField)
         onPreviousRequested: root.focusPrevious(customField)
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 
     Field {
@@ -250,7 +249,7 @@ Modal {
         onSubmitted: root.accepted(root.password)
         onNextRequested: root.focusNext(wordsField)
         onPreviousRequested: root.focusPrevious(wordsField)
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 
     Field {
@@ -265,6 +264,6 @@ Modal {
         onSubmitted: root.accepted(root.password)
         onNextRequested: root.focusNext(separatorField)
         onPreviousRequested: root.focusPrevious(separatorField)
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 }

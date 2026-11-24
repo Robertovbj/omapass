@@ -41,6 +41,8 @@ TestCase {
 
     function test_tab_walks_through_every_option() {
         open();
+        compare(focused(), null);
+        keyClick(Qt.Key_Tab);
         tryVerify(function() { return focused() === modal.tabOrder[1]; }, 3000,
                   "o teclado começa no comprimento");
 
@@ -54,6 +56,8 @@ TestCase {
 
     function test_backtab_walks_back() {
         open();
+        compare(focused(), null);
+        keyClick(Qt.Key_Tab);
         tryVerify(function() { return focused() === modal.tabOrder[1]; }, 3000);
 
         keyClick(Qt.Key_Backtab);
@@ -64,6 +68,8 @@ TestCase {
 
     function test_space_ticks_the_focused_box() {
         open();
+        compare(focused(), null);
+        keyClick(Qt.Key_Tab);
         tryVerify(function() { return focused() === modal.tabOrder[1]; }, 3000);
 
         keyClick(Qt.Key_Tab);
@@ -80,6 +86,8 @@ TestCase {
 
     function test_passphrase_mode_skips_the_password_options() {
         open();
+        compare(focused(), null);
+        keyClick(Qt.Key_Tab);
         tryVerify(function() { return focused() === modal.tabOrder[1]; }, 3000);
 
         keyClick(Qt.Key_Backtab);
@@ -101,6 +109,8 @@ TestCase {
     // ← and → move between the two tabs; the password comes back with ←.
     function test_mode_tabs_follow_the_arrows() {
         open();
+        compare(focused(), null);
+        keyClick(Qt.Key_Tab);
         tryVerify(function() { return focused() === modal.tabOrder[1]; }, 3000);
         keyClick(Qt.Key_Backtab);
         keyClick(Qt.Key_Right);

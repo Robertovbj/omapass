@@ -22,7 +22,7 @@ bool clickable(const QQuickItem *item) {
     if (item->inherits("QQuickAbstractButton") || textField(item))
         return true;
     if (item->inherits("QQuickMouseArea"))
-        return takesLeftClick(item) && item->property("cursorShape").value<Qt::CursorShape>() == Qt::PointingHandCursor;
+        return item->property("enabled").toBool() && takesLeftClick(item) && item->property("cursorShape").value<Qt::CursorShape>() == Qt::PointingHandCursor;
     for (const auto *child : item->children()) {
         if (child->inherits("QQuickTapHandler") && child->property("enabled").toBool() && takesLeftClick(child))
             return true;
@@ -122,6 +122,10 @@ void LinkHints::type(const QString &letter) {
         }
         if (textField(target.item)) {
             target.item->forceActiveFocus(Qt::ShortcutFocusReason);
+            return;
+        }
+        if (target.item->metaObject()->indexOfMethod("activateHint()") >= 0) {
+            QMetaObject::invokeMethod(target.item, "activateHint", Qt::DirectConnection);
             return;
         }
         const QPointF global = window->mapToGlobal(at);

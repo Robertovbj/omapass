@@ -35,6 +35,7 @@ TestCase {
     function test_login_is_shown_and_enter_copies_it() {
         modal.visible = true;
         tryVerify(function() { return modal.opened; }, 3000);
+        keyClick(Qt.Key_Tab);
 
         const login = findChild(modal, "usernameField");
         verify(login !== null, "o campo de login existe");
@@ -55,6 +56,7 @@ TestCase {
                           "extraUrls": ["http://localhost:8080", "http://192.168.0.10"], "notes": "" };
         modal.visible = true;
         tryVerify(function() { return modal.opened; }, 3000);
+        keyClick(Qt.Key_Tab);
 
         tryVerify(function() { return findChild(modal.contentItem, "extraUrlField1") !== null; }, 3000,
                   "um campo por URL adicional");
@@ -83,6 +85,7 @@ TestCase {
     function test_enter_on_the_title_copies_the_title() {
         modal.visible = true;
         tryVerify(function() { return modal.opened; }, 3000);
+        keyClick(Qt.Key_Tab);
         keyClick(Qt.Key_Return);
         compare(controller.lastCopied, "Gmail");
     }
@@ -144,6 +147,7 @@ TestCase {
                           "url": "https://mail.google.com", "notes": "", "hasOtp": true };
         modal.visible = true;
         tryVerify(function() { return modal.opened; }, 3000);
+        keyClick(Qt.Key_Tab);
 
         const otp = findChild(modal, "otpField");
         verify(otp.visible);
@@ -164,6 +168,7 @@ TestCase {
         modal.details = { "title": "gmail", "hasOtp": true };
         modal.visible = true;
         tryVerify(function() { return modal.opened; }, 3000);
+        keyClick(Qt.Key_Tab);
 
         const otp = findChild(modal, "otpField");
         verify(otp.visible);

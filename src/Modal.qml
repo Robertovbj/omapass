@@ -30,10 +30,7 @@ Popup {
     property bool cancelOnly: false
     property real cardWidth: Math.round(460 * root.s)
 
-    // Sheets made only of buttons and text rely on this; ones with fields
-    // turn it off and let the focused field handle its own keys, otherwise
-    // the catcher below takes the focus the field needs to be typed into.
-    property bool capturesKeys: true
+    property Item firstField: null
     signal keyPressed(var event)
     signal dismissed()
     // The main action's button was clicked.
@@ -64,6 +61,7 @@ Popup {
 
     function announceShown() {
         announcedShown = true;
+        takeKeyboard();
         shown();
     }
 
@@ -133,14 +131,24 @@ Popup {
     }
 
     contentItem: Item {
+        Keys.onEscapePressed: root.dismissed()
+
         Item {
             id: keyCatcher
             width: 0
             height: 0
-            focus: root.capturesKeys
+            focus: true
 
             Keys.onPressed: function(event) {
-                root.keyPressed(event);
+                if (event.key === Qt.Key_Escape) {
+                    root.dismissed();
+                    event.accepted = true;
+                } else if (event.key === Qt.Key_Tab && root.firstField && root.firstField.visible && root.firstField.enabled) {
+                    root.firstField.forceActiveFocus();
+                    event.accepted = true;
+                } else {
+                    root.keyPressed(event);
+                }
             }
         }
 

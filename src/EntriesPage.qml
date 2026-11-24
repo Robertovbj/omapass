@@ -318,7 +318,7 @@ FocusScope {
     Modal {
         id: sshModal
         visible: page.mode === "ssh"
-        capturesKeys: false
+        firstField: onUnlock
         heading: i18n.t("ssh.options")
         subtitle: page.selectedEntry
         acceptText: i18n.t("common.save")
@@ -339,7 +339,6 @@ FocusScope {
             onUnlock.checked = options.addOnUnlock;
             confirmation.checked = options.confirm;
             lifetime.text = String(options.lifetimeSeconds);
-            onUnlock.forceActiveFocus();
         }
         onAcceptRequested: save()
         onDismissed: page.mode = "list"
@@ -348,7 +347,7 @@ FocusScope {
             id: onUnlock
             text: i18n.t("ssh.on_unlock")
             onSubmitted: sshModal.save()
-            onCancelled: sshModal.dismissed()
+            onCancelled: sshModal.takeKeyboard()
             onNextRequested: sshModal.moveFocus(sshModal.tabOrder, onUnlock, 1)
             onPreviousRequested: sshModal.moveFocus(sshModal.tabOrder, onUnlock, -1)
         }
@@ -357,7 +356,7 @@ FocusScope {
             id: confirmation
             text: i18n.t("ssh.confirm")
             onSubmitted: sshModal.save()
-            onCancelled: sshModal.dismissed()
+            onCancelled: sshModal.takeKeyboard()
             onNextRequested: sshModal.moveFocus(sshModal.tabOrder, confirmation, 1)
             onPreviousRequested: sshModal.moveFocus(sshModal.tabOrder, confirmation, -1)
         }
@@ -369,7 +368,7 @@ FocusScope {
             field.inputMethodHints: Qt.ImhDigitsOnly
             field.validator: RegularExpressionValidator { regularExpression: /[0-9]+/ }
             onSubmitted: sshModal.save()
-            onCancelled: sshModal.dismissed()
+            onCancelled: sshModal.takeKeyboard()
             onNextRequested: sshModal.moveFocus(sshModal.tabOrder, lifetime, 1)
             onPreviousRequested: sshModal.moveFocus(sshModal.tabOrder, lifetime, -1)
         }

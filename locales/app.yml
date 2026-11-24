@@ -731,8 +731,8 @@ ui.type_login:
   pt-BR: "senha"
   en: "password"
 ui.type_ssh:
-  pt-BR: "ssh"
-  en: "ssh"
+  pt-BR: "SSH"
+  en: "SSH"
 ui.type_group:
   pt-BR: "grupo"
   en: "group"

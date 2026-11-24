@@ -18,12 +18,11 @@ Modal {
 
     onAcceptRequested: root.submit()
 
-    capturesKeys: false
+    firstField: nameField.field
 
     onShown: {
         nameField.text = "";
         passwordField.text = "";
-        nameField.field.forceActiveFocus();
     }
 
     function submit() {
@@ -42,7 +41,7 @@ Modal {
         onSubmitted: passwordField.field.forceActiveFocus()
         onNextRequested: passwordField.field.forceActiveFocus()
         onPreviousRequested: passwordField.field.forceActiveFocus()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 
     Field {
@@ -55,6 +54,6 @@ Modal {
         onSubmitted: root.submit()
         onNextRequested: nameField.field.forceActiveFocus()
         onPreviousRequested: nameField.field.forceActiveFocus()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 }

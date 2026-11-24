@@ -38,18 +38,14 @@ Modal {
         }
     }
 
-    capturesKeys: false
+    firstField: root.askingCode ? codeField.field : serverField.field
 
     function focusFirstField() {
         if (root.askingCode) {
             codeField.text = "";
             codeField.field.forceActiveFocus();
-        } else if (serverField.text.trim().length === 0) {
-            serverField.field.forceActiveFocus();
-        } else if (emailField.text.length === 0) {
-            emailField.field.forceActiveFocus();
         } else {
-            passwordField.field.forceActiveFocus();
+            root.takeKeyboard();
         }
     }
 
@@ -94,7 +90,7 @@ Modal {
         onSubmitted: emailField.field.forceActiveFocus()
         onNextRequested: emailField.field.forceActiveFocus()
         onPreviousRequested: passwordField.field.forceActiveFocus()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 
     Field {
@@ -108,7 +104,7 @@ Modal {
         onSubmitted: passwordField.field.forceActiveFocus()
         onNextRequested: passwordField.field.forceActiveFocus()
         onPreviousRequested: serverField.field.forceActiveFocus()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 
     Field {
@@ -123,7 +119,7 @@ Modal {
         onSubmitted: root.submitCredentials()
         onNextRequested: serverField.field.forceActiveFocus()
         onPreviousRequested: emailField.field.forceActiveFocus()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 
     Field {
@@ -135,6 +131,6 @@ Modal {
         enabled: !root.busy
 
         onSubmitted: if (text.trim().length > 0) root.codeSubmitted(text)
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 }

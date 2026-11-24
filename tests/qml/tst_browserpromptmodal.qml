@@ -38,11 +38,13 @@ TestCase {
         ask({ "kind": "access", "site": "github.com",
               "entries": [{ "path": "Web/GitHub", "name": "GitHub", "login": "ana" },
                           { "path": "Web/GitHub trabalho", "name": "GitHub trabalho", "login": "" }] });
-        // Both ticked, the first one under the keyboard.
+        // Both entries start checked.
         const remember = findChild(modal.contentItem, "accessRemember");
         verify(remember.checked);
         verify(modal.accessOrder[0].checked && modal.accessOrder[1].checked);
-        tryVerify(function() { return modal.accessOrder[0].activeFocus; }, 2000);
+        verify(!modal.accessOrder[0].activeFocus);
+        keyClick(Qt.Key_Tab);
+        verify(modal.accessOrder[0].activeFocus);
 
         keyClick(Qt.Key_Space);
         verify(!modal.accessOrder[0].checked);
@@ -63,7 +65,12 @@ TestCase {
     function test_escapeDeniesAccess() {
         ask({ "kind": "access", "site": "github.com",
               "entries": [{ "path": "Web/GitHub", "name": "GitHub", "login": "ana" }] });
-        tryVerify(function() { return modal.accessOrder[0].activeFocus; }, 2000);
+        verify(!modal.accessOrder[0].activeFocus);
+        keyClick(Qt.Key_Tab);
+        verify(modal.accessOrder[0].activeFocus);
+        keyClick(Qt.Key_Escape);
+        verify(modal.opened);
+        compare(browser.answers.length, 0);
         keyClick(Qt.Key_Escape);
         const answer = lastAnswer();
         compare(answer.value.allowed, []);
@@ -89,6 +96,9 @@ TestCase {
         ask({ "kind": "associate", "vault": "Pessoal.kdbx" });
         const name = findChild(modal.contentItem, "associateName");
         tryVerify(function() { return name.field.activeFocus; }, 2000);
+        keyClick(Qt.Key_Escape);
+        verify(modal.opened);
+        compare(browser.answers.length, 0);
         keyClick(Qt.Key_Escape);
         compare(lastAnswer().value, "");
     }

@@ -251,7 +251,7 @@ FocusScope {
                     font.weight: Font.DemiBold
                     MouseArea {
                         anchors.fill: parent
-                        enabled: pane.hasHeadingMenu
+                        visible: pane.hasHeadingMenu
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             const pos = mapToItem(pane, width / 2, height);
@@ -467,6 +467,11 @@ FocusScope {
                         : modelData.path !== undefined ? modelData.path : ""
                     readonly property string tag: pane.tagFor(modelData)
 
+                    function activateHint() {
+                        list.currentIndex = index;
+                        pane.activated(index);
+                    }
+
                     function cell(key) {
                         const value = typeof modelData === "object" ? modelData[key] : "";
                         return value === undefined || value === null ? "" : String(value);
@@ -576,10 +581,7 @@ FocusScope {
                             list.currentIndex = index;
                             pane.leaveSearch();
                         }
-                        onDoubleTapped: {
-                            list.currentIndex = index;
-                            pane.activated(index);
-                        }
+                        onDoubleTapped: row.activateHint()
                     }
 
                 }

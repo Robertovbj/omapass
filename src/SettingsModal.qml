@@ -44,7 +44,7 @@ Modal {
         font.pixelSize: Math.round(12 * root.s)
     }
 
-    capturesKeys: false
+    firstField: pathField.field
 
     onShown: {
         const values = controller.settings();
@@ -61,7 +61,6 @@ Modal {
         root.wordlistInUse = values.wordlistInUse;
         root.configPath = values.configPath;
         wordlistField.text = values.wordlist;
-        pathField.field.forceActiveFocus();
     }
 
     // The minutes field only shows while the lock is on; moveFocus skips it
@@ -168,7 +167,7 @@ Modal {
             label: i18n.t("settings.path_label")
 
             onSubmitted: root.submit()
-            onCancelled: root.dismissed()
+            onCancelled: root.takeKeyboard()
             onNextRequested: root.focusNext(pathField)
             onPreviousRequested: root.focusPrevious(pathField)
         }
@@ -189,7 +188,7 @@ Modal {
         text: i18n.t("settings.recency")
 
         onSubmitted: root.submit()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
         onNextRequested: root.focusNext(recencyBox)
         onPreviousRequested: root.focusPrevious(recencyBox)
     }
@@ -201,7 +200,7 @@ Modal {
         text: i18n.t("settings.lock_enabled")
 
         onSubmitted: root.submit()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
         onNextRequested: root.focusNext(lockBox)
         onPreviousRequested: root.focusPrevious(lockBox)
     }
@@ -214,7 +213,7 @@ Modal {
         field.inputMethodHints: Qt.ImhDigitsOnly
 
         onSubmitted: root.submit()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
         onNextRequested: root.focusNext(lockField)
         onPreviousRequested: root.focusPrevious(lockField)
     }
@@ -228,7 +227,7 @@ Modal {
             : i18n.t("settings.site_icons")
 
         onSubmitted: root.submit()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
         onNextRequested: root.focusNext(iconsBox)
         onPreviousRequested: root.focusPrevious(iconsBox)
     }
@@ -240,7 +239,7 @@ Modal {
         text: i18n.t("settings.site_icons_duckduckgo")
 
         onSubmitted: root.submit()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
         onNextRequested: root.focusNext(duckDuckGoBox)
         onPreviousRequested: root.focusPrevious(duckDuckGoBox)
     }
@@ -268,7 +267,7 @@ Modal {
         text: i18n.t("settings.browser")
 
         onSubmitted: root.submit()
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
         onNextRequested: root.focusNext(browserBox)
         onPreviousRequested: root.focusPrevious(browserBox)
     }
@@ -291,7 +290,7 @@ Modal {
             label: i18n.t("settings.wordlist_label")
 
             onSubmitted: root.submit()
-            onCancelled: root.dismissed()
+            onCancelled: root.takeKeyboard()
             onNextRequested: root.focusNext(wordlistField)
             onPreviousRequested: root.focusPrevious(wordlistField)
         }

@@ -34,7 +34,7 @@ Modal {
             root.submitted(passwordField.text);
     }
 
-    capturesKeys: false
+    firstField: root.usingPin ? pinField.field : passwordField.field
 
     onShown: {
         root.usingPin = root.pinAvailable;
@@ -83,7 +83,7 @@ Modal {
         enabled: !root.busy
 
         onSubmitted: root.pinSubmitted(text)
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
         // Tab, next and previous all mean the same thing here: give up on
         // the PIN and type the master password.
         onNextRequested: root.useMasterPassword()
@@ -99,6 +99,6 @@ Modal {
         enabled: !root.busy
 
         onSubmitted: root.submitted(text)
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 }

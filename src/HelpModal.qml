@@ -29,7 +29,7 @@ Modal {
         return result;
     }
 
-    capturesKeys: false
+    firstField: filterField.field
 
     onShown: {
         filterField.text = "";
@@ -45,7 +45,7 @@ Modal {
         width: parent.width
         placeholderText: i18n.t("help.filter")
 
-        onCancelled: root.dismissed()
+        onCancelled: root.takeKeyboard()
     }
 
     // ? and q are typed into the filter; F1 still closes.

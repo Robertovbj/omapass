@@ -40,6 +40,21 @@ TestCase {
         compare(page.mode, "list", "enquanto procura, a lista fica");
     }
 
+    function test_startup_keyboard_navigates_databases() {
+        page.forceActiveFocus();
+        controller.emitDatabases(testCase.bancos);
+        const list = findChild(page, "entryList");
+        waitForRendering(list);
+        list.currentIndex = 0;
+        keyClick(Qt.Key_J);
+        compare(list.currentIndex, 1);
+        keyClick(Qt.Key_Slash);
+        keyClick(Qt.Key_X);
+        compare(controller.databaseQuery, "x");
+        keyClick(Qt.Key_Backspace);
+        keyClick(Qt.Key_Escape);
+    }
+
     // The order the application actually produces.
     function test_list_before_flag_keeps_the_list() {
         controller.emitDatabases(testCase.bancos);

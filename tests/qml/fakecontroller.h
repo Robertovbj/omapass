@@ -141,7 +141,8 @@ public:
         emit databasesChanged();
     }
 
-    Q_INVOKABLE void selectDatabase(int) {}
+    Q_INVOKABLE void selectDatabase(int index) { emit databaseSelected(index); }
+    Q_INVOKABLE void copyPassword(const QString &entry) { emit passwordRequested(entry); }
     Q_INVOKABLE void copyText(const QString &text) {
         m_lastCopied = text;
         emit copied();
@@ -212,6 +213,8 @@ public:
     }
 
 signals:
+    void databaseSelected(int index);
+    void passwordRequested(const QString &entry);
     void databaseSwitched(const QString &path);
     void databasePickerRequested();
     void queryChanged();
