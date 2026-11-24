@@ -2650,11 +2650,8 @@ QVariantMap AppController::generatorOptions() const {
 // Generating takes about ten milliseconds, so it happens right here rather
 // than on a worker thread: the sheet regenerates on every change.
 QVariantMap AppController::generate(const QVariantMap &options) {
-    // Only with a vault open: generating is one step of putting a password
-    // somewhere, not a standalone tool.
-    if (m_vault.isNull())
-        return {};
-
+    // No database needed: a password can be made before deciding where to
+    // keep it, as KeePassXC's generator allows.
     const GeneratorOptions wanted = Generator::normalize(optionsFromMap(options));
 
     QSettings settings;

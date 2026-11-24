@@ -55,6 +55,17 @@ TestCase {
         keyClick(Qt.Key_Escape);
     }
 
+    // The generator needs no database: Ctrl+G opens it from this screen.
+    function test_ctrl_g_opens_the_generator_without_a_database() {
+        page.forceActiveFocus();
+        controller.emitDatabases(testCase.bancos);
+        controller.emitScanning(false);
+        compare(page.mode, "list");
+        keyClick(Qt.Key_G, Qt.ControlModifier);
+        compare(page.mode, "generate");
+        page.mode = "list";
+    }
+
     // The order the application actually produces.
     function test_list_before_flag_keeps_the_list() {
         controller.emitDatabases(testCase.bancos);
