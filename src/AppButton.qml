@@ -15,6 +15,10 @@ Button {
     readonly property real s: systemTheme.textScale
     readonly property bool lit: hovered || down
 
+    // Hover is asked for, not left to the platform: Qt turns it off where the
+    // platform theme says hover effects are not used (qtengine on Omarchy,
+    // for one), and then `hovered` never changes.
+    hoverEnabled: true
     focusPolicy: Qt.NoFocus
     implicitHeight: Math.round(36 * s)
     leftPadding: Math.round(16 * s)

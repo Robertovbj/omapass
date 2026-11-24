@@ -11,6 +11,8 @@ ScrollBar {
     required property Flickable view
     readonly property real s: systemTheme.textScale
 
+    // As in AppButton: hover is not left to the platform theme.
+    hoverEnabled: true
     active: hovered || pressed || shownLately.running
 
     contentItem: Rectangle {
