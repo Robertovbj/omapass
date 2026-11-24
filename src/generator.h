@@ -19,11 +19,24 @@ struct GeneratorOptions {
     bool lower = true;
     bool upper = true;
     bool numbers = true;
-    bool special = true;
+    // The printable ASCII punctuation, in KeePassXC's six groups. Together
+    // they are every symbol on a US keyboard.
+    bool logograms = true;     // # $ % & @ ^ ` ~
+    bool punctuation = true;   // . , : ;
+    bool quotes = true;        // " '
+    bool dashes = true;        // \ / | _ -
+    bool math = true;          // < > * + ! ? =
+    bool braces = true;        // { [ ( ) ] }
+    // Latin-1's printable characters past ASCII (¡ to ÿ).
+    bool extendedAscii = false;
     bool excludeSimilar = false;
-    // Characters to leave out, and a set to draw from instead of the classes
-    // above. Both are optional.
+    // At least one character from each group in use.
+    bool everyGroup = true;
+    // Characters to leave out; characters to draw from as a group of their
+    // own, beside the classes; and a set to draw from instead of the
+    // classes. All optional.
     QString exclude;
+    QString extra;
     QString custom;
 
     // Passphrase
@@ -56,6 +69,20 @@ QStringList wordlistDirectories();
 // The first wordlist that is actually there. Empty when none is, which is
 // what hides the passphrase mode.
 QString wordlistPath();
+
+// The groups a password is drawn from, after the exclusions: the classes
+// and the extra characters, or the custom set alone. Empty groups are left
+// out.
+QStringList characterGroups(const GeneratorOptions &options);
+
+// How many bits of entropy a result of these options carries, as generated:
+// length × log2(pool) for a password, words × log2(list size) for a
+// passphrase. 0 when nothing can be generated.
+double entropyBits(const GeneratorOptions &options);
+
+// KeePassXC's bands: below 40 bits "poor", below 75 "weak", below 100
+// "good", and "excellent" from there.
+QString quality(double bits);
 
 bool generate(const GeneratorOptions &options, Secret *password, QString *error);
 

@@ -200,16 +200,26 @@ public:
             {QStringLiteral("lower"), true},
             {QStringLiteral("upper"), true},
             {QStringLiteral("numbers"), true},
-            {QStringLiteral("special"), false},
+            {QStringLiteral("logograms"), false},
+            {QStringLiteral("punctuation"), false},
+            {QStringLiteral("quotes"), false},
+            {QStringLiteral("dashes"), false},
+            {QStringLiteral("math"), false},
+            {QStringLiteral("braces"), false},
+            {QStringLiteral("extendedAscii"), false},
             {QStringLiteral("excludeSimilar"), false},
+            {QStringLiteral("everyGroup"), true},
             {QStringLiteral("exclude"), QString()},
+            {QStringLiteral("extra"), QString()},
             {QStringLiteral("custom"), QString()},
             {QStringLiteral("words"), 6},
             {QStringLiteral("separator"), QStringLiteral("-")},
         };
     }
     Q_INVOKABLE QVariantMap generate(const QVariantMap &) const {
-        return {{QStringLiteral("password"), QStringLiteral("senha-de-teste")}};
+        return {{QStringLiteral("password"), QStringLiteral("senha-de-teste")},
+                {QStringLiteral("entropy"), 82.0},
+                {QStringLiteral("quality"), QStringLiteral("good")}};
     }
 
 signals:

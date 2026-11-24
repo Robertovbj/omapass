@@ -46,8 +46,8 @@ TestCase {
         tryVerify(function() { return focused() === modal.tabOrder[1]; }, 3000,
                   "o teclado começa no comprimento");
 
-        // length → five boxes → exclude → custom → passphrase toggle
-        const expected = [2, 3, 4, 5, 6, 7, 8, 0, 1];
+        // length → twelve boxes → extra → exclude → custom → passphrase toggle
+        const expected = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 0, 1];
         for (let i = 0; i < expected.length; ++i) {
             keyClick(Qt.Key_Tab);
             compare(focused(), modal.tabOrder[expected[i]], "Tab nº " + (i + 1));
@@ -63,7 +63,7 @@ TestCase {
         keyClick(Qt.Key_Backtab);
         compare(focused(), modal.tabOrder[0], "volta para o modo frase-senha");
         keyClick(Qt.Key_Backtab);
-        compare(focused(), modal.tabOrder[8], "e dá a volta até o último campo");
+        compare(focused(), modal.tabOrder[16], "e dá a volta até o último campo");
     }
 
     function test_space_ticks_the_focused_box() {
@@ -99,9 +99,9 @@ TestCase {
 
         // mode tabs → words → separator → mode tabs
         keyClick(Qt.Key_Tab);
-        compare(focused(), modal.tabOrder[9]);
+        compare(focused(), modal.tabOrder[17]);
         keyClick(Qt.Key_Tab);
-        compare(focused(), modal.tabOrder[10]);
+        compare(focused(), modal.tabOrder[18]);
         keyClick(Qt.Key_Tab);
         compare(focused(), passphrase);
     }

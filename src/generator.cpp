@@ -10,7 +10,9 @@
 
 #include <botan/system_rng.h>
 
+#include <cmath>
 #include <limits>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -24,13 +26,41 @@ constexpr int maxLength = 128;
 constexpr int minWords = 3;
 constexpr int maxWords = 16;
 
-// What each class draws from. Special is the printable ASCII punctuation;
-// "similar" are the characters that are easy to take for one another.
+// What each class draws from. The six symbol groups are KeePassXC's and
+// split the printable ASCII punctuation between them; "similar" are the
+// characters that are easy to take for one another.
 const QString lowerSet = QStringLiteral("abcdefghijklmnopqrstuvwxyz");
 const QString upperSet = QStringLiteral("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
 const QString numberSet = QStringLiteral("0123456789");
-const QString specialSet = QStringLiteral("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~");
+const QString logogramSet = QStringLiteral("#$%&@^`~");
+const QString punctuationSet = QStringLiteral(".,:;");
+const QString quoteSet = QStringLiteral("\"'");
+const QString dashSet = QStringLiteral("\\/|_-");
+const QString mathSet = QStringLiteral("<>*+!?=");
+const QString braceSet = QStringLiteral("{[()]}");
 const QString similarSet = QStringLiteral("iIl1|Lo0O");
+
+// Latin-1 from ¡ (U+00A1) to ÿ (U+00FF), less the soft hyphen, which does
+// not show: what KeePassXC calls extended ASCII.
+QString extendedAsciiSet() {
+    QString set;
+    for (ushort code = 0xA1; code <= 0xFF; ++code) {
+        if (code != 0xAD)
+            set.append(QChar(code));
+    }
+    return set;
+}
+
+// Each character once, in the order first seen: a set typed by hand may
+// repeat one, which would make it likelier than the rest.
+QString unique(const QString &text) {
+    QString out;
+    for (const QChar c : text) {
+        if (!out.contains(c))
+            out.append(c);
+    }
+    return out;
+}
 
 // A uniform number in [0, bound), without modulo bias.
 quint32 randomBelow(quint32 bound) {
@@ -85,9 +115,70 @@ GeneratorOptions normalize(GeneratorOptions options) {
         return options;
 
     // Every class off would leave nothing to draw from.
-    if (!options.lower && !options.upper && !options.numbers && !options.special)
+    if (!options.lower && !options.upper && !options.numbers && !options.logograms
+        && !options.punctuation && !options.quotes && !options.dashes && !options.math
+        && !options.braces && !options.extendedAscii && options.extra.isEmpty())
         options.lower = true;
     return options;
+}
+
+QStringList characterGroups(const GeneratorOptions &options) {
+    QString removed = options.exclude;
+    if (options.excludeSimilar)
+        removed += similarSet;
+
+    QStringList groups;
+    if (!options.custom.isEmpty()) {
+        groups << withoutChars(unique(options.custom), removed);
+    } else {
+        const std::pair<bool, QString> classes[] = {
+            {options.lower, lowerSet},
+            {options.upper, upperSet},
+            {options.numbers, numberSet},
+            {options.logograms, logogramSet},
+            {options.punctuation, punctuationSet},
+            {options.quotes, quoteSet},
+            {options.dashes, dashSet},
+            {options.math, mathSet},
+            {options.braces, braceSet},
+            {options.extendedAscii, extendedAsciiSet()},
+        };
+        QString taken;
+        for (const auto &[on, set] : classes) {
+            if (on) {
+                groups << withoutChars(set, removed);
+                taken += set;
+            }
+        }
+        // The extra characters a class already has would count twice.
+        groups << withoutChars(unique(options.extra), removed + taken);
+    }
+    groups.removeAll(QString());
+    return groups;
+}
+
+double entropyBits(const GeneratorOptions &options) {
+    const GeneratorOptions bounded = normalize(options);
+    if (bounded.passphrase) {
+        const QString wordlist = wordlistPath();
+        const qsizetype size = wordlist.isEmpty() ? 0 : readWords(wordlist).size();
+        return size > 1 ? bounded.words * std::log2(double(size)) : 0;
+    }
+
+    qsizetype pool = 0;
+    for (const QString &group : characterGroups(bounded))
+        pool += group.size();
+    return pool > 1 ? bounded.length * std::log2(double(pool)) : 0;
+}
+
+QString quality(double bits) {
+    if (bits < 40)
+        return QStringLiteral("poor");
+    if (bits < 75)
+        return QStringLiteral("weak");
+    if (bits < 100)
+        return QStringLiteral("good");
+    return QStringLiteral("excellent");
 }
 
 void configure(const QString &configured, const QString &language) {
@@ -181,24 +272,7 @@ bool generate(const GeneratorOptions &options, Secret *password, QString *error)
 
         // The classes in use, each with the characters left after the
         // exclusions; a custom set stands alone.
-        QString removed = bounded.exclude;
-        if (bounded.excludeSimilar)
-            removed += similarSet;
-
-        QStringList groups;
-        if (!bounded.custom.isEmpty()) {
-            groups << withoutChars(bounded.custom, removed);
-        } else {
-            if (bounded.lower)
-                groups << withoutChars(lowerSet, removed);
-            if (bounded.upper)
-                groups << withoutChars(upperSet, removed);
-            if (bounded.numbers)
-                groups << withoutChars(numberSet, removed);
-            if (bounded.special)
-                groups << withoutChars(specialSet, removed);
-        }
-        groups.removeAll(QString());
+        const QStringList groups = characterGroups(bounded);
         if (groups.isEmpty()) {
             *error = I18n::t(QStringLiteral("generator.error"));
             return false;
@@ -208,13 +282,15 @@ bool generate(const GeneratorOptions &options, Secret *password, QString *error)
         for (const QString &group : std::as_const(groups))
             pool += group;
 
-        // One from every class first, so the result meets what was asked
-        // for; the rest from the whole pool; then shuffled so the guaranteed
-        // ones do not sit at the front.
+        // With everyGroup, one from every group first, so the result meets
+        // what was asked for; the rest from the whole pool; then shuffled so
+        // the guaranteed ones do not sit at the front.
         std::vector<QChar> picked;
-        for (const QString &group : std::as_const(groups)) {
-            if (int(picked.size()) < bounded.length)
-                picked.push_back(group.at(int(randomBelow(quint32(group.size())))));
+        if (bounded.everyGroup) {
+            for (const QString &group : groups) {
+                if (int(picked.size()) < bounded.length)
+                    picked.push_back(group.at(int(randomBelow(quint32(group.size())))));
+            }
         }
         while (int(picked.size()) < bounded.length)
             picked.push_back(pool.at(int(randomBelow(quint32(pool.size())))));
