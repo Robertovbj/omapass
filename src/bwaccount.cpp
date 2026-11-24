@@ -390,16 +390,17 @@ QJsonObject BwAccount::cipherRequest(const QJsonObject &encrypted, const QString
     request.insert(QStringLiteral("folderId"), folderId.isEmpty() ? QJsonValue(QJsonValue::Null)
                                                                   : QJsonValue(folderId));
 
-    if (encrypted.isEmpty() && !data.sshPublicKey.isEmpty()) {
+    if (!data.sshPublicKey.isEmpty() && (encrypted.isEmpty() || request.value(QStringLiteral("type")).toInt() == 5)) {
         request.remove(QStringLiteral("login"));
         request.insert(QStringLiteral("type"), 5);
         const QByteArray blob = QByteArray::fromBase64(data.sshPublicKey.section(' ', 1, 1).toLatin1());
         const QByteArray digest = QCryptographicHash::hash(blob, QCryptographicHash::Sha256);
         const QString fingerprint = QStringLiteral("SHA256:")
             + QString::fromLatin1(digest.toBase64(QByteArray::OmitTrailingEquals));
-        request.insert(QStringLiteral("sshKey"), QJsonObject{
-            {QStringLiteral("publicKey"), encryptedField(data.sshPublicKey, key)},
-            {QStringLiteral("keyFingerprint"), encryptedField(fingerprint, key)}});
+        QJsonObject ssh = request.value(QStringLiteral("sshKey")).toObject();
+        ssh.insert(QStringLiteral("publicKey"), encryptedField(data.sshPublicKey, key));
+        ssh.insert(QStringLiteral("keyFingerprint"), encryptedField(fingerprint, key));
+        request.insert(QStringLiteral("sshKey"), ssh);
     }
     if (request.value(QStringLiteral("type")).toInt() == 5) {
         // An SSH key has no login: the "password" is the private key.

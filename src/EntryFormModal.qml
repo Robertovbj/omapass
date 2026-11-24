@@ -8,7 +8,9 @@ Modal {
     id: root
 
     property bool sshSupported: false
-    readonly property bool sshEntry: !isEdit && sshSupported && kinds.currentIndex === 1
+    readonly property bool sshEntry: isEdit ? fields.type === "ssh" : sshSupported && kinds.currentIndex === 1
+    readonly property bool sshAttachment: isEdit && !!fields.sshAttachment
+    readonly property bool inlineSshKey: sshEntry && !sshAttachment
     property bool resumeDraft: false
     property bool isEdit: false
     property bool passBackend: false
@@ -21,13 +23,16 @@ Modal {
     acceptText: i18n.t("common.save")
     cardWidth: Math.round(560 * s)
 
-    acceptEnabled: !sshEntry || privateKey.text.trim().length > 0
+    acceptEnabled: !inlineSshKey || privateKey.text.trim().length > 0
 
     onAcceptRequested: root.submit()
 
     capturesKeys: false
 
-    onClosed: privateKey.clear()
+    onClosed: {
+        privateKey.text = "";
+        publicKey.text = "";
+    }
 
     onShown: {
         if (resumeDraft) {
@@ -36,11 +41,12 @@ Modal {
             return;
         }
         kinds.currentIndex = 0;
-        privateKey.text = "";
+        privateKey.text = inlineSshKey ? (fields.password || "") : "";
+        publicKey.text = fields.sshPublicKey || "";
         groupField.text = root.fields.group || "";
         titleField.text = root.fields.title || "";
         usernameField.text = root.fields.username || "";
-        passwordField.text = root.fields.password || "";
+        passwordField.text = inlineSshKey ? "" : (root.fields.password || "");
         urlField.text = root.fields.url || "";
         extraUrlsField.text = (root.fields.extraUrls || []).join(" ");
         notesArea.text = root.fields.notes || "";
@@ -49,7 +55,9 @@ Modal {
 
         // Group and title already came from the path, so editing starts on
         // the password — the field that actually changes most often.
-        if (root.isEdit)
+        if (root.isEdit && root.inlineSshKey)
+            privateKey.field.forceActiveFocus();
+        else if (root.isEdit)
             passwordField.field.forceActiveFocus();
         else
             groupField.field.forceActiveFocus();
@@ -79,19 +87,20 @@ Modal {
             return;
         root.submitted({
             "type": root.sshEntry ? "ssh" : "login",
+            "sshPublicKey": root.sshEntry ? publicKey.text : "",
             "isEdit": root.isEdit,
             "originalPath": root.fields.originalPath || "",
             "group": groupField.text,
             "title": titleField.text,
-            "username": root.sshEntry ? "" : usernameField.text,
-            "password": root.sshEntry ? privateKey.text : passwordField.text,
-            "url": root.sshEntry ? "" : urlField.text,
-            "extraUrls": root.sshEntry ? "" : extraUrlsField.text,
+            "username": root.inlineSshKey ? "" : usernameField.text,
+            "password": root.inlineSshKey ? privateKey.text : passwordField.text,
+            "url": root.inlineSshKey ? "" : urlField.text,
+            "extraUrls": root.inlineSshKey ? "" : extraUrlsField.text,
             "notes": notesArea.text,
             "extra": root.fields.extra || [],
             // The controller keeps the original as it was when the field was
             // not touched, and checks and normalises it when it was.
-            "otp": root.sshEntry ? "" : otpField.text,
+            "otp": root.inlineSshKey ? "" : otpField.text,
             "originalOtp": root.fields.otp || ""
         });
     }
@@ -99,7 +108,7 @@ Modal {
     // The fields the pass backend does not show are hidden, which is how
     // moveFocus knows to skip them.
     readonly property var tabOrder: [
-        kinds, groupField, titleField, privateKey, usernameField, passwordField, revealPassword,
+        kinds, groupField, titleField, privateKey, publicKey, usernameField, passwordField, revealPassword,
         otpField, urlField, extraUrlsField, notesArea
     ]
 
@@ -151,7 +160,7 @@ Modal {
     Field {
         id: usernameField
         width: parent.width
-        visible: !root.passBackend && !root.sshEntry
+        visible: !root.passBackend && !root.inlineSshKey
         label: i18n.t("common.username_label")
 
         onCancelled: root.dismissed()
@@ -162,7 +171,7 @@ Modal {
 
     Field {
         id: passwordField
-        visible: !root.sshEntry
+        visible: !root.inlineSshKey
         width: parent.width
         label: i18n.t("common.password_label")
         echoMode: revealPassword.checked ? TextInput.Normal : TextInput.Password
@@ -191,7 +200,7 @@ Modal {
     // code, both go in as they are.
     Field {
         id: otpField
-        visible: !root.sshEntry
+        visible: !root.inlineSshKey
         objectName: "otpField"
         width: parent.width
         label: i18n.t("common.otp_label")
@@ -206,7 +215,7 @@ Modal {
     Field {
         id: urlField
         width: parent.width
-        visible: !root.passBackend && !root.sshEntry
+        visible: !root.passBackend && !root.inlineSshKey
         label: i18n.t("common.url_label")
 
         onCancelled: root.dismissed()
@@ -221,7 +230,7 @@ Modal {
         id: extraUrlsField
         objectName: "extraUrlsField"
         width: parent.width
-        visible: !root.passBackend && !root.sshEntry
+        visible: !root.passBackend && !root.inlineSshKey
         label: i18n.t("common.extra_urls_label")
         placeholderText: "https://exemplo.com https://login.exemplo.com"
 
@@ -231,22 +240,61 @@ Modal {
         onPreviousRequested: root.focusPrevious(extraUrlsField)
     }
 
-    ScrollView {
-        visible: root.sshEntry
+    component KeyField: Column {
+        id: keyField
+        required property string label
+        property alias text: editor.text
+        property alias field: editor
+        property alias editorName: editor.objectName
+        property alias placeholder: editor.placeholderText
         width: parent.width
-        height: Math.round(110 * root.s)
-        contentWidth: availableWidth
-        TextArea {
-            id: privateKey
-            objectName: "sshPrivateKey"
-            placeholderText: i18n.t("ssh.private_key")
-            wrapMode: TextArea.WrapAnywhere
-            font.family: systemTheme.monoFamily
-            color: theme.foreground
-            Keys.onEscapePressed: root.dismissed()
-            Keys.onTabPressed: root.focusNext(privateKey)
-            Keys.onBacktabPressed: root.focusPrevious(privateKey)
+        spacing: Math.round(6 * root.s)
+
+        Text {
+            text: keyField.label
+            color: editor.activeFocus ? theme.foreground : theme.muted
+            font.pixelSize: Math.round(13 * root.s)
         }
+        ScrollView {
+            width: parent.width
+            height: Math.round(90 * root.s)
+            contentWidth: availableWidth
+            background: Rectangle {
+                color: theme.background
+                radius: Math.min(4, theme.radius)
+                border.color: editor.activeFocus ? theme.accent : theme.border
+            }
+            TextArea {
+                id: editor
+                background: null
+                padding: Math.round(10 * root.s)
+                font.family: systemTheme.monoFamily
+                wrapMode: TextArea.WrapAnywhere
+                color: theme.foreground
+                placeholderTextColor: theme.muted
+                selectionColor: theme.selection
+                selectedTextColor: theme.selectionText
+                Keys.onEscapePressed: root.dismissed()
+                Keys.onTabPressed: root.focusNext(keyField)
+                Keys.onBacktabPressed: root.focusPrevious(keyField)
+            }
+        }
+    }
+
+    KeyField {
+        id: privateKey
+        editorName: "sshPrivateKey"
+        label: i18n.t("ssh.private_label")
+        placeholder: i18n.t("ssh.private_key")
+        visible: root.inlineSshKey
+    }
+
+    KeyField {
+        id: publicKey
+        editorName: "sshPublicKey"
+        label: i18n.t("ssh.public_label")
+        placeholder: i18n.t("ssh.public_hint")
+        visible: root.sshEntry
     }
 
     Column {

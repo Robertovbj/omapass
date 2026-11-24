@@ -89,12 +89,44 @@ TestCase {
         compare(submitted.signalArguments[0][0].otp, otp.text);
         kinds.currentIndex = 1;
         findChild(form, "sshPrivateKey").text = "private key";
+        findChild(form, "sshPublicKey").text = "ssh-ed25519 AAAA deploy";
         form.submit();
         const payload = submitted.signalArguments[1][0];
         compare(payload.type, "ssh");
         compare(payload.password, "private key");
+        compare(payload.sshPublicKey, "ssh-ed25519 AAAA deploy");
         compare(payload.otp, "");
         form.sshSupported = false;
+    }
+
+    function test_edit_ssh_keys() {
+        form.isEdit = true;
+        form.fields = {type: "ssh", password: "private key", sshPublicKey: "ssh-ed25519 AAAA deploy"};
+        form.open();
+        tryCompare(form, "opened", true);
+        const publicKey = findChild(form, "sshPublicKey");
+        verify(publicKey.visible);
+        compare(publicKey.text, form.fields.sshPublicKey);
+        compare(findChild(form, "sshPrivateKey").text, form.fields.password);
+        publicKey.text += "-edited";
+        submitted.clear();
+        form.submit();
+        compare(submitted.signalArguments[0][0].sshPublicKey, publicKey.text);
+        form.close();
+        tryCompare(form, "opened", false);
+        form.fields = {type: "ssh", sshAttachment: true, password: "passphrase",
+                       sshPublicKey: "ssh-ed25519 AAAA", username: "deploy"};
+        form.open();
+        tryCompare(form, "opened", true);
+        verify(publicKey.visible);
+        verify(!findChild(form, "sshPrivateKey").visible);
+        submitted.clear();
+        form.submit();
+        compare(submitted.signalArguments[0][0].password, "passphrase");
+        compare(submitted.signalArguments[0][0].username, "deploy");
+        form.close();
+        form.isEdit = false;
+        form.fields = {};
     }
 
     function test_wrapped_notes_scroll_inside_the_form() {

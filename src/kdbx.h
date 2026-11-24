@@ -23,6 +23,7 @@
 
 // What the entry form shows.
 struct KdbxEntry {
+    QString sshPublicKey;
     Secret sshAttachment;  // Used when creating an entry with a KeeAgent attachment.
     QString title;
     QString username;

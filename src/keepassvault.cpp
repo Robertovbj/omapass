@@ -173,6 +173,7 @@ bool KeepassVault::fetchEntry(const QString &entryPath, EntryData *data, QString
         return false;
     }
     data->username = entry.username;
+    data->sshPublicKey = entry.sshPublicKey;
     data->password = entry.password;
     data->url = entry.url;
     data->extraUrls = entry.extraUrls;
@@ -191,6 +192,7 @@ bool KeepassVault::addEntry(const QString &entryPath, const QString &group, cons
     KdbxEntry entry;
     entry.title = lastSegment(entryPath);
     entry.username = data.username;
+    entry.sshPublicKey = data.sshPublicKey;
     entry.password = data.password;
     entry.url = data.url;
     entry.extraUrls = data.extraUrls;
@@ -213,6 +215,7 @@ bool KeepassVault::editEntry(const QString &oldPath, const QString &newPath, con
     KdbxEntry entry;
     entry.title = lastSegment(newPath);
     entry.username = data.username;
+    entry.sshPublicKey = data.sshPublicKey;
     entry.password = data.password;
     entry.url = data.url;
     entry.extraUrls = data.extraUrls;

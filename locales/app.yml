@@ -1244,3 +1244,19 @@ ssh.removed:
 ssh.private_key:
   pt-BR: "Cole a chave privada SSH"
   en: "Paste the SSH private key"
+
+ssh.private_label:
+  pt-BR: "Chave privada"
+  en: "Private key"
+
+ssh.public_label:
+  pt-BR: "Chave pública"
+  en: "Public key"
+
+ssh.public_hint:
+  pt-BR: "Cole a chave pública ou deixe em branco para usar a da chave privada."
+  en: "Paste the public key or leave blank to derive it from the private key."
+
+ssh.key_mismatch:
+  pt-BR: "A chave pública precisa corresponder à chave privada."
+  en: "The public key must match the private key."

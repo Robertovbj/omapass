@@ -604,6 +604,10 @@ private slots:
         QCOMPARE(decrypted(ssh.value("publicKey"), *key), data.sshPublicKey);
         QCOMPARE(decrypted(ssh.value("keyFingerprint"), *key),
                  QStringLiteral("SHA256:ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0"));
+        data.sshPublicKey += QStringLiteral(" deploy");
+        const auto edited = BwAccount::cipherRequest(request, data.password.toString(), QStringLiteral("Deploy"),
+                                                    {}, data, *key, {});
+        QCOMPARE(decrypted(edited.value("sshKey").toObject().value("publicKey"), *key), data.sshPublicKey);
     }
 
     void bitwardenNewItemStartsFromABlankLogin() {

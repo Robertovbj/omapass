@@ -509,6 +509,7 @@ private slots:
             KdbxEntry entry;
             entry.title = QStringLiteral("Deploy");
             entry.sshAttachment = Secret(QByteArray("private key content\n"));
+            entry.sshPublicKey = QStringLiteral("ssh-ed25519 YWJj deploy");
             QVERIFY(db->addEntry({}, entry).isEmpty());
             const QString path = dir.filePath(legacy ? QStringLiteral("3.kdbx") : QStringLiteral("4.kdbx"));
             QVERIFY(db->save(path).isEmpty());
@@ -518,6 +519,15 @@ private slots:
             Secret key;
             QVERIFY(db->sshKey(entry.title, &key));
             QCOMPARE(key.bytes(), entry.sshAttachment.bytes());
+            KdbxEntry edited;
+            QVERIFY(db->entry(entry.title, &edited));
+            QCOMPARE(edited.sshPublicKey, entry.sshPublicKey);
+            edited.sshPublicKey += QStringLiteral("-updated");
+            QVERIFY(db->editEntry(entry.title, {}, edited).isEmpty());
+            QVERIFY(db->entry(entry.title, &entry));
+            QCOMPARE(entry.sshPublicKey, edited.sshPublicKey);
+            QVERIFY(db->sshKey(entry.title, &key));
+            QCOMPARE(key.bytes(), QByteArray("private key content\n"));
         }
     }
 

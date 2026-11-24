@@ -1397,6 +1397,22 @@ QVariantMap AppController::entryFields(const QString &entry) {
         return fields;
     }
 
+    const auto ssh = m_listedMeta.value(entry).ssh;
+    if (ssh) {
+        const bool attachment = m_vault->kind() == VaultKind::Keepass;
+        fields.insert(QStringLiteral("type"), QStringLiteral("ssh"));
+        fields.insert(QStringLiteral("sshAttachment"), attachment);
+        if (data.sshPublicKey.isEmpty()) {
+            Secret key;
+            if (!attachment)
+                key = data.password;
+            else
+                m_vault->fetchSshKey(entry, ssh->id, &key, &error);
+            if (!key.isEmpty())
+                data.sshPublicKey = SshAgent::publicIdentity(key);
+        }
+        fields.insert(QStringLiteral("sshPublicKey"), data.sshPublicKey);
+    }
     fields.insert(QStringLiteral("username"), data.username);
     fields.insert(QStringLiteral("password"), data.password.toString());
     fields.insert(QStringLiteral("url"), data.url);
@@ -1427,14 +1443,43 @@ bool AppController::saveEntry(const QVariantMap &fields) {
     EntryData data;
     data.username = fields.value(QStringLiteral("username")).toString().trimmed();
     data.password = Secret(fields.value(QStringLiteral("password")).toString());
-    if (!isEdit && fields.value(QStringLiteral("type")).toString() == QLatin1String("ssh")) {
+    if (fields.value(QStringLiteral("type")).toString() == QLatin1String("ssh")) {
         if (passBackend() || onePasswordBackend())
             return false;
-        data.password = Secret(data.password.toString().trimmed() + QLatin1Char('\n'));
-        data.sshPublicKey = SshAgent::publicIdentity(data.password);
-        if (data.sshPublicKey.isEmpty()) {
-            showMessage(I18n::t(QStringLiteral("ssh.invalid_key")), true);
-            return false;
+        const QString publicKey = fields.value(QStringLiteral("sshPublicKey")).toString().trimmed();
+        Secret privateKey = data.password;
+        const bool attachment = isEdit && m_vault->kind() == VaultKind::Keepass;
+        bool validate = true;
+        if (isEdit) {
+            const QString original = fields.value(QStringLiteral("originalPath")).toString();
+            const auto ssh = m_listedMeta.value(original).ssh;
+            EntryData stored;
+            QString error;
+            if (!ssh || !m_vault->fetchEntry(original, &stored, &error)) {
+                showMessage(I18n::t(QStringLiteral("app.read_entry_error"), QStringLiteral("err"), error), true);
+                return false;
+            }
+            validate = publicKey != stored.sshPublicKey || (!attachment && privateKey.bytes() != stored.password.bytes());
+            if (attachment && validate && !m_vault->fetchSshKey(original, ssh->id, &privateKey, &error)) {
+                showMessage(I18n::t(QStringLiteral("ssh.invalid_key")), true);
+                return false;
+            }
+        }
+        if (validate) {
+            privateKey = Secret(privateKey.toString().trimmed() + QLatin1Char('\n'));
+            const QString identity = SshAgent::publicIdentity(privateKey);
+            if (identity.isEmpty()) {
+                showMessage(I18n::t(QStringLiteral("ssh.invalid_key")), true);
+                return false;
+            }
+            if (!publicKey.isEmpty() && (publicKey.contains(QLatin1Char('\n')) || publicKey.contains(QLatin1Char('\r'))
+                || publicKey.simplified().section(QLatin1Char(' '), 0, 1) != identity)) {
+                showMessage(I18n::t(QStringLiteral("ssh.key_mismatch")), true);
+                return false;
+            }
+            data.sshPublicKey = publicKey.isEmpty() ? identity : publicKey.simplified();
+            if (!attachment)
+                data.password = privateKey;
         }
     }
     data.url = fields.value(QStringLiteral("url")).toString().trimmed();

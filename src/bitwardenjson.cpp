@@ -139,6 +139,7 @@ EntryData bwEntryData(const QJsonObject &item) {
 
         EntryData data;
         data.password = Secret(key);
+        data.sshPublicKey = item.value(QStringLiteral("sshKey")).toObject().value(QStringLiteral("publicKey")).toString();
         data.notes = item.value(QStringLiteral("notes")).toString();
         return data;
     }

@@ -846,6 +846,8 @@ void KdbxDatabase::Impl::fill(XNode &entry, const KdbxEntry &data) const {
     // Read before the title changes: a KeePass 2 pair is labelled with it.
     const bool otpChanged = otpOf(entry) != data.otp.toString();
 
+    if (!data.sshPublicKey.isEmpty())
+        setString(entry, QStringLiteral("omapass.sshPublicKey"), data.sshPublicKey, false);
     setString(entry, QStringLiteral("Title"), data.title, false);
     setString(entry, QStringLiteral("UserName"), data.username, false);
     setString(entry, QStringLiteral("Password"), data.password.toString(), true);
@@ -918,6 +920,7 @@ std::unique_ptr<XNode> KdbxDatabase::Impl::makeEntry(const KdbxEntry &data) cons
 
 KdbxEntry KdbxDatabase::Impl::read(const XNode &entry) {
     KdbxEntry out;
+    out.sshPublicKey = stringOf(entry, QStringLiteral("omapass.sshPublicKey"));
     out.title = stringOf(entry, QStringLiteral("Title"));
     out.username = stringOf(entry, QStringLiteral("UserName"));
     out.password = Secret(stringOf(entry, QStringLiteral("Password")));
@@ -1594,7 +1597,8 @@ QString KdbxDatabase::editEntry(const QString &oldPath, const QString &group, co
     const bool changed = before.title != data.title || before.username != data.username
         || before.password.bytes() != data.password.bytes() || before.url != data.url
         || before.notes != data.notes || before.otp.bytes() != data.otp.bytes()
-        || before.extraUrls != data.extraUrls;
+        || before.extraUrls != data.extraUrls
+        || (!data.sshPublicKey.isEmpty() && before.sshPublicKey != data.sshPublicKey);
     if (changed)
         d->pushHistory(*entry);
 

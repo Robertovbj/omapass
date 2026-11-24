@@ -28,7 +28,7 @@ struct DbRef {
 // used by the pass backend, to preserve lines it does not model when an
 // entry that already had them is edited.
 struct EntryData {
-    QString sshPublicKey;  // Set when creating a native SSH key entry.
+    QString sshPublicKey;  // OpenSSH public key, including its optional comment.
     QString username;
     Secret password;
     QString url;
