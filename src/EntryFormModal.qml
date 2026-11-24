@@ -108,7 +108,7 @@ Modal {
         id: kinds
         objectName: "entryKinds"
         visible: !root.isEdit && root.sshSupported
-        options: [i18n.t("common.password_label"), i18n.t("ui.type_ssh")]
+        options: [i18n.t("common.password_label"), "SSH"]
         onNextRequested: root.focusNext(kinds)
         onPreviousRequested: root.focusPrevious(kinds)
         onSubmitted: root.submit()
