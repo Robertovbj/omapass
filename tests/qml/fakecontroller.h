@@ -83,6 +83,7 @@ class FakeController : public QObject {
     Q_PROPERTY(QObject *browser READ browser CONSTANT)
     Q_PROPERTY(QVariantList entryRows READ entryRows CONSTANT)
     Q_PROPERTY(QString query MEMBER m_query NOTIFY queryChanged)
+    Q_PROPERTY(QVariantList openDatabases READ openDatabases CONSTANT)
     Q_PROPERTY(QString vaultLabel READ vaultLabel CONSTANT)
     Q_PROPERTY(bool passBackend MEMBER m_passBackend CONSTANT)
     Q_PROPERTY(bool pinConfigured MEMBER m_pinConfigured CONSTANT)
@@ -93,6 +94,12 @@ public:
 
     QObject *browser() { return &m_browser; }
     bool anyDatabaseFound() const { return !m_databases.isEmpty(); }
+    QVariantList openDatabases() const {
+        return {QVariantMap{{"name", "Pessoal"}, {"kind", "KeePassXC"}, {"path", "/pessoal.kdbx"}},
+                QVariantMap{{"name", "Trabalho"}, {"kind", "pass"}, {"path", "/trabalho"}}};
+    }
+    Q_INVOKABLE void switchDatabase(const QString &path) { emit databaseSwitched(path); }
+    Q_INVOKABLE void chooseAnotherDatabase() { emit databasePickerRequested(); }
     QString vaultLabel() const { return QStringLiteral("Cofre"); }
 
     QVariantList entryRows() const {
@@ -205,6 +212,8 @@ public:
     }
 
 signals:
+    void databaseSwitched(const QString &path);
+    void databasePickerRequested();
     void queryChanged();
     void copied();
     void scanningChanged();

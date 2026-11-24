@@ -177,7 +177,7 @@ Modal {
     Text {
         width: parent.width
         visible: root.kind === "access"
-        text: i18n.t("browser.access_text", { "site": root.prompt.site || "" })
+        text: (root.prompt.vault ? root.prompt.vault + "\n" : "") + i18n.t("browser.access_text", { "site": root.prompt.site || "" })
         color: theme.foreground
         wrapMode: Text.WordWrap
         font.pixelSize: Math.round(14 * root.s)
@@ -225,7 +225,7 @@ Modal {
         width: parent.width
         visible: root.asksYesNo
         text: root.kind === "update"
-            ? i18n.t("browser.update_text", { "name": root.prompt.name || "",
+            ? (root.prompt.vault ? root.prompt.vault + "\n" : "") + i18n.t("browser.update_text", { "name": root.prompt.name || "",
                                               "login": root.prompt.login || "",
                                               "site": root.prompt.site || "" })
             : i18n.t("browser.conflict_text",

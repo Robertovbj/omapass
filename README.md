@@ -66,6 +66,15 @@ O omapass procura arquivos `.kdbx` e password-stores do pass (diretórios com `.
 dentro do diretório configurado (padrão: o home) e lista também as contas Bitwarden e
 1Password adicionadas por ele. Havendo um único banco, ele vai direto para o desbloqueio.
 
+Com um banco desbloqueado, clique no nome dele no cabeçalho ou use `Ctrl+Tab`
+para alternar entre bancos abertos. **Abrir outro banco…** permite desbloquear
+mais um. Na lista de entradas, `Esc`, `q` e o cadeado bloqueiam só o banco
+exibido. O bloqueio por inatividade e o da sessão protegem todos os bancos.
+
+A extensão busca logins nos bancos abertos que você conectou ao navegador.
+Ao atualizar uma senha, ela grava no banco de origem da entrada. Para um login
+novo, usa o banco exibido se ele estiver conectado.
+
 Na tela de bancos, `Ctrl+A` cria um banco ou adiciona uma conta. `Ctrl+?` mostra todos os
 atalhos, e `Ctrl+O` abre as configurações.
 

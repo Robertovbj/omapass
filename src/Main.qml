@@ -60,7 +60,18 @@ ApplicationWindow {
     Loader {
         id: pageLoader
         anchors.fill: parent
-        sourceComponent: controller.stage === "databases" ? databasePage : entriesPage
+        function loadStage() {
+            sourceComponent = null;
+            sourceComponent = controller.stage === "databases" ? databasePage : entriesPage;
+        }
+        Component.onCompleted: loadStage()
+        Connections {
+            target: controller
+            function onStageChanged() {
+                window.settingsOpen = false;
+                pageLoader.loadStage();
+            }
+        }
         // No forceActiveFocus() here: the page's own list pane claims the
         // keyboard when it should have it, and forcing focus onto the page
         // after loading would take it straight back off a sheet that opened

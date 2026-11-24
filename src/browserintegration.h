@@ -26,15 +26,16 @@ public:
     virtual const Vault *browserVault() const = 0;
     // The entries as the list has them (empty groups left out), the groups,
     // and the login and URL of every entry it knows them for.
-    virtual QStringList browserEntries() const = 0;
+    virtual QList<const Vault *> browserVaults() const { return {browserVault()}; }
+    virtual QStringList entriesFor(const Vault *vault) const = 0;
+    virtual QHash<QString, EntryMeta> metaFor(const Vault *vault) const = 0;
     virtual QStringList browserGroups() const = 0;
-    virtual QHash<QString, EntryMeta> browserMeta() const = 0;
     virtual void browserLock() = 0;
     virtual Secret browserGeneratePassword() = 0;
     // Runs a change to the vault off the main thread, the way the app's own
     // edits run, then lists the entries again. False at once when the vault
     // cannot take a change now (no vault, or another change running).
-    virtual bool browserChange(std::function<bool(const Vault *, QString *)> work,
+    virtual bool browserChange(const Vault *vault, std::function<bool(const Vault *, QString *)> work,
                                std::function<void(bool)> done) = 0;
 };
 
@@ -89,6 +90,9 @@ public:
     bool unlocked() const override;
     void showUnlock() override;
     QString databaseHash() const override;
+    QStringList databaseHashes() const override;
+    QString keyForDatabase(const QString &hash, const QString &id) const override;
+    void databaseTotp(const QString &hash, const QString &uuid, std::function<void(const QString &)> done) override;
     QString associationKey(const QString &id) const override;
     void associate(const QString &idKey, std::function<void(const QString &)> done) override;
     void findLogins(const BrowserLoginQuery &query,
@@ -121,10 +125,15 @@ private:
     void dropPrompts();
 
     BrowserStore *store() const;
-    QString pathOfUuid(const QString &uuid) const;
+    QString hashForVault(const Vault *vault) const;
+    QHash<const Vault *, QString> m_hashes;
+    const Vault *vaultByHash(const QString &hash) const;
+    QString pathOfUuid(const Vault *vault, const QString &uuid) const;
+    void findVaultLogins(const Vault *vault, const BrowserLoginQuery &query,
+                         std::function<void(const QVector<BrowserLogin> &)> done);
     // Reads `paths` from the vault off the main thread and hands the logins
     // to `done`, if the vault is still the same one by then.
-    void deliver(const QStringList &paths, std::function<void(const QVector<BrowserLogin> &)> done);
+    void deliver(const Vault *vault, const QStringList &paths, std::function<void(const QVector<BrowserLogin> &)> done);
     void install(bool replace, bool quiet);
 
     BrowserApp *m_app;
@@ -143,7 +152,7 @@ private:
     QList<QFuture<void>> m_reads;
     // The entries handed to a browser since the vault opened: a code is only
     // given for one of them.
-    QSet<QString> m_handedOut;
+    QHash<QString, QSet<QString>> m_handedOut;
     // Groups the browser asked for that have no entry yet (and so do not
     // exist anywhere but here), by the id it was given.
     QHash<QString, QString> m_pendingGroups;

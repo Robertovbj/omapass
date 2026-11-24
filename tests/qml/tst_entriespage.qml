@@ -50,6 +50,32 @@ TestCase {
         }
     }
 
+    SignalSpy { id: switched; target: controller; signalName: "databaseSwitched" }
+    SignalSpy { id: picker; target: controller; signalName: "databasePickerRequested" }
+
+    function test_switch_databases_from_header() {
+        const component = Qt.createComponent("qrc:/EntriesPage.qml");
+        const page = createTemporaryObject(component, testCase, {width: 460, height: 160});
+        const heading = findChild(page, "headerTitle");
+        const menu = findChild(page, "databasesMenu");
+        waitForRendering(page);
+        verify(heading.width <= heading.implicitWidth + 1);
+        compare(menu.dim, false);
+        mouseClick(heading);
+        tryCompare(menu, "opened", true);
+        compare(menu.options[1], "Trabalho · pass");
+        keyClick(Qt.Key_Down);
+        keyClick(Qt.Key_Return);
+        tryCompare(switched, "count", 1);
+        compare(switched.signalArguments[0][0], "/trabalho");
+        tryCompare(menu, "opened", false);
+        keyClick(Qt.Key_Tab, Qt.ControlModifier);
+        tryCompare(menu, "opened", true);
+        keyClick(Qt.Key_Up);
+        keyClick(Qt.Key_Return);
+        tryCompare(picker, "count", 1);
+    }
+
     function test_click_outside_dismisses_without_choosing() {
         menuChoice.clear();
         menu.open();

@@ -6,7 +6,7 @@
 #include <QPromise>
 #include <QThreadPool>
 #include <QObject>
-#include <QScopedPointer>
+#include <QSharedPointer>
 #include <QStringList>
 #include <QTimer>
 #include <QVariantList>
@@ -70,6 +70,7 @@ class AppController : public QObject, public BrowserApp {
     // Bitwarden's TwoFactorProviderType numbers.
     Q_PROPERTY(QVariantList loginMethods READ loginMethods NOTIFY loginChanged)
 
+    Q_PROPERTY(QVariantList openDatabases READ openDatabases NOTIFY stageChanged)
     Q_PROPERTY(QString vaultLabel READ vaultLabel NOTIFY stageChanged)
     Q_PROPERTY(bool passBackend READ passBackend NOTIFY stageChanged)
     Q_PROPERTY(bool bitwardenBackend READ bitwardenBackend NOTIFY stageChanged)
@@ -142,12 +143,13 @@ public:
 
     // BrowserApp
     const Vault *browserVault() const override { return m_vault.data(); }
-    QStringList browserEntries() const override;
+    QList<const Vault *> browserVaults() const override;
+    QStringList entriesFor(const Vault *vault) const override;
+    QHash<QString, EntryMeta> metaFor(const Vault *vault) const override;
     QStringList browserGroups() const override { return m_groups; }
-    QHash<QString, EntryMeta> browserMeta() const override;
     void browserLock() override { lock(); }
     Secret browserGeneratePassword() override;
-    bool browserChange(std::function<bool(const Vault *, QString *)> work,
+    bool browserChange(const Vault *vault, std::function<bool(const Vault *, QString *)> work,
                        std::function<void(bool)> done) override;
 
     QString message() const;
@@ -161,7 +163,11 @@ public:
     Q_INVOKABLE void cancelUnlock();
     // Locks the open vault and goes back to the database list — the same
     // thing the inactivity timer does, on demand.
+    QVariantList openDatabases() const;
+    Q_INVOKABLE void switchDatabase(const QString &path);
+    Q_INVOKABLE void chooseAnotherDatabase();
     Q_INVOKABLE void lock();
+    void lockAll();
 
     // Database creation
     Q_INVOKABLE void createKeepassDatabase(const QString &name, const QString &password);
@@ -402,7 +408,22 @@ private:
     bool m_pinAvailable = false;
     bool m_pinConfigured = false;
 
-    QScopedPointer<Vault> m_vault;
+    struct ParkedVault {
+        QSharedPointer<Vault> vault;
+        SshAgent ssh;
+        QStringList entries;
+        QHash<QString, EntryMeta> meta;
+    };
+    QList<ParkedVault> m_parked;
+    QSharedPointer<Vault> m_vault;
+    void parkVault();
+    void displayVault();
+    void resetVaultView();
+    void closeParked();
+    bool isOpen(const QString &path) const;
+    bool m_lockAllPending = false;
+    QString m_lockPendingPath;
+    void finishPendingLock();
     SshAgent m_sshAgent;
     QFutureWatcher<QString> *m_sshTask = nullptr;
 

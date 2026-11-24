@@ -8,8 +8,10 @@ FocusScope {
 
     property string mode: "list"
     property string selectedEntry: ""
+    property string iconEntry: ""
+    property string iconRequest: ""
 
-    readonly property bool menuOpen: actionsMenu.opened
+    readonly property bool menuOpen: actionsMenu.opened || databasesMenu.opened
 
     Binding {
         target: window
@@ -42,9 +44,10 @@ FocusScope {
             controller.showMessage(i18n.t("app.no_entry_selected"), true);
             return;
         }
-        page.selectedEntry = entry;
+        page.iconEntry = entry;
+        page.iconRequest = "entryIcon/" + JSON.stringify([controller.openDatabases[0].path, entry]);
         if (filePicker.available)
-            filePicker.openFile("entryIcon", i18n.t("ui.icon_pick_title"),
+            filePicker.openFile(page.iconRequest, i18n.t("ui.icon_pick_title"),
                                 [{ "name": i18n.t("ui.icon_filter"),
                                    "patterns": ["*.png", "*.jpg", "*.jpeg", "*.ico", "*.webp", "*.gif", "*.bmp"] },
                                  { "name": i18n.t("settings.all_files"), "patterns": ["*"] }]);
@@ -56,11 +59,11 @@ FocusScope {
         target: filePicker
 
         function onPicked(purpose, path) {
-            if (purpose === "entryIcon" && path.length > 0)
-                controller.chooseEntryIcon(page.selectedEntry, path);
+            if (purpose === page.iconRequest && path.length > 0)
+                controller.chooseEntryIcon(page.iconEntry, path);
         }
         function onFailed(purpose, error) {
-            if (purpose === "entryIcon")
+            if (purpose === page.iconRequest)
                 controller.showMessage(error, true);
         }
     }
@@ -69,7 +72,7 @@ FocusScope {
         id: iconDialog
         title: i18n.t("ui.icon_pick_title")
         nameFilters: [i18n.t("ui.icon_filter"), i18n.t("settings.all_files")]
-        onAccepted: controller.chooseEntryIcon(page.selectedEntry, selectedFile)
+        onAccepted: controller.chooseEntryIcon(page.iconEntry, selectedFile)
     }
 
     function openAddForm() {
@@ -144,6 +147,13 @@ FocusScope {
         ]
         onQueryChanged: controller.query = query
 
+        hasHeadingMenu: true
+        onHeadingMenuRequested: function(x, y) {
+            databasesMenu.anchorX = x - databasesMenu.width / 2;
+            databasesMenu.anchorY = y;
+            databasesMenu.selected = 0;
+            databasesMenu.open();
+        }
         heading: controller.vaultLabel
         headerActions: [
             { "icon": "plus", "description": i18n.t("ui.help_add_entry"),
@@ -196,6 +206,26 @@ FocusScope {
             actionsMenu.fields = controller.entryMenuFields(actionsMenu.entry);
             actionsMenu.sshOptions = controller.sshKeyOptions(actionsMenu.entry);
             actionsMenu.open();
+        }
+    }
+
+    ActionsMenu {
+        id: databasesMenu
+        objectName: "databasesMenu"
+        parent: page
+        readonly property var databases: controller.openDatabases
+        options: databases.map(function(db) {
+            const duplicate = databases.some(other => other.path !== db.path && other.name === db.name && other.kind === db.kind);
+            return (duplicate ? db.path : db.name) + " · " + db.kind;
+        }).concat([i18n.t("db_app.open_another")])
+        groupStarts: [databases.length]
+        onClosed: pane.claimKeyboard()
+        onChosen: function(index) {
+            close();
+            if (index === databases.length)
+                controller.chooseAnotherDatabase();
+            else
+                controller.switchDatabase(databases[index].path);
         }
     }
 
@@ -469,7 +499,8 @@ FocusScope {
                 "items": [["j / k", i18n.t("help.move_selection")],
                           ["g g / G", i18n.t("help.go_top_bottom")],
                           ["Ctrl+U / Ctrl+D", i18n.t("help.half_page")],
-                          ["Ctrl+N / Ctrl+P", i18n.t("help.next_prev")]]
+                          ["Ctrl+N / Ctrl+P", i18n.t("help.next_prev")],
+                          ["Ctrl+Tab", i18n.t("db_app.switch_database")]]
             },
             {
                 "title": i18n.t("help.search_section"),

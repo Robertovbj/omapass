@@ -1,5 +1,7 @@
 #include "browserintegration.h"
 
+#include <QCryptographicHash>
+
 #include <QDateTime>
 #include <QDir>
 #include <QFutureWatcher>
@@ -133,7 +135,20 @@ void BrowserIntegration::install(bool replace, bool quiet) {
 
 void BrowserIntegration::vaultChanged() {
     ++m_generation;
-    m_handedOut.clear();
+    const auto open = m_app->browserVaults();
+    m_hashes.removeIf([&](QHash<const Vault *, QString>::iterator it) { return !open.contains(it.key()); });
+    for (const auto *vault : open) {
+        if (!vault || m_hashes.contains(vault))
+            continue;
+        QString hash = BrowserStore(vault, m_localDir).databaseHash();
+        // A copy of a KDBX retains its root UUID. Keep the first file's
+        // native hash and distinguish other open copies by path.
+        if (m_hashes.values().contains(hash))
+            hash = QString::fromLatin1(QCryptographicHash::hash(hash.toLatin1() + vault->path().toUtf8(),
+                                       QCryptographicHash::Sha256).toHex());
+        m_hashes.insert(vault, hash);
+    }
+    m_handedOut.removeIf([this](QHash<QString, QSet<QString>>::iterator it) { return !m_hashes.values().contains(it.key()); });
     m_pendingGroups.clear();
     m_store.reset();
     m_storeVault = nullptr;
@@ -171,11 +186,10 @@ BrowserStore *BrowserIntegration::store() const {
     return m_store.get();
 }
 
-QString BrowserIntegration::pathOfUuid(const QString &uuid) const {
-    BrowserStore *s = store();
-    if (!s)
+QString BrowserIntegration::pathOfUuid(const Vault *vault, const QString &uuid) const {
+    if (!vault)
         return QString();
-    const QHash<QString, QString> uuids = s->entryUuids(m_app->browserEntries());
+    const QHash<QString, QString> uuids = BrowserStore(vault, m_localDir).entryUuids(m_app->entriesFor(vault));
     for (auto it = uuids.cbegin(); it != uuids.cend(); ++it) {
         if (it.value().compare(uuid, Qt::CaseInsensitive) == 0)
             return it.key();
@@ -257,8 +271,35 @@ void BrowserIntegration::showUnlock() {
 }
 
 QString BrowserIntegration::databaseHash() const {
-    BrowserStore *s = store();
-    return s ? s->databaseHash() : QString();
+    return hashForVault(m_app->browserVault());
+}
+
+QString BrowserIntegration::hashForVault(const Vault *vault) const {
+    if (!vault)
+        return {};
+    const auto it = m_hashes.constFind(vault);
+    return it == m_hashes.cend() ? BrowserStore(vault, m_localDir).databaseHash() : it.value();
+}
+
+QStringList BrowserIntegration::databaseHashes() const {
+    QStringList hashes;
+    for (const auto *vault : m_app->browserVaults())
+        if (vault)
+            hashes.append(hashForVault(vault));
+    hashes.removeDuplicates();
+    return hashes;
+}
+
+const Vault *BrowserIntegration::vaultByHash(const QString &hash) const {
+    for (const auto *vault : m_app->browserVaults())
+        if (vault && hashForVault(vault) == hash)
+            return vault;
+    return nullptr;
+}
+
+QString BrowserIntegration::keyForDatabase(const QString &hash, const QString &id) const {
+    const auto *vault = vaultByHash(hash);
+    return vault ? BrowserStore(vault, m_localDir).key(id) : QString();
 }
 
 QString BrowserIntegration::associationKey(const QString &id) const {
@@ -295,11 +336,29 @@ void BrowserIntegration::associate(const QString &idKey, std::function<void(cons
 
 void BrowserIntegration::findLogins(const BrowserLoginQuery &query,
                                     std::function<void(const QVector<BrowserLogin> &)> done) {
-    BrowserStore *s = store();
-    if (!s) {
+    const QStringList hashes = query.databases.isEmpty() ? QStringList{databaseHash()} : query.databases;
+    struct Results {
+        int pending;
+        QVector<BrowserLogin> logins;
+    };
+    auto results = std::make_shared<Results>(Results{int(hashes.size()), {}});
+    const auto generation = m_generation;
+    for (const auto &hash : hashes) {
+        findVaultLogins(vaultByHash(hash), query, [this, results, done, generation](const QVector<BrowserLogin> &items) {
+            results->logins.append(items);
+            if (--results->pending == 0)
+                done(generation == m_generation ? results->logins : QVector<BrowserLogin>{});
+        });
+    }
+}
+
+void BrowserIntegration::findVaultLogins(const Vault *vault, const BrowserLoginQuery &query,
+                                         std::function<void(const QVector<BrowserLogin> &)> done) {
+    if (!vault) {
         done({});
         return;
     }
+    BrowserStore db(vault, m_localDir);
     const QString site = BrowserProtocol::hostOf(query.url);
     QString form = BrowserProtocol::hostOf(query.submitUrl);
     if (form == site)
@@ -309,11 +368,11 @@ void BrowserIntegration::findLogins(const BrowserLoginQuery &query,
         return;
     }
 
-    const QHash<QString, EntryMeta> meta = m_app->browserMeta();
-    const QHash<QString, BrowserStore::Access> access = s->access();
+    const QHash<QString, EntryMeta> meta = m_app->metaFor(vault);
+    const QHash<QString, BrowserStore::Access> access = db.access();
     QStringList allowed;
     QStringList unknown;
-    for (const QString &entry : m_app->browserEntries()) {
+    for (const QString &entry : m_app->entriesFor(vault)) {
         const EntryMeta info = meta.value(entry);
         if (info.type != QLatin1String("login"))
             continue;
@@ -331,7 +390,7 @@ void BrowserIntegration::findLogins(const BrowserLoginQuery &query,
     }
 
     if (unknown.isEmpty()) {
-        deliver(allowed, done);
+        deliver(vault, allowed, done);
         return;
     }
 
@@ -344,9 +403,10 @@ void BrowserIntegration::findLogins(const BrowserLoginQuery &query,
 
     const quint64 generation = m_generation;
     ask({{QStringLiteral("kind"), QStringLiteral("access")},
+         {QStringLiteral("vault"), Vault::displayName({vault->path(), vault->kind()})},
          {QStringLiteral("site"), site},
          {QStringLiteral("entries"), shownEntries}},
-        [this, generation, allowed, unknown, site, form, done](const QVariant &answer) {
+        [this, vault, generation, allowed, unknown, site, form, done](const QVariant &answer) {
             if (generation != m_generation) {
                 done({});
                 return;
@@ -358,9 +418,9 @@ void BrowserIntegration::findLogins(const BrowserLoginQuery &query,
                     picked.append(path);
             }
 
-            BrowserStore *s = store();
-            if (reply.value(QStringLiteral("remember")).toBool() && s) {
-                const QHash<QString, BrowserStore::Access> access = s->access();
+            BrowserStore db(vault, m_localDir);
+            if (reply.value(QStringLiteral("remember")).toBool()) {
+                const QHash<QString, BrowserStore::Access> access = db.access();
                 QString error;
                 for (const QString &entry : unknown) {
                     BrowserStore::Access rules = access.value(entry);
@@ -373,33 +433,33 @@ void BrowserIntegration::findLogins(const BrowserLoginQuery &query,
                         if (!add.contains(host))
                             add.append(host);
                     }
-                    if (!s->setAccess(entry, rules, &error)) {
+                    if (!db.setAccess(entry, rules, &error)) {
                         emit message(I18n::t(QStringLiteral("browser.save_error"), QStringLiteral("err"), error),
                                      true);
                         break;
                     }
                 }
             }
-            deliver(allowed + picked, done);
+            deliver(vault, allowed + picked, done);
         });
 }
 
-void BrowserIntegration::deliver(const QStringList &paths,
+void BrowserIntegration::deliver(const Vault *vault, const QStringList &paths,
                                  std::function<void(const QVector<BrowserLogin> &)> done) {
-    const Vault *vault = m_app->browserVault();
-    BrowserStore *s = store();
-    if (paths.isEmpty() || !vault || !s) {
+    if (paths.isEmpty() || !vault) {
         done({});
         return;
     }
 
-    const QHash<QString, QString> uuids = s->entryUuids(paths);
+    BrowserStore db(vault, m_localDir);
+    const QString hash = hashForVault(vault);
+    const QHash<QString, QString> uuids = db.entryUuids(paths);
     QHash<QString, QString> names;
     for (const QString &path : paths)
         names.insert(path, vault->titleFor(path, lastSegment(path)));
 
     // Reading can mean a process per entry (pass, 1Password): never here.
-    const QFuture<QVector<BrowserLogin>> read = QtConcurrent::run([vault, paths, uuids, names]() {
+    const QFuture<QVector<BrowserLogin>> read = QtConcurrent::run([vault, paths, uuids, names, hash]() {
         QVector<BrowserLogin> logins;
         const qint64 now = QDateTime::currentSecsSinceEpoch();
         for (const QString &path : paths) {
@@ -408,6 +468,7 @@ void BrowserIntegration::deliver(const QStringList &paths,
             if (!vault->fetchEntry(path, &data, &error))
                 continue;
             BrowserLogin login;
+            login.databaseHash = hash;
             login.uuid = uuids.value(path);
             login.name = names.value(path);
             login.login = data.username;
@@ -439,31 +500,37 @@ void BrowserIntegration::deliver(const QStringList &paths,
             return;
         }
         for (const BrowserLogin &login : logins)
-            m_handedOut.insert(login.uuid.toLower());
+            m_handedOut[login.databaseHash].insert(login.uuid.toLower());
         done(logins);
     });
     watcher->setFuture(read);
 }
 
 void BrowserIntegration::totp(const QString &uuid, std::function<void(const QString &)> done) {
+    databaseTotp(databaseHash(), uuid, done);
+}
+
+void BrowserIntegration::databaseTotp(const QString &hash, const QString &uuid, std::function<void(const QString &)> done) {
+    const Vault *vault = vaultByHash(hash);
     // Only for an entry this browser was already given: get-totp names no
     // site, so there is nothing else to check it against.
-    const QString path = m_handedOut.contains(uuid.toLower()) ? pathOfUuid(uuid) : QString();
+    const QString path = m_handedOut.value(hash).contains(uuid.toLower()) ? pathOfUuid(vault, uuid) : QString();
     if (path.isEmpty()) {
         done(QString());
         return;
     }
-    deliver({path}, [done](const QVector<BrowserLogin> &logins) {
+    deliver(vault, {path}, [done](const QVector<BrowserLogin> &logins) {
         done(logins.isEmpty() ? QString() : logins.first().totp);
     });
 }
 
 void BrowserIntegration::saveLogin(const BrowserSaveRequest &request, std::function<void(bool)> done) {
-    BrowserStore *s = store();
-    if (!s) {
+    const Vault *target = request.databaseHash.isEmpty() ? m_app->browserVault() : vaultByHash(request.databaseHash);
+    if (!target) {
         done(false);
         return;
     }
+    BrowserStore db(target, m_localDir);
     const QString site = BrowserProtocol::hostOf(request.url);
     const QString form = BrowserProtocol::hostOf(request.submitUrl);
     const QString login = request.login;
@@ -471,21 +538,22 @@ void BrowserIntegration::saveLogin(const BrowserSaveRequest &request, std::funct
     const quint64 generation = m_generation;
 
     if (!request.uuid.isEmpty()) {
-        const QString path = pathOfUuid(request.uuid);
+        const QString path = pathOfUuid(target, request.uuid);
         if (path.isEmpty()) {
             done(false);
             return;
         }
         ask({{QStringLiteral("kind"), QStringLiteral("update")},
+             {QStringLiteral("vault"), Vault::displayName({target->path(), target->kind()})},
              {QStringLiteral("name"), lastSegment(path)},
              {QStringLiteral("login"), login},
              {QStringLiteral("site"), site}},
-            [this, generation, path, login, password, done](const QVariant &answer) {
+            [this, generation, target, path, login, password, done](const QVariant &answer) {
                 if (!answer.toBool() || generation != m_generation) {
                     done(false);
                     return;
                 }
-                const bool started = m_app->browserChange(
+                const bool started = m_app->browserChange(target,
                     [path, login, password](const Vault *vault, QString *error) {
                         EntryData data;
                         if (!vault->fetchEntry(path, &data, error))
@@ -502,15 +570,21 @@ void BrowserIntegration::saveLogin(const BrowserSaveRequest &request, std::funct
     }
 
     // The group the extension picked, by id; else by name; else KeePassXC's.
-    const QStringList groups = m_app->browserGroups();
+    QStringList groups;
+    if (target == m_app->browserVault()) {
+        groups = m_app->browserGroups();
+    } else {
+        QStringList entries;
+        target->list(&entries, &groups);
+    }
     QString group;
     bool found = false;
     if (!request.groupUuid.isEmpty()) {
-        if (m_pendingGroups.contains(request.groupUuid)) {
+        if (target == m_app->browserVault() && m_pendingGroups.contains(request.groupUuid)) {
             group = m_pendingGroups.value(request.groupUuid);
             found = true;
         } else {
-            const QHash<QString, QString> ids = s->groupUuids(groups);
+            const QHash<QString, QString> ids = db.groupUuids(groups);
             for (auto it = ids.cbegin(); it != ids.cend(); ++it) {
                 if (it.value().compare(request.groupUuid, Qt::CaseInsensitive) == 0) {
                     group = it.key();
@@ -518,8 +592,7 @@ void BrowserIntegration::saveLogin(const BrowserSaveRequest &request, std::funct
                     break;
                 }
             }
-            const Vault *vault = m_app->browserVault();
-            if (!found && vault && request.groupUuid.compare(vault->databaseUuid(), Qt::CaseInsensitive) == 0)
+            if (!found && request.groupUuid.compare(target->databaseUuid(), Qt::CaseInsensitive) == 0)
                 found = true;
         }
     }
@@ -529,7 +602,7 @@ void BrowserIntegration::saveLogin(const BrowserSaveRequest &request, std::funct
     // Titled after the site, like KeePassXC; a second login for it gets a
     // number rather than replacing the first.
     const QString base = site.isEmpty() ? request.url : site;
-    const QStringList entries = m_app->browserEntries();
+    const QStringList entries = m_app->entriesFor(target);
     const auto pathFor = [&group](const QString &title) {
         return group.isEmpty() ? title : group + QLatin1Char('/') + title;
     };
@@ -543,20 +616,20 @@ void BrowserIntegration::saveLogin(const BrowserSaveRequest &request, std::funct
     data.password = password;
     data.url = request.url;
 
-    const bool started = m_app->browserChange(
+    const bool started = m_app->browserChange(target,
         [path, group, data](const Vault *vault, QString *error) {
             return vault->addEntry(path, group, data, error);
         },
-        [this, generation, path, site, form, done](bool saved) {
+        [this, generation, target, path, site, form, done](bool saved) {
             // The site that saved it may have it back without asking.
-            BrowserStore *s = store();
-            if (saved && generation == m_generation && s) {
+            if (saved && generation == m_generation) {
+                BrowserStore store(target, m_localDir);
                 BrowserStore::Access rules;
                 rules.allow.append(site);
                 if (!form.isEmpty() && form != site)
                     rules.allow.append(form);
                 QString error;
-                s->setAccess(path, rules, &error);
+                store.setAccess(path, rules, &error);
             }
             done(saved);
         });

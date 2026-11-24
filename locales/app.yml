@@ -1245,6 +1245,14 @@ ssh.private_key:
   pt-BR: "Cole a chave privada SSH"
   en: "Paste the SSH private key"
 
+db_app.open_another:
+  pt-BR: "Abrir outro banco…"
+  en: "Open another database…"
+
+db_app.switch_database:
+  pt-BR: "Alternar entre bancos"
+  en: "Switch databases"
+
 ssh.private_label:
   pt-BR: "Chave privada"
   en: "Private key"

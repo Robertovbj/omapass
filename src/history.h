@@ -17,9 +17,9 @@ class History {
 public:
     explicit History(bool enabled);
 
-    void recordUse(const QString &item);
-    quint64 score(const QString &item) const;
-    void sortItems(QStringList &items) const;
+    void recordUse(const QString &item, const QString &vault = {});
+    quint64 score(const QString &item, const QString &vault = {}) const;
+    void sortItems(QStringList &items, const QString &vault = {}) const;
 
 private:
     QString hashItem(const QString &item) const;

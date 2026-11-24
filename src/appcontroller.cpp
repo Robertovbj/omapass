@@ -292,7 +292,7 @@ AppController::AppController(const AppConfig &config, QObject *parent)
     m_browser.setEnabled(m_config.browserIntegration, true);
     connect(&m_lockTimer, &QTimer::timeout, this, [this]() {
         if (m_config.lockMinutes && m_lastActivity.hasExpired(qint64(*m_config.lockMinutes) * 60 * 1000))
-            lock();
+            lockAll();
     });
     applyLockSettings();
 }
@@ -322,7 +322,9 @@ AppController::~AppController() {
     m_localScanTask.waitForFinished();
     m_accountScanTask.waitForFinished();
     m_accountCheckTask.waitForFinished();
+    closeParked();
     closeVault();
+    m_browser.vaultChanged();
 }
 
 template <typename Work, typename Done>
@@ -365,6 +367,8 @@ void AppController::setSyncing(bool syncing) {
         return;
     m_syncing = syncing;
     emit syncingChanged();
+    if (!m_busy && !m_syncing && (m_lockAllPending || !m_lockPendingPath.isEmpty()))
+        QTimer::singleShot(0, this, &AppController::finishPendingLock);
 }
 
 void AppController::startBackgroundSync() {
@@ -412,22 +416,127 @@ bool AppController::eventFilter(QObject *watched, QEvent *event) {
     return QObject::eventFilter(watched, event);
 }
 
-void AppController::lock() {
-    if (m_vault.isNull())
-        return; // nada desbloqueado — nada a travar (tela de bancos, por exemplo)
-    if (m_busy || m_syncing)
-        return; // uma operação ainda usa o banco; o timer tenta de novo no próximo ciclo
+QVariantList AppController::openDatabases() const {
+    QVariantList result;
+    if (m_vault)
+        result.append(describe({m_vault->path(), m_vault->kind()}));
+    for (const auto &item : m_parked)
+        result.append(describe({item.vault->path(), item.vault->kind()}));
+    return result;
+}
 
-    const QString sshError = closeVault();
-    // Nothing is open any more, so no database is the PIN's subject until
-    // one is picked again.
-    refreshPinState();
-    m_query.clear();
-    refreshEntries();
+bool AppController::isOpen(const QString &path) const {
+    return (m_vault && m_vault->path() == path) ||
+        std::any_of(m_parked.cbegin(), m_parked.cend(), [&](const auto &v) { return v.vault->path() == path; });
+}
 
+void AppController::chooseAnotherDatabase() {
+    if (!vaultReadyForChanges())
+        return;
     m_stage = QStringLiteral("databases");
     emit stageChanged();
     refreshDatabases();
+}
+
+void AppController::switchDatabase(const QString &path) {
+    if (m_busy || m_syncing || m_lockAllPending || !m_lockPendingPath.isEmpty() || !isOpen(path))
+        return;
+    cancelAccountCheck();
+    if (!m_vault || m_vault->path() != path) {
+        const auto it = std::find_if(m_parked.begin(), m_parked.end(),
+                                     [&](const auto &v) { return v.vault->path() == path; });
+        auto next = std::move(*it);
+        m_parked.erase(it);
+        parkVault();
+        m_vault = std::move(next.vault);
+        m_sshAgent = std::move(next.ssh);
+    }
+    displayVault();
+}
+
+void AppController::closeParked() {
+    m_browser.waitForReads();
+    for (auto &v : m_parked) {
+        const QString error = v.ssh.clear();
+        if (!error.isEmpty())
+            qWarning().noquote() << error;
+        v.vault->close();
+    }
+    m_parked.clear();
+}
+
+void AppController::finishPendingLock() {
+    if (m_busy || m_syncing)
+        return;
+    if (m_lockAllPending) {
+        lockAll();
+        return;
+    }
+    const QString path = std::exchange(m_lockPendingPath, {});
+    if (path.isEmpty())
+        return;
+    if (m_vault && m_vault->path() == path) {
+        lock();
+        return;
+    }
+    // Unlocking another vault may have finished while the lock was queued.
+    for (auto it = m_parked.begin(); it != m_parked.end(); ++it) {
+        if (it->vault->path() != path)
+            continue;
+        m_browser.waitForReads();
+        const QString error = it->ssh.clear();
+        it->vault->close();
+        m_parked.erase(it);
+        m_browser.vaultChanged();
+        emit stageChanged();
+        if (!error.isEmpty())
+            showMessage(error, true);
+        break;
+    }
+}
+
+void AppController::lockAll() {
+    if (!m_vault)
+        return;
+    if (m_busy || m_syncing) {
+        m_lockAllPending = true;
+        return;
+    }
+    m_lockAllPending = false;
+    cancelAccountCheck();
+    m_hasPendingDatabase = false;
+    m_bitwardenLogin.cancel();
+    m_onePasswordLogin.cancel();
+    setLoginStep({});
+    emit pendingDatabaseChanged();
+    closeParked();
+    lock();
+}
+
+void AppController::lock() {
+    if (!m_vault)
+        return;
+    if (m_busy || m_syncing) {
+        m_lockPendingPath = m_vault->path();
+        return;
+    }
+    if (m_lockAllPending) {
+        lockAll();
+        return;
+    }
+    m_lockPendingPath.clear();
+    const QString sshError = closeVault();
+    if (!m_parked.isEmpty()) {
+        switchDatabase(m_parked.constLast().vault->path());
+    } else {
+        m_browser.vaultChanged();
+        refreshPinState();
+        m_query.clear();
+        refreshEntries();
+        m_stage = QStringLiteral("databases");
+        emit stageChanged();
+        refreshDatabases();
+    }
     if (!sshError.isEmpty())
         showMessage(sshError, true);
 }
@@ -482,10 +591,10 @@ bool AppController::bitwardenBackend() const {
 }
 
 DbRef AppController::pinTarget() const {
-    if (!m_vault.isNull())
-        return {m_vault->path(), m_vault->kind()};
     if (m_hasPendingDatabase)
         return m_pendingDatabase;
+    if (m_vault)
+        return {m_vault->path(), m_vault->kind()};
     return DbRef();
 }
 
@@ -495,7 +604,7 @@ void AppController::refreshPinState() {
     const DbRef target = pinTarget();
     const bool configured = !target.path.isEmpty() && Pin::hasPin(target.path);
 
-    m_pinAvailable = m_vault.isNull() && m_hasPendingDatabase && configured;
+    m_pinAvailable = m_hasPendingDatabase && configured;
 
     if (m_pinConfigured != configured) {
         m_pinConfigured = configured;
@@ -694,10 +803,14 @@ void AppController::checkAccountThenAsk(const DbRef &ref) {
 }
 
 void AppController::selectDatabase(int index) {
-    if (index < 0 || index >= m_filteredDatabases.size())
+    if (m_busy || m_syncing || index < 0 || index >= m_filteredDatabases.size())
         return;
 
     const DbRef ref = m_filteredDatabases.at(index);
+    if (isOpen(ref.path)) {
+        switchDatabase(ref.path);
+        return;
+    }
 
     if (ref.kind != VaultKind::Bitwarden && ref.kind != VaultKind::OnePassword) {
         setUnlockError(QString());
@@ -705,7 +818,7 @@ void AppController::selectDatabase(int index) {
         return;
     }
 
-    if (m_busy || m_checkingAccount)
+    if (m_checkingAccount)
         return;
 
     setUnlockError(QString());
@@ -724,10 +837,12 @@ void AppController::cancelAccountCheck() {
 }
 
 void AppController::cancelUnlock() {
+    if (m_busy)
+        return;
     // A sign-in waiting on a two-step code would otherwise sit there.
     m_onePasswordLogin.cancel();
-    setBusy(false);
     m_hasPendingDatabase = false;
+    refreshPinState();
     setUnlockError(QString());
     emit pendingDatabaseChanged();
 }
@@ -844,15 +959,40 @@ void AppController::openVault(const DbRef &ref, const Secret &secret) {
 }
 
 void AppController::adoptVault(const DbRef &ref, Vault *vault) {
-    const QString sshError = closeVault();
+    if (isOpen(ref.path)) {
+        delete vault;
+        switchDatabase(ref.path);
+        return;
+    }
+    parkVault();
     m_vault.reset(vault);
-    loadIconChoice();
-    refreshPinState();
     m_history.recordUse(ref.path);
+    displayVault();
+    startSshKeys();
+    if (vault->kind() == VaultKind::Bitwarden)
+        startBackgroundSync();
+}
 
+void AppController::parkVault() {
+    if (!m_vault)
+        return;
+    if (m_sshTask) {
+        m_sshTask->waitForFinished();
+        delete m_sshTask;
+        m_sshTask = nullptr;
+    }
+    m_parked.append({m_vault, std::move(m_sshAgent), entriesFor(m_vault.data()), metaFor(m_vault.data())});
+    m_sshAgent = {};
+    resetVaultView();
+    m_vault.reset();
+}
+
+void AppController::displayVault() {
     m_hasPendingDatabase = false;
+    refreshPinState();
     emit pendingDatabaseChanged();
-
+    loadIconChoice();
+    clearMessage();
     m_query.clear();
     refreshEntries();
     m_browser.vaultChanged();
@@ -860,14 +1000,6 @@ void AppController::adoptVault(const DbRef &ref, Vault *vault) {
     m_stage = QStringLiteral("entries");
     emit stageChanged();
     showVaultWarning();
-    if (!sshError.isEmpty())
-        showMessage(sshError, true);
-    startSshKeys();
-
-    // Opening read omapass' own copy; what changed on the server since the
-    // last sync arrives a moment later.
-    if (vault->kind() == VaultKind::Bitwarden)
-        startBackgroundSync();
 }
 
 void AppController::showVaultWarning() {
@@ -892,7 +1024,8 @@ void AppController::refreshEntries() {
         m_lazyMeta.clear();
     }
 
-    m_history.sortItems(m_allEntries);
+    if (m_vault)
+        m_history.sortItems(m_allEntries, m_vault->path());
     rebuildRows();
     startMetaLoad();
 }
@@ -1206,7 +1339,7 @@ void AppController::copyPassword(const QString &entry) {
         return;
     }
 
-    m_history.recordUse(entry);
+    m_history.recordUse(entry, m_vault->path());
 
     Secret password;
     QString error;
@@ -1246,7 +1379,7 @@ bool AppController::fetchForCopy(const QString &entry, EntryData *data) {
         showMessage(error, true);
         return false;
     }
-    m_history.recordUse(entry);
+    m_history.recordUse(entry, m_vault->path());
     return true;
 }
 
@@ -1532,7 +1665,7 @@ bool AppController::saveEntry(const QVariantMap &fields) {
                 m_browser.entryMoved(originalPath, path);
             if (result.ok) {
                 if (!isEdit)
-                    m_history.recordUse(path);
+                    m_history.recordUse(path, m_vault->path());
                 showMessage(I18n::t(isEdit ? QStringLiteral("app.entry_edited")
                                            : QStringLiteral("app.entry_added")),
                             false);
@@ -1848,6 +1981,7 @@ void AppController::cancelBitwardenLogin() {
 
 bool AppController::isBitwardenDatabase(int index) const {
     return index >= 0 && index < m_filteredDatabases.size()
+        && !isOpen(m_filteredDatabases.at(index).path)
         && m_filteredDatabases.at(index).kind == VaultKind::Bitwarden;
 }
 
@@ -1942,6 +2076,7 @@ void AppController::cancelOnePasswordLogin() {
 
 bool AppController::isOnePasswordDatabase(int index) const {
     return index >= 0 && index < m_filteredDatabases.size()
+        && !isOpen(m_filteredDatabases.at(index).path)
         && m_filteredDatabases.at(index).kind == VaultKind::OnePassword;
 }
 
@@ -2035,16 +2170,19 @@ QString AppController::closeVault() {
     if (m_vault.isNull())
         return {};
     const QString sshError = clearSshKeys();
+    resetVaultView();
+    m_vault->close();
+    m_vault.reset();
+    return sshError;
+}
+
+void AppController::resetVaultView() {
     stopMetaLoad();
     m_metaPool.waitForDone();
     m_lazyMeta.clear();
     m_metaArrived.clear();
     forgetShownOtp();
     m_browser.waitForReads();
-    m_vault->close();
-    m_vault.reset();
-    m_browser.vaultChanged();
-    return sshError;
 }
 
 QString AppController::message() const {
@@ -2098,6 +2236,8 @@ void AppController::setBusy(bool busy) {
 
     m_busy = busy;
     emit busyChanged();
+    if (!m_busy && !m_syncing && (m_lockAllPending || !m_lockPendingPath.isEmpty()))
+        QTimer::singleShot(0, this, &AppController::finishPendingLock);
 }
 
 void AppController::setUnlockError(const QString &error) {
@@ -2375,7 +2515,21 @@ void AppController::saveWindowGeometry(int x, int y, int width, int height, bool
 
 // ---------------------------------------------------------------- browser
 
-QStringList AppController::browserEntries() const {
+QList<const Vault *> AppController::browserVaults() const {
+    QList<const Vault *> vaults;
+    if (m_vault)
+        vaults.append(m_vault.data());
+    for (const auto &item : m_parked)
+        vaults.append(item.vault.data());
+    return vaults;
+}
+
+QStringList AppController::entriesFor(const Vault *vault) const {
+    for (const auto &item : m_parked)
+        if (item.vault.data() == vault)
+            return item.entries;
+    if (!vault || vault != m_vault.data())
+        return {};
     QStringList entries;
     entries.reserve(m_allEntries.size());
     for (const QString &entry : m_allEntries) {
@@ -2385,7 +2539,12 @@ QStringList AppController::browserEntries() const {
     return entries;
 }
 
-QHash<QString, EntryMeta> AppController::browserMeta() const {
+QHash<QString, EntryMeta> AppController::metaFor(const Vault *vault) const {
+    for (const auto &item : m_parked)
+        if (item.vault.data() == vault)
+            return item.meta;
+    if (!vault || vault != m_vault.data())
+        return {};
     QHash<QString, EntryMeta> meta = m_listedMeta;
     for (auto it = m_lazyMeta.cbegin(); it != m_lazyMeta.cend(); ++it)
         meta.insert(it.key(), it.value());
@@ -2401,24 +2560,35 @@ Secret AppController::browserGeneratePassword() {
     return password;
 }
 
-bool AppController::browserChange(std::function<bool(const Vault *, QString *)> work,
-                                  std::function<void(bool)> done) {
-    if (m_vault.isNull() || m_busy || m_syncing)
+bool AppController::browserChange(const Vault *vault, std::function<bool(const Vault *, QString *)> work,
+                                     std::function<void(bool)> done) {
+    if (!vault || !browserVaults().contains(vault) || m_busy || m_syncing || m_lockAllPending
+        || !m_lockPendingPath.isEmpty() || m_hasPendingDatabase || !m_loginStep.isEmpty())
         return false;
-    // Locking waits while busy, so the vault outlives the task.
-    const Vault *vault = m_vault.data();
     runInBackground(
         [vault, work]() {
             TaskResult result;
             result.ok = work(vault, &result.error);
             return result;
         },
-        [this, done](const TaskResult &result) {
+        [this, vault, done](const TaskResult &result) {
             showMessage(result.ok ? I18n::t(QStringLiteral("browser.login_saved"))
                                   : I18n::t(QStringLiteral("browser.login_save_error"), QStringLiteral("err"),
                                             result.error),
                         !result.ok);
-            refreshEntries();
+            if (vault == m_vault.data()) {
+                refreshEntries();
+            } else if (result.ok) {
+                for (auto &item : m_parked) {
+                    if (vault != item.vault.data())
+                        continue;
+                    QStringList groups;
+                    vault->list(&item.entries, &groups);
+                    item.entries.removeIf([this](const QString &entry) { return isEmptyGroup(entry); });
+                    item.meta = vault->entryMeta();
+                    break;
+                }
+            }
             done(result.ok);
         });
     return true;

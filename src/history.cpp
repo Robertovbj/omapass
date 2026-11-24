@@ -84,11 +84,11 @@ QString History::hashItem(const QString &item) const {
     return QString::fromLatin1(mac.result().toHex());
 }
 
-void History::recordUse(const QString &item) {
+void History::recordUse(const QString &item, const QString &vault) {
     if (!m_enabled)
         return;
 
-    Record &record = m_records[hashItem(item)];
+    Record &record = m_records[hashItem(vault.isEmpty() ? item : vault + QChar::Null + item)];
     record.count += 1;
     record.timestamp = nowSecs();
     save();
@@ -109,11 +109,16 @@ void History::save() const {
         out << it.key() << '|' << it->count << '|' << it->timestamp << '\n';
 }
 
-quint64 History::score(const QString &item) const {
+quint64 History::score(const QString &item, const QString &vault) const {
     if (!m_enabled)
         return 0;
 
-    const auto hit = m_records.constFind(hashItem(item));
+    auto hit = m_records.constEnd();
+    if (!vault.isEmpty())
+        hit = m_records.constFind(hashItem(vault + QChar::Null + item));
+    // Keep the ranking learned before entry history carried a vault path.
+    if (hit == m_records.constEnd())
+        hit = m_records.constFind(hashItem(item));
     if (hit == m_records.constEnd())
         return 0;
 
@@ -122,15 +127,15 @@ quint64 History::score(const QString &item) const {
     return static_cast<quint64>(hit->count) * weightForAge(age);
 }
 
-void History::sortItems(QStringList &items) const {
+void History::sortItems(QStringList &items, const QString &vault) const {
     if (!m_enabled)
         return;
 
     // Alphabetical order breaks score ties, so an unused list stays stable
     // and predictable instead of shuffling on every launch.
-    std::sort(items.begin(), items.end(), [this](const QString &a, const QString &b) {
-        const quint64 scoreA = score(a);
-        const quint64 scoreB = score(b);
+    std::sort(items.begin(), items.end(), [this, &vault](const QString &a, const QString &b) {
+        const quint64 scoreA = score(a, vault);
+        const quint64 scoreB = score(b, vault);
         if (scoreA != scoreB)
             return scoreA > scoreB;
         return a < b;

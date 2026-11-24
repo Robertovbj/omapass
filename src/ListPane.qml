@@ -12,6 +12,8 @@ FocusScope {
     property var model: []
     // The header: what is open (centre) and the actions offered as icons
     // (right), each { "icon", "description", "action": function }.
+    property bool hasHeadingMenu: false
+    signal headingMenuRequested(real x, real y)
     property string heading: ""
     property string subheading: ""
     property var headerActions: []
@@ -165,6 +167,11 @@ FocusScope {
             return false;
 
         switch (event.key) {
+        case Qt.Key_Tab:
+            if (!pane.hasHeadingMenu)
+                return false;
+            pane.headingMenuRequested(pane.width / 2, headerBar.height);
+            return true;
         case Qt.Key_D: halfPageDown(); return true;
         case Qt.Key_U: halfPageUp(); return true;
         case Qt.Key_N: next(); return true;
@@ -224,21 +231,33 @@ FocusScope {
             }
 
             Column {
-                anchors.centerIn: parent
-                width: Math.max(0, parent.width - 2 * Math.max(appName.width, actionsRow.width)
-                                - Math.round(32 * pane.s))
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.left: appName.right
+                anchors.right: actionsRow.left
+                anchors.leftMargin: Math.round(8 * pane.s)
+                anchors.rightMargin: Math.round(8 * pane.s)
                 spacing: Math.round(2 * pane.s)
 
                 Text {
                     objectName: "headerTitle"
-                    width: parent.width
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: Math.min(implicitWidth, parent.width)
                     visible: text.length > 0
-                    text: pane.heading
+                    text: pane.hasHeadingMenu ? pane.heading + " ▾" : pane.heading
                     color: theme.foreground
                     horizontalAlignment: Text.AlignHCenter
                     elide: Text.ElideMiddle
                     font.pixelSize: Math.round(13 * pane.s)
                     font.weight: Font.DemiBold
+                    MouseArea {
+                        anchors.fill: parent
+                        enabled: pane.hasHeadingMenu
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            const pos = mapToItem(pane, width / 2, height);
+                            pane.headingMenuRequested(pos.x, pos.y);
+                        }
+                    }
                 }
 
                 Text {

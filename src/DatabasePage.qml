@@ -81,7 +81,12 @@ FocusScope {
                 page.mode = "confirmLogoutOp";
         }
         onHelpRequested: page.mode = "help"
-        onQuitRequested: Qt.quit()
+        onQuitRequested: {
+            if (controller.openDatabases.length)
+                controller.switchDatabase(controller.openDatabases[0].path);
+            else
+                Qt.quit();
+        }
     }
 
     ConfirmModal {

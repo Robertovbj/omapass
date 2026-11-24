@@ -7,6 +7,7 @@
 
 #include <QLocalSocket>
 
+#include "appcontroller.h"
 #include "browsercrypto.h"
 #include "browserintegration.h"
 #include "browsermanifests.h"
@@ -204,14 +205,14 @@ public:
     }
 
     const Vault *browserVault() const override { return vault.get(); }
-    QStringList browserEntries() const override { return entries; }
+    QStringList entriesFor(const Vault *) const override { return entries; }
     QStringList browserGroups() const override { return groupList; }
-    QHash<QString, EntryMeta> browserMeta() const override { return meta; }
+    QHash<QString, EntryMeta> metaFor(const Vault *) const override { return meta; }
     void browserLock() override { ++locks; }
     Secret browserGeneratePassword() override { return Secret(QStringLiteral("gerada")); }
-    bool browserChange(std::function<bool(const Vault *, QString *)> work,
+    bool browserChange(const Vault *target, std::function<bool(const Vault *, QString *)> work,
                        std::function<void(bool)> done) override {
-        if (!vault)
+        if (!vault || vault.get() != target)
             return false;
         ++changes;
         QString error;
@@ -448,6 +449,120 @@ private slots:
         QCOMPARE(message.value("success").toString(), QStringLiteral("true"));
     }
 
+    void browserRequiresAnAssociationForEachDatabase() {
+        FakeHost host;
+        BrowserSession session(&host);
+        Extension extension;
+        extension.exchange(session);
+        const QString first = host.hash;
+        QVERIFY(extension.associate(session));
+
+        host.hash = QStringLiteral("second");
+        const auto groups = [&]() { return extension.call(session, "get-database-groups"); };
+        QCOMPARE(errorOf(groups()), int(BrowserProtocol::AssociationFailed));
+        QVERIFY(extension.associate(session));
+        QVERIFY(groups().contains("groups"));
+
+        host.hash = first;
+        QVERIFY(groups().contains("groups"));
+        host.keys.remove(host.associationName);
+        QCOMPARE(errorOf(groups()), int(BrowserProtocol::AssociationFailed));
+    }
+
+    void twoOpenDatabases() {
+        QTemporaryDir dir;
+        AppConfig config;
+        config.searchPath = dir.path();
+        config.recencyEnabled = false;
+        const QString personal = dir.filePath("personal.kdbx");
+        const QString work = dir.filePath("work.kdbx");
+        for (const auto &path : {personal, work}) {
+            auto db = KdbxDatabase::create(Secret(QStringLiteral("senha")), "Test");
+            KdbxEntry entry;
+            entry.title = "Mail";
+            entry.username = QFileInfo(path).baseName();
+            entry.url = "https://example.org";
+            QVERIFY(db->addEntry({}, entry).isEmpty());
+            QVERIFY(db->save(path).isEmpty());
+        }
+
+        AppController app(config);
+        const auto open = [&](const QString &path) {
+            QTRY_VERIFY(!app.scanning());
+            app.setDatabaseQuery(QFileInfo(path).fileName());
+            QCOMPARE(app.databases().size(), 1);
+            app.selectDatabase(0);
+            QCOMPARE(app.pendingDatabase().value("path").toString(), path);
+            app.unlock("senha");
+            QTRY_VERIFY(!app.busy());
+            QCOMPARE(app.browserVault()->path(), path);
+        };
+        open(personal);
+        app.chooseAnotherDatabase();
+        open(work);
+        QCOMPARE(app.openDatabases().size(), 2);
+        app.switchDatabase(personal);
+        QCOMPARE(app.browserVault()->path(), personal);
+
+        auto *integration = qobject_cast<BrowserIntegration *>(app.browser());
+        QVERIFY(integration);
+        const auto hashes = integration->databaseHashes();
+        QCOMPARE(hashes.size(), 2);
+        QString error;
+        for (const auto *vault : app.browserVaults()) {
+            BrowserStore db(vault, dir.path());
+            QVERIFY(db.setKey("browser", QFileInfo(vault->path()).baseName(), &error));
+            QVERIFY(db.setAccess("Mail", {{"example.org"}, {}}, &error));
+        }
+        BrowserSession session(integration);
+        Extension extension;
+        extension.exchange(session);
+        QCOMPARE(extension.call(session, "test-associate", {{"id", "browser"}, {"key", "personal"}})
+                 .value("hash").toString(), hashes.first());
+
+        QJsonObject reply;
+        const auto search = [&](const QJsonArray &keys, int expected) {
+            reply = {};
+            session.handle(extension.request("get-logins", {{"url", "https://example.org"}, {"keys", keys}}),
+                           [&](const QJsonObject &answer) { reply = extension.open(answer); });
+            QTRY_VERIFY(!reply.isEmpty());
+            QCOMPARE(reply.value("count").toInt(), expected);
+        };
+        search({}, 1);
+        search({QJsonObject{{"id", "browser"}, {"key", "work"}}}, 2);
+        QString workId;
+        for (const auto &v : reply.value("entries").toArray()) {
+            if (v.toObject().value("login") == QLatin1String("work"))
+                workId = v.toObject().value("uuid").toString();
+        }
+        QVERIFY(!workId.isEmpty());
+        reply = {};
+        session.handle(extension.request("set-login", {{"uuid", workId}, {"url", "https://example.org"},
+                                                       {"login", "updated"}, {"password", "new"}}),
+                       [&](const QJsonObject &answer) { reply = extension.open(answer); });
+        QCOMPARE(integration->prompt().value("vault").toString(), QFileInfo(work).fileName());
+        integration->answerUpdate(true);
+        QTRY_COMPARE(reply.value("error").toString(), QStringLiteral("success"));
+        QCOMPARE(app.entryFields("Mail").value("username").toString(), QStringLiteral("personal"));
+        app.lock();
+        QCOMPARE(app.openDatabases().size(), 1);
+        QCOMPARE(app.entryFields("Mail").value("username").toString(), QStringLiteral("updated"));
+        search({}, 1);
+        app.chooseAnotherDatabase();
+        open(personal);
+        // The write holds a vault until its completion callback has run.
+        BrowserSaveRequest add;
+        add.url = "https://new.example.org";
+        int saved = -1;
+        integration->saveLogin(add, [&](bool ok) { saved = ok; });
+        QVERIFY(app.busy());
+        app.lockAll();
+        QTRY_COMPARE(saved, 1);
+        QTRY_VERIFY(app.openDatabases().isEmpty());
+        QVERIFY(!integration->unlocked());
+        QCOMPARE(app.stage(), QStringLiteral("databases"));
+    }
+
     void browserGivesLogins() {
         FakeHost host;
         host.logins = {login(QString(32, 'a'), "GitHub", "ana", "s3nha", "654321"),
@@ -500,6 +615,8 @@ private slots:
         extension.exchange(session);
         QVERIFY(extension.associate(session));
 
+        host.logins = {login(QString(32, 'a'), "Mail", "ana", "senha")};
+        extension.call(session, "get-logins", {{"url", "https://example.org"}});
         QCOMPARE(extension.call(session, "get-totp", {{"uuid", QString(32, 'a')}}).value("totp").toString(),
                  QStringLiteral("123456"));
         QCOMPARE(errorOf(extension.call(session, "get-totp", {{"uuid", "../etc"}})),

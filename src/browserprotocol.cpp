@@ -1,5 +1,7 @@
 #include "browserprotocol.h"
 
+#include <QCryptographicHash>
+#include <QHash>
 #include <QHostAddress>
 #include <QJsonDocument>
 #include <QRegularExpression>
@@ -115,7 +117,32 @@ struct BrowserSession::State {
     BrowserHost *host = nullptr;
     QByteArray clientPublicKey;
     BrowserCrypto::KeyPair keys;
-    bool associated = false;
+    struct Association {
+        QString id;
+        QString key;
+    };
+    QHash<QString, Association> associations;
+    struct EntryRef {
+        QString database;
+        QString uuid;
+    };
+    QHash<QString, EntryRef> delivered;
+    quint64 exchange = 0;
+
+    QString entryId(const QString &database, const QString &uuid) {
+        const EntryRef entry{database, uuid.toLower()};
+        QString id = entry.uuid;
+        while (delivered.contains(id)) {
+            const auto previous = delivered.value(id);
+            if (previous.database == database && previous.uuid == entry.uuid)
+                return id;
+            // Imported entries in different databases can share a native UUID.
+            id = QString::fromLatin1(QCryptographicHash::hash(database.toUtf8() + id.toLatin1(),
+                                     QCryptographicHash::Sha256).toHex().left(32));
+        }
+        delivered.insert(id, entry);
+        return id;
+    }
 
     // The decrypted message of `request`, or empty when it has none or it
     // does not open.
@@ -182,8 +209,8 @@ void BrowserSession::handle(const QJsonObject &request, const Reply &reply) {
     BrowserHost *host = s.host;
     // Answers given later go through here, and only while the session lives.
     const std::weak_ptr<State> alive = d;
-    const auto later = [alive, reply](const std::function<QJsonObject(State &)> &build) {
-        if (const auto state = alive.lock())
+    const auto later = [alive, reply, exchange = s.exchange](const std::function<QJsonObject(State &)> &build) {
+        if (const auto state = alive.lock(); state && state->exchange == exchange)
             reply(build(*state));
     };
 
@@ -194,7 +221,9 @@ void BrowserSession::handle(const QJsonObject &request, const Reply &reply) {
             reply(errorReply(action, ClientPublicKeyNotReceived));
             return;
         }
-        s.associated = false;
+        ++s.exchange;
+        s.associations.clear();
+        s.delivered.clear();
         s.clientPublicKey = publicKey;
         s.keys = BrowserCrypto::generateKeyPair();
 
@@ -234,7 +263,8 @@ void BrowserSession::handle(const QJsonObject &request, const Reply &reply) {
             reply(errorReply(action, DatabaseHashNotReceived));
             return;
         }
-        reply(s.encrypted(action, request, {{QStringLiteral("hash"), hash}}));
+        reply(s.encrypted(action, request, {{QStringLiteral("hash"), hash},
+                                          {QStringLiteral("hashes"), QJsonArray::fromStringList(host->databaseHashes())}}));
         return;
     }
 
@@ -245,11 +275,13 @@ void BrowserSession::handle(const QJsonObject &request, const Reply &reply) {
             return;
         }
         const QString idKey = field("idKey").isEmpty() ? key : field("idKey");
-        host->associate(idKey, [later, action, request, hash](const QString &id) {
+        host->associate(idKey, [later, action, request, hash, idKey](const QString &id) {
             later([=](State &state) {
                 if (id.isEmpty())
                     return errorReply(action, ActionCancelledOrDenied);
-                state.associated = true;
+                if (hash.isEmpty() || state.host->databaseHash() != hash)
+                    return errorReply(action, AssociationFailed);
+                state.associations.insert(hash, {id, idKey});
                 return state.encrypted(action, request,
                                        {{QStringLiteral("hash"), hash}, {QStringLiteral("id"), id}});
             });
@@ -264,12 +296,14 @@ void BrowserSession::handle(const QJsonObject &request, const Reply &reply) {
             reply(errorReply(action, DatabaseNotOpened));
             return;
         }
-        if (host->associationKey(id) != key) {
-            reply(errorReply(action, AssociationFailed));
-            return;
+        for (const QString &database : host->databaseHashes()) {
+            if (!database.isEmpty() && host->keyForDatabase(database, id) == key) {
+                s.associations.insert(database, {id, key});
+                reply(s.encrypted(action, request, {{QStringLiteral("hash"), database}, {QStringLiteral("id"), id}}));
+                return;
+            }
         }
-        s.associated = true;
-        reply(s.encrypted(action, request, {{QStringLiteral("hash"), hash}, {QStringLiteral("id"), id}}));
+        reply(errorReply(action, AssociationFailed));
         return;
     }
 
@@ -290,13 +324,46 @@ void BrowserSession::handle(const QJsonObject &request, const Reply &reply) {
     }
 
     // Everything below hands out or changes what is in the vault.
-    if (!s.associated) {
+    QStringList authorized;
+    for (const QString &database : host->databaseHashes()) {
+        const auto association = s.associations.constFind(database);
+        if (association != s.associations.cend() && host->keyForDatabase(database, association->id) == association->key)
+            authorized.append(database);
+    }
+    const QString uuid = field("uuid").toLower();
+    const auto entry = s.delivered.value(uuid, {hash, uuid});
+    QString target = (action == QLatin1String("get-totp") || action == QLatin1String("set-login"))
+                         ? entry.database : hash;
+    if (action == QLatin1String("set-login") && field("uuid").isEmpty() && !authorized.contains(hash)) {
+        QStringList candidates;
+        for (const auto &database : authorized)
+            if (s.associations.value(database).id == field("id"))
+                candidates.append(database);
+        if (candidates.size() == 1)
+            target = candidates.first();
+    }
+    const bool search = action == QLatin1String("get-logins");
+    if (authorized.isEmpty() || (!search && !authorized.contains(target))) {
         reply(errorReply(action, AssociationFailed));
         return;
     }
 
     if (action == QLatin1String("get-logins")) {
         BrowserLoginQuery query;
+        query.databases = authorized;
+        for (const auto &value : message.value(QStringLiteral("keys")).toArray()) {
+            const auto item = value.toObject();
+            const QString id = item.value(QStringLiteral("id")).toString();
+            const QString key = item.value(QStringLiteral("key")).toString();
+            if (id.isEmpty() || key.isEmpty())
+                continue;
+            for (const QString &database : host->databaseHashes()) {
+                if (host->keyForDatabase(database, id) == key && !query.databases.contains(database)) {
+                    query.databases.append(database);
+                    s.associations.insert(database, {id, key});
+                }
+            }
+        }
         query.url = field("url");
         query.submitUrl = field("submitUrl");
         query.httpAuth = field("httpAuth") == trueString;
@@ -311,10 +378,11 @@ void BrowserSession::handle(const QJsonObject &request, const Reply &reply) {
                     return errorReply(action, NoLoginsFound);
                 QJsonArray entries;
                 for (const BrowserLogin &login : logins) {
+                    const QString uuid = state.entryId(login.databaseHash.isEmpty() ? hash : login.databaseHash, login.uuid);
                     QJsonObject entry{{QStringLiteral("login"), login.login},
                                       {QStringLiteral("name"), login.name},
                                       {QStringLiteral("password"), login.password.toString()},
-                                      {QStringLiteral("uuid"), login.uuid},
+                                      {QStringLiteral("uuid"), uuid},
                                       {QStringLiteral("group"), login.group}};
                     if (!login.totp.isEmpty())
                         entry.insert(QStringLiteral("totp"), login.totp);
@@ -331,12 +399,15 @@ void BrowserSession::handle(const QJsonObject &request, const Reply &reply) {
     }
 
     if (action == QLatin1String("get-totp")) {
-        const QString uuid = field("uuid");
         if (!isUuid(uuid)) {
             reply(errorReply(action, NoValidUuidProvided));
             return;
         }
-        host->totp(uuid, [later, action, request](const QString &code) {
+        if (!s.delivered.contains(uuid)) {
+            reply(errorReply(action, NoLoginsFound));
+            return;
+        }
+        host->databaseTotp(target, entry.uuid, [later, action, request](const QString &code) {
             later([=](State &state) {
                 return state.encrypted(action, request, {{QStringLiteral("totp"), code}});
             });
@@ -346,13 +417,14 @@ void BrowserSession::handle(const QJsonObject &request, const Reply &reply) {
 
     if (action == QLatin1String("set-login")) {
         BrowserSaveRequest save;
+        save.databaseHash = target;
         save.url = field("url");
         save.submitUrl = field("submitUrl");
         save.login = field("login");
         save.password = Secret(field("password"));
         save.group = field("group");
         save.groupUuid = field("groupUuid");
-        save.uuid = field("uuid");
+        save.uuid = entry.uuid;
         if (save.url.isEmpty()) {
             reply(errorReply(action, NoUrlProvided));
             return;
@@ -361,7 +433,7 @@ void BrowserSession::handle(const QJsonObject &request, const Reply &reply) {
             reply(errorReply(action, NoValidUuidProvided));
             return;
         }
-        host->saveLogin(save, [later, action, request, hash](bool saved) {
+        host->saveLogin(save, [later, action, request, hash = target](bool saved) {
             later([=](State &state) {
                 return state.encrypted(action, request,
                                        {{QStringLiteral("count"), QJsonValue::Null},

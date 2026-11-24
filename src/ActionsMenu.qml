@@ -41,6 +41,7 @@ Popup {
     implicitHeight: menuItems.implicitHeight + topPadding + bottomPadding
     height: parent ? Math.min(implicitHeight, parent.height) : implicitHeight
     modal: true
+    dim: false
     focus: true
     closePolicy: Popup.CloseOnPressOutside
 

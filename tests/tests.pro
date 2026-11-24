@@ -40,6 +40,9 @@ SOURCES += \
     tst_siteicons.cpp \
     tst_sshagent.cpp \
     tst_totp.cpp \
+    ../src/appcontroller.cpp \
+    ../src/bitwardenlogin.cpp \
+    ../src/entryrowsmodel.cpp \
     ../src/bitwardenjson.cpp \
     ../src/bitwardenvault.cpp \
     ../src/bwcrypto.cpp \
@@ -80,6 +83,9 @@ SOURCES += \
 
 HEADERS += \
     support.h \
+    ../src/appcontroller.h \
+    ../src/bitwardenlogin.h \
+    ../src/entryrowsmodel.h \
     ../src/bitwardenjson.h \
     ../src/bitwardenvault.h \
     ../src/bwaccount.h \

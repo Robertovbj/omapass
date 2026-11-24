@@ -63,6 +63,7 @@ struct BrowserLogin {
     QString login;
     Secret password;
     QString group;
+    QString databaseHash;
     QString totp;   // the current code, empty when there is none
 };
 
@@ -70,9 +71,11 @@ struct BrowserLoginQuery {
     QString url;
     QString submitUrl;
     bool httpAuth = false;
+    QStringList databases = {};
 };
 
 struct BrowserSaveRequest {
+    QString databaseHash;
     QString url;
     QString submitUrl;
     QString login;
@@ -93,6 +96,10 @@ public:
     // Identifies the open vault to the extension, which keeps one
     // association per hash. Hex.
     virtual QString databaseHash() const = 0;
+    virtual QStringList databaseHashes() const { return {databaseHash()}; }
+    virtual QString keyForDatabase(const QString &hash, const QString &id) const {
+        return hash == databaseHash() ? associationKey(id) : QString();
+    }
 
     // The identification key stored under `id`, or empty.
     virtual QString associationKey(const QString &id) const = 0;
@@ -105,6 +112,12 @@ public:
                             std::function<void(const QVector<BrowserLogin> &)> done) = 0;
     // The current one-time code of an entry, empty when it has none.
     virtual void totp(const QString &uuid, std::function<void(const QString &)> done) = 0;
+    virtual void databaseTotp(const QString &hash, const QString &uuid, std::function<void(const QString &)> done) {
+        if (hash == databaseHash())
+            totp(uuid, done);
+        else
+            done({});
+    }
     // Adds a login, or updates the one named by `uuid` (which may ask).
     virtual void saveLogin(const BrowserSaveRequest &request, std::function<void(bool saved)> done) = 0;
 
