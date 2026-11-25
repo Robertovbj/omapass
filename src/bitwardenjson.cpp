@@ -91,7 +91,7 @@ BwIndex buildBwIndex(const QHash<QString, QJsonObject> &items, const QHash<QStri
 
     for (const QJsonObject &item : items) {
         const int type = item.value(QStringLiteral("type")).toInt();
-        if (type != 1 && type != 5)
+        if (type != 1 && type != 2 && type != 5)
             continue;
         const QJsonValue deleted = item.value(QStringLiteral("deletedDate"));
         if (!deleted.isNull() && !deleted.isUndefined())
@@ -126,7 +126,14 @@ BwIndex buildBwIndex(const QHash<QString, QJsonObject> &items, const QHash<QStri
 }
 
 EntryData bwEntryData(const QJsonObject &item) {
-    if (item.value(QStringLiteral("type")).toInt() == 5) {
+    const int type = item.value(QStringLiteral("type")).toInt();
+    if (type == 2) {
+        EntryData data;
+        data.isNote = true;
+        data.notes = item.value(QStringLiteral("notes")).toString();
+        return data;
+    }
+    if (type == 5) {
         // The private key is what a key file holds: LF line ends and a final
         // newline, which ssh refuses to load without.
         QString key = item.value(QStringLiteral("sshKey")).toObject()

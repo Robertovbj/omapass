@@ -155,19 +155,28 @@ FocusScope {
             databasesMenu.open();
         }
         heading: controller.vaultLabel
-        headerActions: [
-            { "icon": "plus", "description": i18n.t("ui.help_add_entry"),
-              "action": function() { page.openAddForm(); } },
-            { "icon": "dice", "description": i18n.t("generator.help"),
-              "action": function() { page.mode = "generate"; } },
-            { "icon": "key", "description": controller.pinConfigured ? i18n.t("pin.disable_title")
-                                                                     : i18n.t("pin.setup_title"),
-              "action": function() { page.togglePin(); } },
-            { "icon": "settings", "description": i18n.t("settings.help"),
-              "action": function() { window.settingsOpen = true; } },
-            { "icon": "lock", "description": i18n.t("ui.lock"),
-              "action": function() { controller.lock(); } }
-        ]
+        headerActions: {
+            const actions = [
+                { "icon": "plus", "description": i18n.t("ui.help_add_entry"),
+                  "action": function() { page.openAddForm(); } }
+            ];
+            if (controller.bitwardenBackend) {
+                actions.push({ "icon": "send", "description": i18n.t("bitwarden.send_help"),
+                               "action": function() { page.mode = "send"; } });
+            }
+            actions.push(
+                { "icon": "dice", "description": i18n.t("generator.help"),
+                  "action": function() { page.mode = "generate"; } },
+                { "icon": "key", "description": controller.pinConfigured ? i18n.t("pin.disable_title")
+                                                                         : i18n.t("pin.setup_title"),
+                  "action": function() { page.togglePin(); } },
+                { "icon": "settings", "description": i18n.t("settings.help"),
+                  "action": function() { window.settingsOpen = true; } },
+                { "icon": "lock", "description": i18n.t("ui.lock"),
+                  "action": function() { controller.lock(); } }
+            );
+            return actions;
+        }
 
         footerText: controller.hasMessage ? controller.message
                   : controller.busy ? i18n.t("app.working")
@@ -180,7 +189,11 @@ FocusScope {
 
         onActivated: function(index) {
             const entry = page.currentEntry();
-            if (entry.length > 0)
+            if (entry.length === 0)
+                return;
+            if (controller.isNoteEntry(entry))
+                page.openInfo();
+            else
                 controller.copyPassword(entry);
         }
         onDetailsRequested: page.openInfo()
@@ -188,6 +201,7 @@ FocusScope {
         onEditRequested: page.editEntry(page.currentEntry())
         onDeleteRequested: page.confirmDelete()
         onGenerateRequested: page.mode = "generate"
+        onSendRequested: if (controller.bitwardenBackend) page.mode = "send"
         onPinToggleRequested: page.togglePin()
         onCopyUsernameRequested: page.withEntry(controller.copyUsername)
         onCopyOtpRequested: page.withEntry(controller.copyOtp)
@@ -406,6 +420,7 @@ FocusScope {
         id: formModal
         objectName: "entryFormModal"
         sshSupported: !controller.passBackend && !controller.onePasswordBackend && Qt.platform.os !== "windows"
+        noteSupported: controller.bitwardenBackend
         status: controller.messageIsError ? controller.message : ""
         statusIsError: true
         visible: page.mode === "form"
@@ -433,6 +448,20 @@ FocusScope {
             page.mode = "form";
         }
         onDismissed: page.mode = page.mode === "generateForForm" ? "form" : "list"
+    }
+
+    BitwardenSendModal {
+        id: sendModal
+        objectName: "bitwardenSendModal"
+        visible: page.mode === "send"
+        status: controller.messageIsError ? controller.message : ""
+        statusIsError: true
+
+        onSubmitted: function(payload) {
+            if (controller.createBitwardenSend(payload))
+                page.mode = "list";
+        }
+        onDismissed: page.mode = "list"
     }
 
     EntryInfoModal {
@@ -486,6 +515,7 @@ FocusScope {
                           ["Ctrl+E", i18n.t("ui.help_edit_entry")],
                           ["Ctrl+X", i18n.t("ui.help_delete_entry")],
                           ["Ctrl+G", i18n.t("generator.help")],
+                          ["Ctrl+Shift+S", i18n.t("bitwarden.send_help")],
                           ["Ctrl+I", i18n.t("pin.help")]]
             },
             {

@@ -28,6 +28,7 @@ struct DbRef {
 // used by the pass backend, to preserve lines it does not model when an
 // entry that already had them is edited.
 struct EntryData {
+    bool isNote = false;
     QString sshPublicKey;  // OpenSSH public key, including its optional comment.
     QString username;
     Secret password;
@@ -45,13 +46,14 @@ struct EntryData {
 };
 
 // What the entry list shows next to a path without reading each entry. `type`
-// is "login" or "ssh"; username and url are empty where the backend cannot
-// give them cheaply.
+// is "login", "ssh" or "note"; username and url are empty where the backend
+// cannot give them cheaply.
 struct EntryMeta {
     QString type = QStringLiteral("login");
     QString username;
     QString url;
     QStringList extraUrls;
+    bool hasOtp = false;
     std::optional<SshKeyConfig> ssh;
 };
 

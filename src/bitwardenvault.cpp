@@ -1,8 +1,12 @@
 #include "bitwardenvault.h"
 
 #include "i18n.h"
+#include "totp.h"
 
+#include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QMutexLocker>
 #include <QSettings>
 #include <QUrl>
@@ -259,8 +263,8 @@ BwResponse BitwardenVault::request(const QByteArray &method, const QString &path
     return response;
 }
 
-bool BitwardenVault::sync(QString *error) {
-    if (m_syncedAt.isValid() && m_syncedAt.secsTo(QDateTime::currentDateTimeUtc()) < freshSyncSecs)
+bool BitwardenVault::sync(QString *error, bool force) {
+    if (!force && m_syncedAt.isValid() && m_syncedAt.secsTo(QDateTime::currentDateTimeUtc()) < freshSyncSecs)
         return true;
 
     const BwResponse response = request("GET", QStringLiteral("/sync?excludeDomains=true"), error);
@@ -275,6 +279,222 @@ bool BitwardenVault::sync(QString *error) {
     }
     persist();
     m_syncedAt = QDateTime::currentDateTimeUtc();
+    return true;
+}
+
+bool BitwardenVault::syncCipher(const QString &cipherId, QString *error) {
+    if (cipherId.isEmpty())
+        return false;
+    const BwResponse response = request("GET", QStringLiteral("/ciphers/%1/details").arg(cipherId), error);
+    if (!response.ok())
+        return false;
+
+    const QJsonValue deleted = response.json.value(QStringLiteral("deletedDate"));
+    if (!deleted.isNull() && !deleted.isUndefined()) {
+        removeLocalCipher(cipherId);
+        return true;
+    }
+
+    storeCipher(response.json);
+    return true;
+}
+
+bool BitwardenVault::removeLocalCipher(const QString &cipherId) {
+    if (cipherId.isEmpty())
+        return false;
+    bool existed = false;
+    {
+        const QMutexLocker locker(&m_mutex);
+        existed = m_items.contains(cipherId) || !findById(m_state.ciphers, cipherId).isEmpty();
+        if (!existed)
+            return false;
+        removeById(&m_state.ciphers, cipherId);
+        m_items.remove(cipherId);
+        m_index = buildBwIndex(m_items, m_folders);
+    }
+    persist();
+    return true;
+}
+
+QString BitwardenVault::serverUrl() const {
+    const QMutexLocker locker(&m_mutex);
+    return m_state.server;
+}
+
+bool BitwardenVault::validAccessToken(Secret *token, QString *error) const {
+    if (!authorize(error))
+        return false;
+    *token = m_accessToken;
+    return !token->isEmpty();
+}
+
+bool BitwardenVault::createSend(const BwSendOptions &options, QString *shareUrl, QString *error) const {
+    const QString name = options.name.trimmed();
+    if (name.isEmpty()) {
+        *error = I18n::t(QStringLiteral("bitwarden.send_name_empty"));
+        return false;
+    }
+    if (options.type == 0 && options.text.isEmpty()) {
+        *error = I18n::t(QStringLiteral("bitwarden.send_text_empty"));
+        return false;
+    }
+
+    QByteArray fileBytes;
+    QString fileName;
+    if (options.type == 1) {
+        if (options.filePath.isEmpty()) {
+            *error = I18n::t(QStringLiteral("bitwarden.send_file_empty"));
+            return false;
+        }
+        QFile file(options.filePath);
+        if (!file.open(QIODevice::ReadOnly)) {
+            *error = I18n::t(QStringLiteral("bitwarden.send_file_unreadable"));
+            return false;
+        }
+        fileBytes = file.readAll();
+        if (fileBytes.isEmpty()) {
+            *error = I18n::t(QStringLiteral("bitwarden.send_file_unreadable"));
+            return false;
+        }
+        fileName = QFileInfo(options.filePath).fileName();
+    }
+
+    BwKey user;
+    QString server;
+    {
+        const QMutexLocker locker(&m_mutex);
+        user = m_keys.user;
+        server = m_state.server;
+    }
+
+    const BwBytes seed = BwCrypto::randomBytes(16);
+    const std::optional<BwKey> sendKey = BwCrypto::deriveSendKey(seed);
+    if (!sendKey) {
+        *error = I18n::t(QStringLiteral("bitwarden.send_error"), QStringLiteral("err"), QStringLiteral("crypto"));
+        return false;
+    }
+
+    const QByteArray seedBytes(reinterpret_cast<const char *>(seed.data()), qsizetype(seed.size()));
+    const std::optional<QString> encryptedKey = BwCrypto::encrypt(seedBytes, user);
+    const std::optional<QString> encName = BwCrypto::encrypt(name.toUtf8(), *sendKey);
+    if (!encryptedKey || !encName) {
+        *error = I18n::t(QStringLiteral("bitwarden.send_error"), QStringLiteral("err"), QStringLiteral("crypto"));
+        return false;
+    }
+
+    QJsonValue encNotes = QJsonValue::Null;
+    if (!options.notes.trimmed().isEmpty()) {
+        const std::optional<QString> enc = BwCrypto::encrypt(options.notes.toUtf8(), *sendKey);
+        if (enc)
+            encNotes = *enc;
+    }
+
+    const int deleteHours = qMax(1, options.deleteHours);
+    const QString deletionDate =
+        QDateTime::currentDateTimeUtc().addSecs(qint64(deleteHours) * 3600).toString(Qt::ISODate);
+
+    QJsonValue passwordHash = QJsonValue::Null;
+    if (!options.password.isEmpty()) {
+        const QString hash = BwCrypto::sendPasswordHash(options.password, seed);
+        if (!hash.isEmpty())
+            passwordHash = hash;
+    }
+
+    QJsonObject body{
+        {QStringLiteral("type"), options.type},
+        {QStringLiteral("name"), *encName},
+        {QStringLiteral("notes"), encNotes},
+        {QStringLiteral("key"), *encryptedKey},
+        {QStringLiteral("maxAccessCount"),
+         options.maxAccessCount > 0 ? QJsonValue(options.maxAccessCount) : QJsonValue(QJsonValue::Null)},
+        {QStringLiteral("deletionDate"), deletionDate},
+        {QStringLiteral("expirationDate"), QJsonValue::Null},
+        {QStringLiteral("password"), passwordHash},
+        {QStringLiteral("disabled"), false},
+        {QStringLiteral("hideEmail"), options.hideEmail},
+    };
+
+    QString accessId;
+    if (options.type == 0) {
+        const std::optional<QString> encText = BwCrypto::encrypt(options.text.toUtf8(), *sendKey);
+        if (!encText) {
+            *error = I18n::t(QStringLiteral("bitwarden.send_error"), QStringLiteral("err"), QStringLiteral("crypto"));
+            return false;
+        }
+        body.insert(QStringLiteral("text"),
+                    QJsonObject{{QStringLiteral("text"), *encText},
+                                {QStringLiteral("hidden"), options.hidden}});
+
+        const BwResponse response = request("POST", QStringLiteral("/sends"), error, body);
+        if (!response.ok())
+            return false;
+        accessId = response.json.value(QStringLiteral("accessId")).toString();
+    } else {
+        const std::optional<QString> encFileName = BwCrypto::encrypt(fileName.toUtf8(), *sendKey);
+        const std::optional<QByteArray> encFile = BwCrypto::encryptBuffer(fileBytes, *sendKey);
+        fileBytes.fill('\0');
+        if (!encFileName || !encFile) {
+            *error = I18n::t(QStringLiteral("bitwarden.send_error"), QStringLiteral("err"), QStringLiteral("crypto"));
+            return false;
+        }
+
+        body.insert(QStringLiteral("file"), QJsonObject{{QStringLiteral("fileName"), *encFileName}});
+        QJsonObject v2Body = body;
+        v2Body.insert(QStringLiteral("fileLength"), qint64(encFile->size()));
+
+        QString v2Error;
+        const BwResponse v2Response = request("POST", QStringLiteral("/sends/file/v2"), &v2Error, v2Body);
+        if (v2Response.ok()) {
+            const int uploadType = v2Response.json.value(QStringLiteral("fileUploadType")).toInt(0);
+            const QString uploadUrl = v2Response.json.value(QStringLiteral("url")).toString();
+            const QJsonObject sendResponse = v2Response.json.value(QStringLiteral("sendResponse")).toObject();
+            const QString sendId = sendResponse.value(QStringLiteral("id")).toString();
+            const QString fileId = sendResponse.value(QStringLiteral("file")).toObject()
+                                       .value(QStringLiteral("id")).toString();
+            accessId = sendResponse.value(QStringLiteral("accessId")).toString();
+
+            BwResponse uploadResponse;
+            if (uploadType == 1 && !uploadUrl.isEmpty()) {
+                uploadResponse = BwApi::putRaw(uploadUrl, *encFile,
+                                               {{"x-ms-blob-type", "BlockBlob"},
+                                                {"x-ms-version", "2019-07-07"},
+                                                {"Content-Type", "application/octet-stream"}});
+            } else {
+                if (!authorize(error))
+                    return false;
+                const QString uploadPath = QStringLiteral("/sends/%1/file/%2").arg(sendId, fileId);
+                uploadResponse = BwApi::uploadMultipart(
+                    server, uploadPath, m_accessToken,
+                    {{QStringLiteral("data"), *encFileName, "application/octet-stream", *encFile}});
+            }
+            if (!uploadResponse.ok()) {
+                *error = failureMessage(uploadResponse);
+                return false;
+            }
+        } else if (v2Response.status == 404) {
+            if (!authorize(error))
+                return false;
+            const BwResponse legacy = BwApi::uploadMultipart(
+                server, QStringLiteral("/sends/file"), m_accessToken,
+                {{QStringLiteral("model"), QString(), "application/json",
+                  QJsonDocument(body).toJson(QJsonDocument::Compact)},
+                 {QStringLiteral("data"), *encFileName, "application/octet-stream", *encFile}});
+            if (!legacy.ok()) {
+                *error = failureMessage(legacy);
+                return false;
+            }
+            accessId = legacy.json.value(QStringLiteral("accessId")).toString();
+        } else {
+            *error = v2Error;
+            return false;
+        }
+    }
+
+    if (accessId.isEmpty()) {
+        *error = I18n::t(QStringLiteral("bitwarden.send_error"), QStringLiteral("err"), QStringLiteral("accessId"));
+        return false;
+    }
+    *shareUrl = BwCrypto::sendUrl(server, accessId, seed);
     return true;
 }
 
@@ -392,14 +612,18 @@ QHash<QString, EntryMeta> BitwardenVault::entryMeta() const {
     for (auto it = m_index.items.cbegin(); it != m_index.items.cend(); ++it) {
         const QJsonObject item = m_items.value(it.value().id);
         EntryMeta entry;
-        if (item.value(QStringLiteral("type")).toInt() == 5) {
+        const int type = item.value(QStringLiteral("type")).toInt();
+        if (type == 5) {
             entry.type = QStringLiteral("ssh");
             entry.ssh = SshKeyConfig{it.value().id, {}};
+        } else if (type == 2) {
+            entry.type = QStringLiteral("note");
         } else {
             const EntryData data = bwEntryData(item);
             entry.username = data.username;
             entry.url = data.url;
             entry.extraUrls = data.extraUrls;
+            entry.hasOtp = !data.otp.isEmpty() && Totp::parse(data.otp.toString()).has_value();
         }
         meta.insert(it.key(), entry);
     }

@@ -243,6 +243,124 @@ std::optional<QString> encrypt(const QByteArray &plaintext, const BwKey &key) {
     }
 }
 
+std::optional<QByteArray> encryptBuffer(const QByteArray &plaintext, const BwKey &key) {
+    if (key.enc.size() != 32 || key.mac.size() != 32)
+        return std::nullopt;
+
+    try {
+        const BwBytes iv = randomBytes(16);
+        if (iv.size() != 16)
+            return std::nullopt;
+        BwBytes data(plaintext.cbegin(), plaintext.cend());
+
+        const auto aes = Botan::Cipher_Mode::create_or_throw("AES-256/CBC/PKCS7", encryptDirection);
+        aes->set_key(key.enc);
+        aes->start(iv);
+        aes->finish(data);
+
+        const auto hmac = Botan::MessageAuthenticationCode::create_or_throw("HMAC(SHA-256)");
+        hmac->set_key(key.mac);
+        hmac->update(iv);
+        hmac->update(data);
+        const auto mac = hmac->final();
+
+        QByteArray out;
+        out.reserve(1 + 16 + 32 + qsizetype(data.size()));
+        out.append(char(2));
+        out.append(reinterpret_cast<const char *>(iv.data()), 16);
+        out.append(reinterpret_cast<const char *>(mac.data()), 32);
+        out.append(reinterpret_cast<const char *>(data.data()), qsizetype(data.size()));
+        return out;
+    } catch (const std::exception &) {
+        return std::nullopt;
+    }
+}
+
+std::optional<BwBytes> decryptBuffer(const QByteArray &encBuffer, const BwKey &key) {
+    if (key.enc.size() != 32 || key.mac.size() != 32)
+        return std::nullopt;
+    // 1 byte type + 16 bytes IV + 32 bytes MAC + at least one 16-byte AES block.
+    if (encBuffer.size() < 1 + 16 + 32 + 16 || static_cast<uint8_t>(encBuffer.at(0)) != 2)
+        return std::nullopt;
+    const qsizetype cipherLen = encBuffer.size() - 49;
+    if (cipherLen % 16 != 0)
+        return std::nullopt;
+
+    const auto *raw = reinterpret_cast<const uint8_t *>(encBuffer.constData());
+    const BwBytes iv(raw + 1, raw + 17);
+    const BwBytes mac(raw + 17, raw + 49);
+    BwBytes data(raw + 49, raw + encBuffer.size());
+
+    try {
+        const auto hmac = Botan::MessageAuthenticationCode::create_or_throw("HMAC(SHA-256)");
+        hmac->set_key(key.mac);
+        hmac->update(iv);
+        hmac->update(data);
+        if (!hmac->verify_mac(mac))
+            return std::nullopt;
+
+        const auto aes = Botan::Cipher_Mode::create_or_throw("AES-256/CBC/PKCS7", decryptDirection);
+        aes->set_key(key.enc);
+        aes->start(iv);
+        aes->finish(data);
+        return data;
+    } catch (const std::exception &) {
+        return std::nullopt;
+    }
+}
+
+std::optional<BwKey> deriveSendKey(const BwBytes &seed) {
+    if (seed.size() != 16)
+        return std::nullopt;
+    try {
+        const auto hkdf = Botan::KDF::create_or_throw("HKDF(SHA-256)");
+        static constexpr char salt[] = "bitwarden-send";
+        static constexpr char info[] = "send";
+#if BOTAN_VERSION_MAJOR >= 3
+        const BwBytes derived = hkdf->derive_key(
+            64, seed,
+            std::span(reinterpret_cast<const uint8_t *>(salt), std::strlen(salt)),
+            std::span(reinterpret_cast<const uint8_t *>(info), std::strlen(info)));
+#else
+        const BwBytes derived = hkdf->derive_key(
+            64, seed.data(), seed.size(),
+            reinterpret_cast<const uint8_t *>(salt), std::strlen(salt),
+            reinterpret_cast<const uint8_t *>(info), std::strlen(info));
+#endif
+        return keyFromBytes(derived);
+    } catch (const std::exception &) {
+        return std::nullopt;
+    }
+}
+
+QString sendPasswordHash(const Secret &password, const BwBytes &seed) {
+    if (password.isEmpty() || seed.size() != 16)
+        return QString();
+    BwBytes out(32);
+    try {
+        const auto family = Botan::PasswordHashFamily::create_or_throw("PBKDF2(SHA-256)");
+        const auto hash = family->from_params(100000);
+        hash->derive_key(out.data(), out.size(),
+                         password.bytes().constData(), size_t(password.bytes().size()),
+                         seed.data(), seed.size());
+    } catch (const std::exception &) {
+        return QString();
+    }
+    return QString::fromLatin1(
+        QByteArray(reinterpret_cast<const char *>(out.data()), int(out.size())).toBase64());
+}
+
+QString sendUrl(const QString &server, const QString &accessId, const BwBytes &seed) {
+    QString base = server.isEmpty() ? QStringLiteral("https://vault.bitwarden.com") : server;
+    while (base.endsWith(QLatin1Char('/')))
+        base.chop(1);
+    const QByteArray keyEncoded =
+        QByteArray(reinterpret_cast<const char *>(seed.data()), qsizetype(seed.size()))
+            .toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals);
+    return base + QStringLiteral("/#/send/") + accessId + QLatin1Char('/')
+           + QString::fromLatin1(keyEncoded);
+}
+
 BwBytes randomBytes(int size) {
     BwBytes bytes(size_t(size < 0 ? 0 : size));
     try {

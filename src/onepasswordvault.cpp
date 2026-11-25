@@ -2,6 +2,7 @@
 
 #include "i18n.h"
 #include "process.h"
+#include "totp.h"
 
 #include <QFile>
 #include <QJsonArray>
@@ -517,6 +518,7 @@ QHash<QString, EntryMeta> OnePasswordVault::entryMeta() const {
             entry.username = data.username;
             entry.url = data.url;
             entry.extraUrls = data.extraUrls;
+            entry.hasOtp = !data.otp.isEmpty() && Totp::parse(data.otp.toString()).has_value();
         } else {
             entry.username = item.value(QStringLiteral("additional_information")).toString();
             // The summary has the URLs in the same shape as the whole item.

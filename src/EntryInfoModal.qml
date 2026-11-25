@@ -13,8 +13,9 @@ Modal {
 
     property bool passBackend: false
     property var details: ({})
+    readonly property bool isNote: !!root.details.isNote
     readonly property bool hasOtp: !!root.details.hasOtp
-    readonly property bool hasExtraUrls: (root.details.extraUrls || []).length > 0
+    readonly property bool hasExtraUrls: !root.isNote && (root.details.extraUrls || []).length > 0
 
     // The Tab chain through the additional URLs, which come and go with the
     // entry shown.
@@ -182,14 +183,15 @@ Modal {
         id: titleView
         label: i18n.t("common.title_word")
         value: root.details.title || ""
-        nextField: root.passBackend ? (root.hasOtp ? otpView.view : titleView.view) : usernameView.view
+        nextField: root.passBackend ? (root.hasOtp ? otpView.view : titleView.view)
+                 : root.isNote ? notesView.view : usernameView.view
         previousField: root.passBackend ? (root.hasOtp ? otpView.view : titleView.view) : notesView.view
     }
 
     InfoField {
         id: usernameView
         objectName: "usernameField"
-        visible: !root.passBackend
+        visible: !root.passBackend && !root.isNote
         label: i18n.t("ui.info_login")
         value: root.details.username || ""
         nextField: urlView.view
@@ -198,7 +200,7 @@ Modal {
 
     InfoField {
         id: urlView
-        visible: !root.passBackend
+        visible: !root.passBackend && !root.isNote
         label: "URL"
         value: root.details.url || ""
         openAction: root.details.url ? function() { controller.openAddress(root.details.url); } : null
@@ -210,7 +212,7 @@ Modal {
     // like the main one.
     Repeater {
         id: extraUrlViews
-        model: root.passBackend ? [] : (root.details.extraUrls || [])
+        model: (root.passBackend || root.isNote) ? [] : (root.details.extraUrls || [])
 
         InfoField {
             required property string modelData
@@ -267,8 +269,8 @@ Modal {
         visible: !root.passBackend
         label: i18n.t("common.notes_label")
         value: root.details.notes || ""
-        rows: 5
+        rows: root.isNote ? 10 : 5
         nextField: titleView.view
-        previousField: root.hasOtp ? otpView.view : root.lastUrlView()
+        previousField: root.isNote ? titleView.view : (root.hasOtp ? otpView.view : root.lastUrlView())
     }
 }

@@ -8,7 +8,26 @@ Modal {
     id: root
 
     property bool sshSupported: false
-    readonly property bool sshEntry: isEdit ? fields.type === "ssh" : sshSupported && kinds.currentIndex === 1
+    property bool noteSupported: false
+    readonly property var kindKeys: {
+        const list = ["login"];
+        if (sshSupported)
+            list.push("ssh");
+        if (noteSupported)
+            list.push("note");
+        return list;
+    }
+    readonly property var kindLabels: {
+        const list = [i18n.t("common.password_label")];
+        if (sshSupported)
+            list.push("SSH");
+        if (noteSupported)
+            list.push(i18n.t("common.note_label"));
+        return list;
+    }
+    readonly property string selectedKind: isEdit ? (fields.type || "login") : (kindKeys[kinds.currentIndex] || "login")
+    readonly property bool sshEntry: selectedKind === "ssh"
+    readonly property bool noteEntry: selectedKind === "note"
     readonly property bool sshAttachment: isEdit && !!fields.sshAttachment
     readonly property bool inlineSshKey: sshEntry && !sshAttachment
     property bool resumeDraft: false
@@ -27,7 +46,9 @@ Modal {
 
     onAcceptRequested: root.submit()
 
-    firstField: root.isEdit ? (root.inlineSshKey ? privateKey.field : passwordField.field) : groupField.field
+    firstField: root.isEdit
+        ? (root.inlineSshKey ? privateKey.field : (root.noteEntry ? notesArea : passwordField.field))
+        : groupField.field
 
     onClosed: {
         privateKey.text = "";
@@ -74,22 +95,23 @@ Modal {
     function submit() {
         if (!root.acceptEnabled)
             return;
+        const hideLogin = root.inlineSshKey || root.noteEntry;
         root.submitted({
-            "type": root.sshEntry ? "ssh" : "login",
+            "type": root.selectedKind,
             "sshPublicKey": root.sshEntry ? publicKey.text : "",
             "isEdit": root.isEdit,
             "originalPath": root.fields.originalPath || "",
             "group": groupField.text,
             "title": titleField.text,
-            "username": root.inlineSshKey ? "" : usernameField.text,
-            "password": root.inlineSshKey ? privateKey.text : passwordField.text,
-            "url": root.inlineSshKey ? "" : urlField.text,
-            "extraUrls": root.inlineSshKey ? "" : extraUrlsField.text,
+            "username": hideLogin ? "" : usernameField.text,
+            "password": root.inlineSshKey ? privateKey.text : (root.noteEntry ? "" : passwordField.text),
+            "url": hideLogin ? "" : urlField.text,
+            "extraUrls": hideLogin ? "" : extraUrlsField.text,
             "notes": notesArea.text,
             "extra": root.fields.extra || [],
             // The controller keeps the original as it was when the field was
             // not touched, and checks and normalises it when it was.
-            "otp": root.inlineSshKey ? "" : otpField.text,
+            "otp": hideLogin ? "" : otpField.text,
             "originalOtp": root.fields.otp || ""
         });
     }
@@ -107,8 +129,8 @@ Modal {
     Segmented {
         id: kinds
         objectName: "entryKinds"
-        visible: !root.isEdit && root.sshSupported
-        options: [i18n.t("common.password_label"), "SSH"]
+        visible: !root.isEdit && root.kindKeys.length > 1
+        options: root.kindLabels
         onNextRequested: root.focusNext(kinds)
         onPreviousRequested: root.focusPrevious(kinds)
         onSubmitted: root.submit()
@@ -149,7 +171,7 @@ Modal {
     Field {
         id: usernameField
         width: parent.width
-        visible: !root.passBackend && !root.inlineSshKey
+        visible: !root.passBackend && !root.inlineSshKey && !root.noteEntry
         label: i18n.t("common.username_label")
 
         onCancelled: root.takeKeyboard()
@@ -160,7 +182,7 @@ Modal {
 
     Field {
         id: passwordField
-        visible: !root.inlineSshKey
+        visible: !root.inlineSshKey && !root.noteEntry
         width: parent.width
         label: i18n.t("common.password_label")
         echoMode: revealPassword.checked ? TextInput.Normal : TextInput.Password
@@ -189,7 +211,7 @@ Modal {
     // code, both go in as they are.
     Field {
         id: otpField
-        visible: !root.inlineSshKey
+        visible: !root.inlineSshKey && !root.noteEntry
         objectName: "otpField"
         width: parent.width
         label: i18n.t("common.otp_label")
@@ -204,7 +226,7 @@ Modal {
     Field {
         id: urlField
         width: parent.width
-        visible: !root.passBackend && !root.inlineSshKey
+        visible: !root.passBackend && !root.inlineSshKey && !root.noteEntry
         label: i18n.t("common.url_label")
 
         onCancelled: root.takeKeyboard()
@@ -219,7 +241,7 @@ Modal {
         id: extraUrlsField
         objectName: "extraUrlsField"
         width: parent.width
-        visible: !root.passBackend && !root.inlineSshKey
+        visible: !root.passBackend && !root.inlineSshKey && !root.noteEntry
         label: i18n.t("common.extra_urls_label")
         placeholderText: "https://exemplo.com https://login.exemplo.com"
 
@@ -301,7 +323,7 @@ Modal {
             objectName: "formNotesBox"
             contentWidth: availableWidth
             width: parent.width
-            height: Math.round(90 * root.s)
+            height: Math.round((root.noteEntry ? 180 : 90) * root.s)
             Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
 
             background: Rectangle {

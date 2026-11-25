@@ -312,7 +312,7 @@ std::optional<BwKey> BwAccount::cipherKey(const QJsonObject &cipher, const BwKey
 
 std::optional<QJsonObject> BwAccount::decryptCipher(const QJsonObject &cipher, const BwKeys &keys) {
     const int type = cipher.value(QStringLiteral("type")).toInt();
-    if (type != 1 && type != 5)
+    if (type != 1 && type != 2 && type != 5)
         return std::nullopt;
     const QJsonValue deleted = cipher.value(QStringLiteral("deletedDate"));
     if (!deleted.isNull() && !deleted.isUndefined())
@@ -334,7 +334,12 @@ std::optional<QJsonObject> BwAccount::decryptCipher(const QJsonObject &cipher, c
         item.insert(QStringLiteral("deletedDate"), QJsonValue::Null);
         item.insert(QStringLiteral("name"), decryptField(cipher.value(QStringLiteral("name")), *key));
         item.insert(QStringLiteral("notes"), decryptField(cipher.value(QStringLiteral("notes")), *key));
-        if (type == 5) {
+        if (type == 2) {
+            QJsonObject note = cipher.value(QStringLiteral("secureNote")).toObject();
+            if (!note.contains(QStringLiteral("type")))
+                note.insert(QStringLiteral("type"), 0);
+            item.insert(QStringLiteral("secureNote"), note);
+        } else if (type == 5) {
             const QJsonObject ssh = cipher.value(QStringLiteral("sshKey")).toObject();
             item.insert(QStringLiteral("sshKey"),
                         QJsonObject{{QStringLiteral("privateKey"), decryptField(ssh.value(QStringLiteral("privateKey")), *key)},
@@ -390,6 +395,18 @@ QJsonObject BwAccount::cipherRequest(const QJsonObject &encrypted, const QString
     request.insert(QStringLiteral("notes"), encryptedField(data.notes, key));
     request.insert(QStringLiteral("folderId"), folderId.isEmpty() ? QJsonValue(QJsonValue::Null)
                                                                   : QJsonValue(folderId));
+
+    if ((data.isNote && (encrypted.isEmpty() || request.value(QStringLiteral("type")).toInt() == 2))
+        || request.value(QStringLiteral("type")).toInt() == 2) {
+        request.remove(QStringLiteral("login"));
+        request.remove(QStringLiteral("sshKey"));
+        request.insert(QStringLiteral("type"), 2);
+        QJsonObject note = request.value(QStringLiteral("secureNote")).toObject();
+        if (!note.contains(QStringLiteral("type")))
+            note.insert(QStringLiteral("type"), 0);
+        request.insert(QStringLiteral("secureNote"), note);
+        return request;
+    }
 
     if (!data.sshPublicKey.isEmpty() && (encrypted.isEmpty() || request.value(QStringLiteral("type")).toInt() == 5)) {
         request.remove(QStringLiteral("login"));

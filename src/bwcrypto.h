@@ -71,6 +71,22 @@ std::optional<QString> decryptString(const QString &encString, const BwKey &key)
 // the vault's items and folders are written with, and omapass' own PIN store.
 std::optional<QString> encrypt(const QByteArray &plaintext, const BwKey &key);
 
+// Encrypts/decrypts binary payloads in Bitwarden's type 2 EncArrayBuffer
+// format ([0x02][16-byte IV][32-byte MAC][ciphertext]), used for Send files.
+std::optional<QByteArray> encryptBuffer(const QByteArray &plaintext, const BwKey &key);
+std::optional<BwBytes> decryptBuffer(const QByteArray &encBuffer, const BwKey &key);
+
+// Derives the 64-byte symmetric key for a Bitwarden Send from its 16-byte
+// random seed via HKDF-SHA256 (salt="bitwarden-send", info="send").
+std::optional<BwKey> deriveSendKey(const BwBytes &seed);
+
+// Optional Send password hash: PBKDF2-HMAC-SHA256 (100,000 iterations, salt=seed),
+// 32 bytes base64-encoded.
+QString sendPasswordHash(const Secret &password, const BwBytes &seed);
+
+// Shareable Bitwarden Send URL (`<vault>/#/send/<accessId>/<base64url(seed)>`).
+QString sendUrl(const QString &server, const QString &accessId, const BwBytes &seed);
+
 // Random bytes from the system generator, for a salt or an IV. Empty when
 // the generator fails — callers check the size before using it.
 BwBytes randomBytes(int size);

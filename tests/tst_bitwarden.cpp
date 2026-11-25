@@ -6,6 +6,7 @@
 #include "bwaccount.h"
 #include "bwapi.h"
 #include "bwcrypto.h"
+#include "bwsync.h"
 #include "i18n.h"
 
 #include <QTcpServer>
@@ -687,6 +688,129 @@ private slots:
         BwAccount::remove(path);
         QVERIFY(BwAccount::refPaths().isEmpty());
         QDir(BwAccount::directory()).removeRecursively();
+    }
+
+    void bitwardenSecureNoteDecryptIndexAndRequest() {
+        const auto key = BwCrypto::keyFromBytes(BwCrypto::randomBytes(64));
+        QVERIFY(key);
+
+        EntryData data;
+        data.isNote = true;
+        data.notes = QStringLiteral("Conteudo confidencial da nota");
+        const QJsonObject req = BwAccount::cipherRequest({}, {}, QStringLiteral("Chave de recuperacao"),
+                                                         QString(), data, *key, QStringLiteral("u1"));
+        QCOMPARE(req.value("type").toInt(), 2);
+        QVERIFY(!req.contains("login"));
+        QVERIFY(!req.contains("sshKey"));
+        QCOMPARE(req.value("secureNote").toObject().value("type").toInt(), 0);
+        QCOMPARE(decrypted(req.value("name"), *key), QStringLiteral("Chave de recuperacao"));
+        QCOMPARE(decrypted(req.value("notes"), *key), QStringLiteral("Conteudo confidencial da nota"));
+
+        QJsonObject cipher = req;
+        cipher.insert(QStringLiteral("id"), QStringLiteral("note-1"));
+        BwKeys keys;
+        keys.user = *key;
+        const std::optional<QJsonObject> item = BwAccount::decryptCipher(cipher, keys);
+        QVERIFY(item);
+        QCOMPARE(item->value("type").toInt(), 2);
+        QCOMPARE(item->value("name").toString(), QStringLiteral("Chave de recuperacao"));
+        QCOMPARE(item->value("notes").toString(), QStringLiteral("Conteudo confidencial da nota"));
+
+        const EntryData parsed = bwEntryData(*item);
+        QVERIFY(parsed.isNote);
+        QCOMPARE(parsed.notes, QStringLiteral("Conteudo confidencial da nota"));
+
+        const BwIndex index = buildBwIndex({{QStringLiteral("note-1"), *item}}, {});
+        QCOMPARE(index.entries, QStringList({QStringLiteral("Chave de recuperacao")}));
+    }
+
+    void bitwardenSendCryptoAndUrls() {
+        const BwBytes seed = BwCrypto::randomBytes(16);
+        const std::optional<BwKey> sendKey = BwCrypto::deriveSendKey(seed);
+        QVERIFY(sendKey);
+        QCOMPARE(sendKey->enc.size(), size_t(32));
+        QCOMPARE(sendKey->mac.size(), size_t(32));
+
+        // Same seed always derives the same key.
+        const std::optional<BwKey> again = BwCrypto::deriveSendKey(seed);
+        QVERIFY(again);
+        QCOMPARE(again->enc, sendKey->enc);
+        QCOMPARE(again->mac, sendKey->mac);
+
+        // EncArrayBuffer round-trip + tamper rejection.
+        const QByteArray fileContent("Arquivo secreto de teste 1234567890");
+        const std::optional<QByteArray> encrypted = BwCrypto::encryptBuffer(fileContent, *sendKey);
+        QVERIFY(encrypted);
+        QCOMPARE(uint8_t(encrypted->at(0)), uint8_t(2));
+        const std::optional<BwBytes> decryptedBytes = BwCrypto::decryptBuffer(*encrypted, *sendKey);
+        QVERIFY(decryptedBytes);
+        QCOMPARE(QByteArray(reinterpret_cast<const char *>(decryptedBytes->data()),
+                            qsizetype(decryptedBytes->size())),
+                 fileContent);
+
+        QByteArray tampered = *encrypted;
+        tampered[tampered.size() - 1] = char(tampered[tampered.size() - 1] ^ 0x01);
+        QVERIFY(!BwCrypto::decryptBuffer(tampered, *sendKey));
+
+        // Password hash & share URLs.
+        const QString hash = BwCrypto::sendPasswordHash(Secret(QStringLiteral("segredo")), seed);
+        QCOMPARE(QByteArray::fromBase64(hash.toLatin1()).size(), 32);
+
+        const QString cloudUrl = BwCrypto::sendUrl(QString(), QStringLiteral("abc123"), seed);
+        QVERIFY(cloudUrl.startsWith(QStringLiteral("https://vault.bitwarden.com/#/send/abc123/")));
+        const QString vwUrl = BwCrypto::sendUrl(QStringLiteral("https://limeira.dev.internal"),
+                                                QStringLiteral("xyz789"), seed);
+        QVERIFY(vwUrl.startsWith(QStringLiteral("https://limeira.dev.internal/#/send/xyz789/")));
+    }
+
+    void bitwardenNotificationsUrlAndSignalRDecoder() {
+        QCOMPARE(BwApi::notificationsUrl(QString()),
+                 QStringLiteral("wss://notifications.bitwarden.com/hub"));
+        QCOMPARE(BwApi::notificationsUrl(QStringLiteral("https://vault.bitwarden.eu")),
+                 QStringLiteral("wss://notifications.bitwarden.eu/hub"));
+        QCOMPARE(BwApi::notificationsUrl(QStringLiteral("https://limeira.dev.internal")),
+                 QStringLiteral("wss://limeira.dev.internal/notifications/hub"));
+
+        // Build a SignalR MessagePack Invocation frame:
+        // [1, {}, null, "ReceiveMessage", [{"Type": 0, "Payload": {"Id": "cid-42"}}]]
+        QByteArray msg;
+        msg.append(char(0x95));  // fixarray(5)
+        msg.append(char(0x01));  // 1 (Invocation)
+        msg.append(char(0x80));  // fixmap(0) headers
+        msg.append(char(0xc0));  // nil invocationId
+        const QByteArray target("ReceiveMessage");
+        msg.append(char(0xa0 | target.size()));
+        msg.append(target);
+        msg.append(char(0x91));  // fixarray(1) arguments
+        msg.append(char(0x82));  // fixmap(2) envelope
+        msg.append(char(0xa4));
+        msg.append("Type");
+        msg.append(char(0x00));  // 0 = SyncCipherUpdate
+        msg.append(char(0xa7));
+        msg.append("Payload");
+        msg.append(char(0x81));  // fixmap(1) payload
+        msg.append(char(0xa2));
+        msg.append("Id");
+        const QByteArray cid("cid-42");
+        msg.append(char(0xa0 | cid.size()));
+        msg.append(cid);
+
+        // Prepend varint length + a SignalR Ping frame (\x02\x91\x06).
+        QByteArray framed;
+        framed.append(char(msg.size()));
+        framed.append(msg);
+        framed.append(QByteArray("\x02\x91\x06", 3));
+
+        const QVector<QVariant> decoded = BwSync::decodeSignalRFrames(framed);
+        QCOMPARE(decoded.size(), 2);
+
+        const std::optional<BwSyncEvent> ev = BwSync::parseNotification(decoded.at(0));
+        QVERIFY(ev);
+        QCOMPARE(ev->kind, BwSyncEvent::Kind::CipherChanged);
+        QCOMPARE(ev->cipherId, QStringLiteral("cid-42"));
+
+        // Ping is not a sync event.
+        QVERIFY(!BwSync::parseNotification(decoded.at(1)));
     }
 };
 

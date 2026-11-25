@@ -50,6 +50,7 @@ SOURCES += \
     ../src/bwcrypto.cpp \
     ../src/bwaccount.cpp \
     ../src/bwapi.cpp \
+    ../src/bwsync.cpp \
     ../src/browsercrypto.cpp \
     ../src/browserintegration.cpp \
     ../src/browsermanifests.cpp \
@@ -94,6 +95,7 @@ HEADERS += \
     ../src/bitwardenvault.h \
     ../src/bwaccount.h \
     ../src/bwapi.h \
+    ../src/bwsync.h \
     ../src/browsercrypto.h \
     ../src/browserintegration.h \
     ../src/browsermanifests.h \

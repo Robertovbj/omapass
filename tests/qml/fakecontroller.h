@@ -88,6 +88,8 @@ class FakeController : public QObject {
     Q_PROPERTY(QVariantList openDatabases READ openDatabases CONSTANT)
     Q_PROPERTY(QString vaultLabel READ vaultLabel CONSTANT)
     Q_PROPERTY(bool passBackend MEMBER m_passBackend CONSTANT)
+    Q_PROPERTY(bool bitwardenBackend MEMBER m_bitwardenBackend CONSTANT)
+    Q_PROPERTY(bool onePasswordBackend MEMBER m_onePasswordBackend CONSTANT)
     Q_PROPERTY(bool pinConfigured MEMBER m_pinConfigured CONSTANT)
     Q_PROPERTY(bool syncing MEMBER m_syncing CONSTANT)
 
@@ -115,6 +117,8 @@ public:
         return entryRows().value(index).toMap().value(QStringLiteral("path")).toString();
     }
     Q_INVOKABLE bool isEmptyGroup(const QString &) const { return false; }
+    Q_INVOKABLE bool isNoteEntry(const QString &) const { return false; }
+    Q_INVOKABLE bool createBitwardenSend(const QVariantMap &) { return true; }
     Q_INVOKABLE QVariantMap entryMenuFields(const QString &entry) const {
         return {{QStringLiteral("hasPassword"), entry == entryPathAt(0)},
                 {QStringLiteral("hasUsername"), entry == entryPathAt(1)},
@@ -247,6 +251,8 @@ signals:
 private:
     QString m_query;
     bool m_passBackend = false;
+    bool m_bitwardenBackend = false;
+    bool m_onePasswordBackend = false;
     bool m_pinConfigured = false;
     bool m_syncing = false;
     bool m_scanning = true;

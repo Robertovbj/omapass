@@ -4,6 +4,7 @@
 #include <QJsonObject>
 #include <QList>
 #include <QPair>
+#include <QSslCertificate>
 #include <QString>
 
 #include "secret.h"
@@ -46,6 +47,15 @@ namespace BwApi {
 // their own, as does the EU cloud.
 QString identityUrl(const QString &server);
 QString apiUrl(const QString &server);
+QString notificationsUrl(const QString &server);
+const QList<QSslCertificate> &extraCaCertificates();
+
+struct MultipartPart {
+    QString name;
+    QString fileName;
+    QByteArray contentType;
+    QByteArray body;
+};
 
 // The identifier this installation presents as its device: Bitwarden
 // remembers known devices by it, so it is made once and kept.
@@ -62,6 +72,14 @@ BwResponse token(const QString &server, const Form &form);
 BwResponse call(const QString &server, const QByteArray &method, const QString &path,
                 const Secret &accessToken, const QJsonObject &body = QJsonObject(),
                 bool hasBody = false);
+
+// POST multipart/form-data to {api}/{path}, used for Send file uploads.
+BwResponse uploadMultipart(const QString &server, const QString &path,
+                           const Secret &accessToken, const QList<MultipartPart> &parts);
+
+// PUT raw bytes to an absolute URL (e.g., Azure Blob direct upload for Send).
+BwResponse putRaw(const QString &url, const QByteArray &data,
+                  const QList<QPair<QByteArray, QByteArray>> &headers = {});
 
 // Gives up on every request in flight and refuses new ones, for when the
 // application quits: a sync waiting on a slow server would otherwise keep

@@ -1,6 +1,7 @@
 #include "bwapi.h"
 
 #include <QEventLoop>
+#include <QHttpMultiPart>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QNetworkAccessManager>
@@ -51,22 +52,10 @@ QJsonValue camelizedValue(const QJsonValue &value) {
     return value;
 }
 
-// Certificates to trust besides the system's, for a server with one of its
-// own (a self-signed one, or from an internal CA): a PEM file, possibly with
-// several, named by OMAPASS_CA_CERTS. Read once.
-const QList<QSslCertificate> &extraCaCertificates() {
-    static const QList<QSslCertificate> certificates = []() {
-        const QString path = qEnvironmentVariable("OMAPASS_CA_CERTS");
-        return path.isEmpty() ? QList<QSslCertificate>()
-                              : QSslCertificate::fromPath(path, QSsl::Pem);
-    }();
-    return certificates;
-}
-
 void addCommonHeaders(QNetworkRequest *request) {
-    if (!extraCaCertificates().isEmpty()) {
+    if (!BwApi::extraCaCertificates().isEmpty()) {
         QSslConfiguration ssl = request->sslConfiguration();
-        ssl.addCaCertificates(extraCaCertificates());
+        ssl.addCaCertificates(BwApi::extraCaCertificates());
         request->setSslConfiguration(ssl);
     }
     request->setRawHeader("Accept", "application/json");
@@ -183,6 +172,29 @@ QString BwApi::apiUrl(const QString &server) {
     return server + QStringLiteral("/api");
 }
 
+QString BwApi::notificationsUrl(const QString &server) {
+    if (server.isEmpty())
+        return QStringLiteral("wss://notifications.bitwarden.com/hub");
+    if (server == QLatin1String("https://vault.bitwarden.eu"))
+        return QStringLiteral("wss://notifications.bitwarden.eu/hub");
+    QUrl url(server);
+    url.setScheme(url.scheme() == QLatin1String("http") ? QStringLiteral("ws") : QStringLiteral("wss"));
+    QString path = url.path();
+    while (path.endsWith(QLatin1Char('/')))
+        path.chop(1);
+    url.setPath(path + QStringLiteral("/notifications/hub"));
+    return url.toString();
+}
+
+const QList<QSslCertificate> &BwApi::extraCaCertificates() {
+    static const QList<QSslCertificate> certificates = []() {
+        const QString path = qEnvironmentVariable("OMAPASS_CA_CERTS");
+        return path.isEmpty() ? QList<QSslCertificate>()
+                              : QSslCertificate::fromPath(path, QSsl::Pem);
+    }();
+    return certificates;
+}
+
 QString BwApi::deviceIdentifier() {
     QSettings settings;
     QString id = settings.value(deviceSetting).toString();
@@ -233,6 +245,88 @@ BwResponse BwApi::call(const QString &server, const QByteArray &method, const QS
         payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
     }
     return send(request, method, payload);
+}
+
+BwResponse BwApi::uploadMultipart(const QString &server, const QString &path,
+                                  const Secret &accessToken, const QList<MultipartPart> &parts) {
+    BwResponse response;
+    if (abortRequested) {
+        response.failure = BwResponse::Failure::Unreachable;
+        return response;
+    }
+
+    QNetworkRequest request(QUrl(apiUrl(server) + path));
+    addCommonHeaders(&request);
+    request.setTransferTimeout(120000);
+    if (!accessToken.isEmpty()) {
+        QByteArray header = "Bearer " + accessToken.toString().toLatin1();
+        request.setRawHeader("Authorization", header);
+        header.fill('\0');
+    }
+
+    auto *multiPart = new QHttpMultiPart(QHttpMultiPart::FormDataType);
+    for (const MultipartPart &part : parts) {
+        QHttpPart httpPart;
+        QString disposition = QStringLiteral("form-data; name=\"%1\"").arg(part.name);
+        if (!part.fileName.isEmpty())
+            disposition += QStringLiteral("; filename=\"%1\"").arg(part.fileName);
+        httpPart.setHeader(QNetworkRequest::ContentDispositionHeader, disposition);
+        if (!part.contentType.isEmpty())
+            httpPart.setHeader(QNetworkRequest::ContentTypeHeader, part.contentType);
+        httpPart.setBody(part.body);
+        multiPart->append(httpPart);
+    }
+
+    QNetworkAccessManager manager;
+    QEventLoop loop;
+    QNetworkReply *reply = manager.post(request, multiPart);
+    multiPart->setParent(reply);
+    QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+
+    QTimer abortPoll;
+    abortPoll.setInterval(100);
+    QObject::connect(&abortPoll, &QTimer::timeout, reply, [reply]() {
+        if (abortRequested)
+            reply->abort();
+    });
+    abortPoll.start();
+    loop.exec();
+    abortPoll.stop();
+
+    response.status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    QByteArray content = reply->readAll();
+    const QJsonDocument document = QJsonDocument::fromJson(content);
+    content.fill('\0');
+    if (document.isObject())
+        response.json = BwApi::camelized(document.object());
+
+    const QNetworkReply::NetworkError error = reply->error();
+    if (response.status == 0) {
+        response.failure = error == QNetworkReply::SslHandshakeFailedError
+            ? BwResponse::Failure::Certificate
+            : BwResponse::Failure::Unreachable;
+        response.networkError = reply->errorString();
+    } else if (response.status < 200 || response.status >= 300) {
+        response.failure = BwResponse::Failure::Http;
+        response.networkError = reply->errorString();
+    }
+
+    reply->deleteLater();
+    return response;
+}
+
+BwResponse BwApi::putRaw(const QString &url, const QByteArray &data,
+                         const QList<QPair<QByteArray, QByteArray>> &headers) {
+    QNetworkRequest request{QUrl(url)};
+    if (!extraCaCertificates().isEmpty()) {
+        QSslConfiguration ssl = request.sslConfiguration();
+        ssl.addCaCertificates(extraCaCertificates());
+        request.setSslConfiguration(ssl);
+    }
+    request.setTransferTimeout(120000);
+    for (const auto &[name, value] : headers)
+        request.setRawHeader(name, value);
+    return send(request, "PUT", data);
 }
 
 BwResponse BwApi::prelogin(const QString &server, const QString &email) {

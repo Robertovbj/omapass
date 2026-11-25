@@ -14,6 +14,7 @@
 
 #include "bitwardenlogin.h"
 #include "browserintegration.h"
+#include "bwsync.h"
 #include "config.h"
 #include "entryicons.h"
 #include "entryrowsmodel.h"
@@ -191,6 +192,7 @@ public:
     Q_INVOKABLE void cancelBitwardenLogin();
     Q_INVOKABLE bool isBitwardenDatabase(int index) const;
     Q_INVOKABLE void logoutBitwarden(int index);
+    Q_INVOKABLE bool createBitwardenSend(const QVariantMap &fields);
     Q_INVOKABLE QString validatePin(const QString &pin, const QString &confirm,
                                     bool allowText = false) const;
     Q_INVOKABLE QString pinWeakWarning(const QString &pin) const;
@@ -212,6 +214,7 @@ public:
 
     // Entries
     Q_INVOKABLE bool isEmptyGroup(const QString &entry) const;
+    Q_INVOKABLE bool isNoteEntry(const QString &entry) const;
     Q_INVOKABLE QString groupNameOf(const QString &entry) const;
     // Drops the wait for an account check; the list takes the keyboard back.
     Q_INVOKABLE void cancelAccountCheck();
@@ -377,6 +380,7 @@ private:
     // Waited on at shutdown, so no worker thread outlives the vault it uses.
     QFuture<void> m_task;
     QFuture<void> m_syncTask;
+    QFuture<void> m_bwRealtimeTask;
     QFuture<void> m_localScanTask;
     QFuture<void> m_accountScanTask;
     QFuture<void> m_accountCheckTask;
@@ -435,6 +439,12 @@ private:
     QFutureWatcher<QString> *m_sshTask = nullptr;
 
     BitwardenLogin m_bitwardenLogin;
+    BwSync m_bwSync;
+    QTimer m_bwReconnectTimer;
+    int m_bwReconnectDelayMs = 5000;
+    void startBitwardenRealtime();
+    void stopBitwardenRealtime();
+    void handleBitwardenSyncEvent(const BwSyncEvent &event);
     OnePasswordLogin m_onePasswordLogin;
     QString m_loginStep;
     QString m_loginEmail;

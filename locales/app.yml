@@ -559,6 +559,90 @@ bitwarden.syncing:
 bitwarden.sync_error:
   pt-BR: "Falha ao sincronizar com o Bitwarden (mostrando a cópia local): %{err}"
   en: "Bitwarden sync failed (showing the local copy): %{err}"
+bitwarden.send_help:
+  pt-BR: "Enviar segredo (Bitwarden Send)"
+  en: "Send secret (Bitwarden Send)"
+bitwarden.send_title:
+  pt-BR: "Bitwarden Send"
+  en: "Bitwarden Send"
+bitwarden.send_create:
+  pt-BR: "Criar e copiar link"
+  en: "Create and copy link"
+bitwarden.send_type_text:
+  pt-BR: "Texto"
+  en: "Text"
+bitwarden.send_type_file:
+  pt-BR: "Arquivo"
+  en: "File"
+bitwarden.send_name_label:
+  pt-BR: "Nome"
+  en: "Name"
+bitwarden.send_text_label:
+  pt-BR: "Texto"
+  en: "Text"
+bitwarden.send_hidden_label:
+  pt-BR: "Ocultar texto por padrão ao abrir o link"
+  en: "Hide text by default when opening the link"
+bitwarden.send_file_label:
+  pt-BR: "Arquivo"
+  en: "File"
+bitwarden.send_no_file:
+  pt-BR: "Nenhum arquivo selecionado"
+  en: "No file selected"
+bitwarden.send_choose_file:
+  pt-BR: "Escolher…"
+  en: "Choose…"
+bitwarden.send_choose_file_title:
+  pt-BR: "Escolher arquivo para Bitwarden Send"
+  en: "Choose file for Bitwarden Send"
+bitwarden.send_delete_label:
+  pt-BR: "Excluir automaticamente em"
+  en: "Delete automatically after"
+bitwarden.send_delete_1h:
+  pt-BR: "1 hora"
+  en: "1 hour"
+bitwarden.send_delete_1d:
+  pt-BR: "1 dia"
+  en: "1 day"
+bitwarden.send_delete_7d:
+  pt-BR: "7 dias"
+  en: "7 days"
+bitwarden.send_delete_30d:
+  pt-BR: "30 dias"
+  en: "30 days"
+bitwarden.send_max_access_label:
+  pt-BR: "Máximo de acessos"
+  en: "Maximum access count"
+bitwarden.send_password_label:
+  pt-BR: "Senha de proteção"
+  en: "Password"
+bitwarden.send_notes_label:
+  pt-BR: "Notas privadas (visíveis só para você)"
+  en: "Private notes (only visible to you)"
+bitwarden.send_optional_hint:
+  pt-BR: "opcional"
+  en: "optional"
+bitwarden.send_hide_email:
+  pt-BR: "Ocultar meu e-mail dos destinatários"
+  en: "Hide my email address from recipients"
+bitwarden.send_name_empty:
+  pt-BR: "Informe um nome para o Send."
+  en: "Enter a name for the Send."
+bitwarden.send_text_empty:
+  pt-BR: "Informe o texto a enviar."
+  en: "Enter the text to send."
+bitwarden.send_file_empty:
+  pt-BR: "Selecione um arquivo para enviar."
+  en: "Select a file to send."
+bitwarden.send_file_unreadable:
+  pt-BR: "Não foi possível ler o arquivo selecionado (ou ele está vazio)."
+  en: "Could not read the selected file (or it is empty)."
+bitwarden.send_created:
+  pt-BR: "Bitwarden Send criado! Link copiado para a área de transferência."
+  en: "Bitwarden Send created! Link copied to clipboard."
+bitwarden.send_error:
+  pt-BR: "Erro ao criar Bitwarden Send: %{err}"
+  en: "Error creating Bitwarden Send: %{err}"
 app.working:
   pt-BR: "Aguarde…"
   en: "Please wait…"
@@ -823,6 +907,9 @@ ui.type_login:
 ui.type_ssh:
   pt-BR: "ssh"
   en: "ssh"
+ui.type_note:
+  pt-BR: "nota"
+  en: "note"
 ui.type_group:
   pt-BR: "grupo"
   en: "group"
@@ -954,6 +1041,9 @@ common.url_label:
 common.notes_label:
   pt-BR: "Notas"
   en: "Notes"
+common.note_label:
+  pt-BR: "Nota segura"
+  en: "Secure note"
 common.group_label:
   pt-BR: "Grupo"
   en: "Group"

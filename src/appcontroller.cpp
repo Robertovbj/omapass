@@ -298,6 +298,16 @@ AppController::AppController(const AppConfig &config, QObject *parent)
     m_lastActivity.start();
     qApp->installEventFilter(this);
 
+    m_bwReconnectTimer.setSingleShot(true);
+    connect(&m_bwReconnectTimer, &QTimer::timeout, this, &AppController::startBitwardenRealtime);
+    connect(&m_bwSync, &BwSync::eventReceived, this, &AppController::handleBitwardenSyncEvent);
+    connect(&m_bwSync, &BwSync::disconnected, this, [this](bool) {
+        if (!bitwardenBackend())
+            return;
+        m_bwReconnectTimer.start(m_bwReconnectDelayMs);
+        m_bwReconnectDelayMs = qMin(60000, m_bwReconnectDelayMs * 2);
+    });
+
     m_lockTimer.setInterval(lockCheckIntervalMs);
     m_metaFlush.setSingleShot(true);
     m_metaFlush.setInterval(150);
@@ -319,11 +329,13 @@ AppController::AppController(const AppConfig &config, QObject *parent)
             QVariantMap row = m_allRows.at(index).toMap();
             row.insert(QStringLiteral("username"), meta.username);
             row.insert(QStringLiteral("url"), meta.url);
+            row.insert(QStringLiteral("hasOtp"), meta.hasOtp);
             applyIcon(&row, path, meta.url);
             m_allRows[index] = row;
             m_entryHaystacks[index] = path + QLatin1Char(' ') + row.value(QStringLiteral("typeLabel")).toString()
                                       + QLatin1Char(' ') + meta.username + QLatin1Char(' ') + meta.url
-                                      + QLatin1Char(' ') + meta.extraUrls.join(QLatin1Char(' '));
+                                      + QLatin1Char(' ') + meta.extraUrls.join(QLatin1Char(' '))
+                                      + (meta.hasOtp ? QStringLiteral(" otp") : QString());
             m_rowsModel.replaceRow(index, row);
         }
     });
@@ -353,6 +365,7 @@ AppController::~AppController() {
     // A sync or login waiting on the network ends now rather than when the
     // server gets round to answering; what it was doing is lost either way.
     BwApi::abortAll();
+    stopBitwardenRealtime();
     const QString sshError = clearSshKeys();
     if (!sshError.isEmpty())
         qWarning().noquote() << sshError;
@@ -360,6 +373,7 @@ AppController::~AppController() {
     m_onePasswordLogin.cancel();
     m_task.waitForFinished();
     m_syncTask.waitForFinished();
+    m_bwRealtimeTask.waitForFinished();
     m_localScanTask.waitForFinished();
     m_accountScanTask.waitForFinished();
     m_accountCheckTask.waitForFinished();
@@ -431,6 +445,7 @@ void AppController::startBackgroundSync() {
         } else
             showMessage(I18n::t(QStringLiteral("bitwarden.sync_error"), QStringLiteral("err"), result.error),
                         true);
+        startBitwardenRealtime();
     });
 
     const QFuture<TaskResult> future = QtConcurrent::run([vault]() {
@@ -439,6 +454,84 @@ void AppController::startBackgroundSync() {
         return result;
     });
     m_syncTask = QFuture<void>(future);
+    watcher->setFuture(future);
+}
+
+void AppController::startBitwardenRealtime() {
+    m_bwReconnectTimer.stop();
+    auto *vault = dynamic_cast<BitwardenVault *>(m_vault.data());
+    if (!vault || m_bwSync.isConnected())
+        return;
+
+    struct TokenResult {
+        bool ok = false;
+        QString server;
+        Secret token;
+    };
+
+    const QSharedPointer<Vault> guard = m_vault;
+    auto *watcher = new QFutureWatcher<TokenResult>(this);
+    connect(watcher, &QFutureWatcher<TokenResult>::finished, this, [this, watcher, guard]() {
+        const TokenResult result = watcher->result();
+        watcher->deleteLater();
+        if (m_vault != guard || !result.ok)
+            return;
+        m_bwReconnectDelayMs = 5000;
+        m_bwSync.connectTo(result.server, result.token);
+    });
+    const QFuture<TokenResult> future = QtConcurrent::run([guard]() {
+        TokenResult res;
+        auto *bw = dynamic_cast<BitwardenVault *>(guard.data());
+        if (!bw)
+            return res;
+        QString ignored;
+        res.server = bw->serverUrl();
+        res.ok = bw->validAccessToken(&res.token, &ignored);
+        return res;
+    });
+    m_bwRealtimeTask = QFuture<void>(future);
+    watcher->setFuture(future);
+}
+
+void AppController::stopBitwardenRealtime() {
+    m_bwReconnectTimer.stop();
+    m_bwSync.disconnectFromServer();
+    m_bwReconnectDelayMs = 5000;
+}
+
+void AppController::handleBitwardenSyncEvent(const BwSyncEvent &event) {
+    auto *vault = dynamic_cast<BitwardenVault *>(m_vault.data());
+    if (!vault)
+        return;
+
+    if (event.kind == BwSyncEvent::Kind::CipherDeleted) {
+        if (vault->removeLocalCipher(event.cipherId)) {
+            refreshEntries();
+            m_browser.vaultChanged();
+        }
+        return;
+    }
+
+    const QSharedPointer<Vault> guard = m_vault;
+    auto *watcher = new QFutureWatcher<bool>(this);
+    connect(watcher, &QFutureWatcher<bool>::finished, this, [this, watcher, guard]() {
+        const bool ok = watcher->result();
+        watcher->deleteLater();
+        if (ok && m_vault == guard) {
+            refreshEntries();
+            m_browser.vaultChanged();
+        }
+    });
+    const QFuture<bool> future = QtConcurrent::run([guard, event]() {
+        auto *bw = dynamic_cast<BitwardenVault *>(guard.data());
+        if (!bw)
+            return false;
+        QString ignored;
+        if (event.kind == BwSyncEvent::Kind::CipherChanged && !event.cipherId.isEmpty())
+            return bw->syncCipher(event.cipherId, &ignored);
+        return bw->sync(&ignored, true);
+    });
+    m_bwRealtimeTask = QFuture<void>(future);
     watcher->setFuture(future);
 }
 
@@ -566,6 +659,7 @@ void AppController::lock() {
         return;
     }
     m_lockPendingPath.clear();
+    stopBitwardenRealtime();
     const QString sshError = closeVault();
     if (!m_parked.isEmpty()) {
         switchDatabase(m_parked.constLast().vault->path());
@@ -1019,6 +1113,7 @@ void AppController::adoptVault(const DbRef &ref, Vault *vault) {
 void AppController::parkVault() {
     if (!m_vault)
         return;
+    stopBitwardenRealtime();
     if (m_sshTask) {
         m_sshTask->waitForFinished();
         delete m_sshTask;
@@ -1043,6 +1138,8 @@ void AppController::displayVault() {
     m_stage = QStringLiteral("entries");
     emit stageChanged();
     showVaultWarning();
+    if (m_vault && m_vault->kind() == VaultKind::Bitwarden && !m_syncing)
+        startBitwardenRealtime();
 }
 
 void AppController::showVaultWarning() {
@@ -1088,6 +1185,7 @@ void AppController::rebuildRows() {
         QString username;
         QString url;
         QStringList extraUrls;
+        bool hasOtp = false;
 
         if (isEmptyGroup(path)) {
             type = QStringLiteral("group");
@@ -1102,9 +1200,11 @@ void AppController::rebuildRows() {
             username = entry.username;
             url = entry.url;
             extraUrls = entry.extraUrls;
+            hasOtp = entry.hasOtp;
         }
 
         const QString typeLabel = type == QLatin1String("ssh") ? I18n::t(QStringLiteral("ui.type_ssh"))
+                                : type == QLatin1String("note") ? I18n::t(QStringLiteral("ui.type_note"))
                                 : type == QLatin1String("login") ? I18n::t(QStringLiteral("ui.type_login"))
                                                                   : I18n::t(QStringLiteral("ui.type_group"));
         QVariantMap row;
@@ -1115,13 +1215,15 @@ void AppController::rebuildRows() {
         row.insert(QStringLiteral("typeLabel"), typeLabel);
         row.insert(QStringLiteral("username"), username);
         row.insert(QStringLiteral("url"), url);
+        row.insert(QStringLiteral("hasOtp"), hasOtp);
         applyIcon(&row, path, url);
 
         m_rowOf.insert(path, m_allRows.size());
         m_allRows.append(row);
         // The path carries name and group; the rest is what the columns add.
         m_entryHaystacks.append(path + QLatin1Char(' ') + typeLabel + QLatin1Char(' ') + username
-                                + QLatin1Char(' ') + url + QLatin1Char(' ') + extraUrls.join(QLatin1Char(' ')));
+                                + QLatin1Char(' ') + url + QLatin1Char(' ') + extraUrls.join(QLatin1Char(' '))
+                                + (hasOtp ? QStringLiteral(" otp") : QString()));
     }
     applyEntryFilter();
 }
@@ -1239,6 +1341,14 @@ bool AppController::isEmptyGroup(const QString &entry) const {
     return entry.endsWith(Vault::emptyGroupSuffix());
 }
 
+bool AppController::isNoteEntry(const QString &entry) const {
+    if (entry.isEmpty() || isEmptyGroup(entry))
+        return false;
+    const EntryMeta meta = m_lazyMeta.contains(entry) ? m_lazyMeta.value(entry)
+                                                      : m_listedMeta.value(entry);
+    return meta.type == QLatin1String("note");
+}
+
 QString AppController::groupNameOf(const QString &entry) const {
     const QString suffix = Vault::emptyGroupSuffix();
     return entry.endsWith(suffix) ? entry.chopped(suffix.size()) : entry;
@@ -1249,9 +1359,11 @@ QVariantMap AppController::entryMenuFields(const QString &entry) const {
     QString error;
     if (!m_vault || entry.isEmpty() || isEmptyGroup(entry) || !m_vault->fetchEntry(entry, &data, &error))
         return {};
-    // A native Bitwarden SSH item exposes its private key through fetchPassword.
-    const bool privateKey = m_listedMeta.value(entry).type == QLatin1String("ssh");
-    return {{QStringLiteral("hasPassword"), !privateKey && !data.password.isEmpty()},
+    // A native Bitwarden SSH item exposes its private key through fetchPassword;
+    // a secure note has no password at all.
+    const QString entryType = m_listedMeta.value(entry).type;
+    const bool noPassword = entryType == QLatin1String("ssh") || entryType == QLatin1String("note");
+    return {{QStringLiteral("hasPassword"), !noPassword && !data.password.isEmpty()},
             {QStringLiteral("hasUsername"), !data.username.trimmed().isEmpty()},
             {QStringLiteral("hasUrl"), !data.url.trimmed().isEmpty()},
             {QStringLiteral("hasOtp"), !data.otp.isEmpty() && Totp::parse(data.otp.toString()).has_value()}};
@@ -1537,6 +1649,7 @@ QVariantMap AppController::entryDetails(const QString &entry) {
     m_shownOtp = data.otp.isEmpty() ? std::nullopt : Totp::parse(data.otp.toString());
 
     return {{QStringLiteral("title"), m_vault->titleFor(entry, fallback)},
+            {QStringLiteral("isNote"), data.isNote},
             {QStringLiteral("username"), data.username},
             {QStringLiteral("url"), data.url},
             {QStringLiteral("extraUrls"), data.extraUrls},
@@ -1585,7 +1698,9 @@ QVariantMap AppController::entryFields(const QString &entry) {
     }
 
     const auto ssh = m_listedMeta.value(entry).ssh;
-    if (ssh) {
+    if (data.isNote) {
+        fields.insert(QStringLiteral("type"), QStringLiteral("note"));
+    } else if (ssh) {
         const bool attachment = m_vault->kind() == VaultKind::Keepass;
         fields.insert(QStringLiteral("type"), QStringLiteral("ssh"));
         fields.insert(QStringLiteral("sshAttachment"), attachment);
@@ -1628,73 +1743,81 @@ bool AppController::saveEntry(const QVariantMap &fields) {
     const bool isEdit = fields.value(QStringLiteral("isEdit")).toBool();
 
     EntryData data;
-    data.username = fields.value(QStringLiteral("username")).toString().trimmed();
-    data.password = Secret(fields.value(QStringLiteral("password")).toString());
-    if (fields.value(QStringLiteral("type")).toString() == QLatin1String("ssh")) {
-        if (passBackend() || onePasswordBackend())
+    const QString entryType = fields.value(QStringLiteral("type")).toString();
+    if (entryType == QLatin1String("note")) {
+        if (!bitwardenBackend())
             return false;
-        const QString publicKey = fields.value(QStringLiteral("sshPublicKey")).toString().trimmed();
-        Secret privateKey = data.password;
-        const bool attachment = isEdit && m_vault->kind() == VaultKind::Keepass;
-        bool validate = true;
-        if (isEdit) {
-            const QString original = fields.value(QStringLiteral("originalPath")).toString();
-            const auto ssh = m_listedMeta.value(original).ssh;
-            EntryData stored;
+        data.isNote = true;
+        data.notes = fields.value(QStringLiteral("notes")).toString();
+    } else {
+        data.username = fields.value(QStringLiteral("username")).toString().trimmed();
+        data.password = Secret(fields.value(QStringLiteral("password")).toString());
+        if (entryType == QLatin1String("ssh")) {
+            if (passBackend() || onePasswordBackend())
+                return false;
+            const QString publicKey = fields.value(QStringLiteral("sshPublicKey")).toString().trimmed();
+            Secret privateKey = data.password;
+            const bool attachment = isEdit && m_vault->kind() == VaultKind::Keepass;
+            bool validate = true;
+            if (isEdit) {
+                const QString original = fields.value(QStringLiteral("originalPath")).toString();
+                const auto ssh = m_listedMeta.value(original).ssh;
+                EntryData stored;
+                QString error;
+                if (!ssh || !m_vault->fetchEntry(original, &stored, &error)) {
+                    showMessage(I18n::t(QStringLiteral("app.read_entry_error"), QStringLiteral("err"), error), true);
+                    return false;
+                }
+                validate = publicKey != stored.sshPublicKey || (!attachment && privateKey.bytes() != stored.password.bytes());
+                if (attachment && validate && !m_vault->fetchSshKey(original, ssh->id, &privateKey, &error)) {
+                    showMessage(I18n::t(QStringLiteral("ssh.invalid_key")), true);
+                    return false;
+                }
+            }
+            if (validate) {
+                privateKey = Secret(privateKey.toString().trimmed() + QLatin1Char('\n'));
+                const QString identity = SshAgent::publicIdentity(privateKey);
+                if (identity.isEmpty()) {
+                    showMessage(I18n::t(QStringLiteral("ssh.invalid_key")), true);
+                    return false;
+                }
+                if (!publicKey.isEmpty() && (publicKey.contains(QLatin1Char('\n')) || publicKey.contains(QLatin1Char('\r'))
+                    || publicKey.simplified().section(QLatin1Char(' '), 0, 1) != identity)) {
+                    showMessage(I18n::t(QStringLiteral("ssh.key_mismatch")), true);
+                    return false;
+                }
+                data.sshPublicKey = publicKey.isEmpty() ? identity : publicKey.simplified();
+                if (!attachment)
+                    data.password = privateKey;
+            }
+        }
+        data.url = fields.value(QStringLiteral("url")).toString().trimmed();
+        // Typed as one line, separated by spaces (or one per line): an address
+        // has none of its own. The main URL is not repeated among them, and
+        // with no main URL the first one takes its place.
+        static const QRegularExpression separators(QStringLiteral("[\\s,]+"));
+        const QStringList typed = fields.value(QStringLiteral("extraUrls")).toString()
+                                      .split(separators, Qt::SkipEmptyParts);
+        for (const QString &url : typed) {
+            if (url != data.url && !data.extraUrls.contains(url))
+                data.extraUrls.append(url);
+        }
+        if (data.url.isEmpty() && !data.extraUrls.isEmpty())
+            data.url = data.extraUrls.takeFirst();
+        data.notes = fields.value(QStringLiteral("notes")).toString();
+        data.extra = fields.value(QStringLiteral("extra")).toStringList();
+        // Named after the entry, as an authenticator app would show it.
+        {
             QString error;
-            if (!ssh || !m_vault->fetchEntry(original, &stored, &error)) {
-                showMessage(I18n::t(QStringLiteral("app.read_entry_error"), QStringLiteral("err"), error), true);
+            const std::optional<QString> otp =
+                Totp::forSaving(fields.value(QStringLiteral("otp")).toString(),
+                                fields.value(QStringLiteral("originalOtp")).toString(), title, &error);
+            if (!otp) {
+                showMessage(error, true);
                 return false;
             }
-            validate = publicKey != stored.sshPublicKey || (!attachment && privateKey.bytes() != stored.password.bytes());
-            if (attachment && validate && !m_vault->fetchSshKey(original, ssh->id, &privateKey, &error)) {
-                showMessage(I18n::t(QStringLiteral("ssh.invalid_key")), true);
-                return false;
-            }
+            data.otp = Secret(*otp);
         }
-        if (validate) {
-            privateKey = Secret(privateKey.toString().trimmed() + QLatin1Char('\n'));
-            const QString identity = SshAgent::publicIdentity(privateKey);
-            if (identity.isEmpty()) {
-                showMessage(I18n::t(QStringLiteral("ssh.invalid_key")), true);
-                return false;
-            }
-            if (!publicKey.isEmpty() && (publicKey.contains(QLatin1Char('\n')) || publicKey.contains(QLatin1Char('\r'))
-                || publicKey.simplified().section(QLatin1Char(' '), 0, 1) != identity)) {
-                showMessage(I18n::t(QStringLiteral("ssh.key_mismatch")), true);
-                return false;
-            }
-            data.sshPublicKey = publicKey.isEmpty() ? identity : publicKey.simplified();
-            if (!attachment)
-                data.password = privateKey;
-        }
-    }
-    data.url = fields.value(QStringLiteral("url")).toString().trimmed();
-    // Typed as one line, separated by spaces (or one per line): an address
-    // has none of its own. The main URL is not repeated among them, and
-    // with no main URL the first one takes its place.
-    static const QRegularExpression separators(QStringLiteral("[\\s,]+"));
-    const QStringList typed = fields.value(QStringLiteral("extraUrls")).toString()
-                                  .split(separators, Qt::SkipEmptyParts);
-    for (const QString &url : typed) {
-        if (url != data.url && !data.extraUrls.contains(url))
-            data.extraUrls.append(url);
-    }
-    if (data.url.isEmpty() && !data.extraUrls.isEmpty())
-        data.url = data.extraUrls.takeFirst();
-    data.notes = fields.value(QStringLiteral("notes")).toString();
-    data.extra = fields.value(QStringLiteral("extra")).toStringList();
-    // Named after the entry, as an authenticator app would show it.
-    {
-        QString error;
-        const std::optional<QString> otp =
-            Totp::forSaving(fields.value(QStringLiteral("otp")).toString(),
-                            fields.value(QStringLiteral("originalOtp")).toString(), title, &error);
-        if (!otp) {
-            showMessage(error, true);
-            return false;
-        }
-        data.otp = Secret(*otp);
     }
 
     // Locking waits while busy, so the vault outlives the task.
@@ -2132,6 +2255,71 @@ void AppController::logoutBitwarden(int index) {
             showMessage(result.ok ? I18n::t(QStringLiteral("bitwarden.logged_out")) : result.error,
                         !result.ok);
         });
+}
+
+bool AppController::createBitwardenSend(const QVariantMap &fields) {
+    if (!vaultReadyForChanges() || !bitwardenBackend())
+        return false;
+
+    auto *vault = dynamic_cast<BitwardenVault *>(m_vault.data());
+    if (!vault)
+        return false;
+
+    BwSendOptions options;
+    options.type = fields.value(QStringLiteral("type"), 0).toInt();
+    options.name = fields.value(QStringLiteral("name")).toString().trimmed();
+    options.text = fields.value(QStringLiteral("text")).toString();
+    options.hidden = fields.value(QStringLiteral("hidden"), false).toBool();
+    const QString rawFile = fields.value(QStringLiteral("filePath")).toString().trimmed();
+    options.filePath = QUrl(rawFile).isLocalFile() ? QUrl(rawFile).toLocalFile() : rawFile;
+    options.deleteHours = fields.value(QStringLiteral("deleteHours"), 168).toInt();
+    options.maxAccessCount = fields.value(QStringLiteral("maxAccessCount"), 0).toInt();
+    options.password = Secret(fields.value(QStringLiteral("password")).toString());
+    options.notes = fields.value(QStringLiteral("notes")).toString();
+    options.hideEmail = fields.value(QStringLiteral("hideEmail"), false).toBool();
+
+    if (options.name.isEmpty()) {
+        showMessage(I18n::t(QStringLiteral("bitwarden.send_name_empty")), true);
+        return false;
+    }
+    if (options.type == 0 && options.text.isEmpty()) {
+        showMessage(I18n::t(QStringLiteral("bitwarden.send_text_empty")), true);
+        return false;
+    }
+    if (options.type == 1) {
+        if (options.filePath.isEmpty()) {
+            showMessage(I18n::t(QStringLiteral("bitwarden.send_file_empty")), true);
+            return false;
+        }
+        const QFileInfo info(options.filePath);
+        if (!info.exists() || !info.isFile() || !info.isReadable() || info.size() == 0) {
+            showMessage(I18n::t(QStringLiteral("bitwarden.send_file_unreadable")), true);
+            return false;
+        }
+    }
+
+    struct SendResult {
+        bool ok = false;
+        QString url;
+        QString error;
+    };
+
+    runInBackground(
+        [vault, options]() {
+            SendResult result;
+            result.ok = vault->createSend(options, &result.url, &result.error);
+            return result;
+        },
+        [this](const SendResult &result) {
+            if (result.ok) {
+                Clipboard::copy(result.url);
+                showMessage(I18n::t(QStringLiteral("bitwarden.send_created")), false);
+            } else {
+                showMessage(I18n::t(QStringLiteral("bitwarden.send_error"), QStringLiteral("err"), result.error),
+                            true);
+            }
+        });
+    return true;
 }
 
 void AppController::addOnePasswordAccount() {

@@ -39,6 +39,7 @@ HEADERS += \
     src/bwaccount.h \
     src/bwapi.h \
     src/bwcrypto.h \
+    src/bwsync.h \
     src/browsercrypto.h \
     src/browserintegration.h \
     src/browsermanifests.h \
@@ -89,6 +90,7 @@ SOURCES += \
     src/bwaccount.cpp \
     src/bwapi.cpp \
     src/bwcrypto.cpp \
+    src/bwsync.cpp \
     src/browsercrypto.cpp \
     src/browserintegration.cpp \
     src/browsermanifests.cpp \

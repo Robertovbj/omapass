@@ -6,6 +6,7 @@
 #include <algorithm>
 
 #include "i18n.h"
+#include "totp.h"
 
 namespace {
 
@@ -128,6 +129,7 @@ QHash<QString, EntryMeta> KeepassVault::entryMeta() const {
         entry.username = item.second.username;
         entry.url = item.second.url;
         entry.extraUrls = item.second.extraUrls;
+        entry.hasOtp = !item.second.otp.isEmpty() && Totp::parse(item.second.otp.toString()).has_value();
         const auto key = ssh.constFind(item.first);
         if (key != ssh.cend())
             entry.ssh = key.value();

@@ -102,6 +102,7 @@ FocusScope {
     signal editRequested()
     signal deleteRequested()
     signal generateRequested()
+    signal sendRequested()
     signal pinToggleRequested()
     signal copyUsernameRequested()
     signal copyOtpRequested()
@@ -180,6 +181,12 @@ FocusScope {
         case Qt.Key_E: pane.editRequested(); return true;
         case Qt.Key_X: pane.deleteRequested(); return true;
         case Qt.Key_G: pane.generateRequested(); return true;
+        case Qt.Key_S:
+            if (event.modifiers & Qt.ShiftModifier) {
+                pane.sendRequested();
+                return true;
+            }
+            return false;
         case Qt.Key_I: pane.pinToggleRequested(); return true;
         // B for the login as in KeePassXC; U, its key for the URL, already
         // scrolls half a page here, so L (link) copies it and Shift+L opens
@@ -520,7 +527,7 @@ FocusScope {
                                     id: cellText
                                     objectName: "cell_" + modelData.key
                                     x: cellIcon.visible ? cellIcon.width + Math.round(6 * pane.s) : 0
-                                    width: parent.width - x
+                                    width: Math.max(0, parent.width - x - (otpBadge.visible ? otpBadge.width + Math.round(6 * pane.s) : 0))
                                     text: row.cell(modelData.key)
                                     color: row.current ? theme.selectionText
                                          : modelData.key === "name" ? theme.foreground : theme.muted
@@ -528,6 +535,31 @@ FocusScope {
                                     elide: Text.ElideRight
                                     font.pixelSize: Math.round(14 * pane.s)
                                     font.weight: modelData.key === "name" ? Font.Medium : Font.Normal
+                                }
+
+                                Rectangle {
+                                    id: otpBadge
+                                    objectName: "rowOtpBadge"
+                                    visible: modelData.key === "name" && !!(row.modelData && row.modelData.hasOtp)
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: otpBadgeText.implicitWidth + Math.round(10 * pane.s)
+                                    height: Math.round(18 * pane.s)
+                                    radius: Math.min(3, theme.radius)
+                                    color: "transparent"
+                                    border.width: 1
+                                    border.color: row.current
+                                        ? Qt.rgba(theme.selectionText.r, theme.selectionText.g, theme.selectionText.b, 0.5)
+                                        : theme.accent
+
+                                    Text {
+                                        id: otpBadgeText
+                                        anchors.centerIn: parent
+                                        text: "OTP"
+                                        color: row.current ? theme.selectionText : theme.accent
+                                        font.pixelSize: Math.round(10 * pane.s)
+                                        font.weight: Font.DemiBold
+                                    }
                                 }
                             }
                         }

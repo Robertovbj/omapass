@@ -30,6 +30,19 @@
 //   nothing.
 // - While the vault is open its items, passwords included, are held in
 //   memory; they are dropped when it is locked.
+struct BwSendOptions {
+    int type = 0;  // 0 = Text, 1 = File
+    QString name;
+    QString notes;
+    QString text;
+    bool hidden = false;
+    QString filePath;
+    int deleteHours = 168;  // 7 days
+    int maxAccessCount = 0;
+    Secret password;
+    bool hideEmail = false;
+};
+
 class BitwardenVault : public Vault {
 public:
     // Every account omapass has a copy of, as database list entries; plus
@@ -57,8 +70,24 @@ public:
                                      const Secret &accessToken, int expiresIn);
 
     // Refreshes the access token and pulls the vault from the server. Skipped
-    // when it was pulled a moment ago (right after logging in).
-    bool sync(QString *error);
+    // when it was pulled a moment ago (right after logging in), unless `force`
+    // is true (e.g., after a WebSocket notification).
+    bool sync(QString *error, bool force = false);
+
+    // Fetches a single cipher's latest details from the server and updates
+    // the local decrypted cache and copy on disk (used by real-time sync).
+    bool syncCipher(const QString &cipherId, QString *error);
+    // Removes a cipher deleted remotely from the local cache and copy on disk.
+    bool removeLocalCipher(const QString &cipherId);
+
+    // Server URL (normalized) and a fresh access token for the notifications
+    // WebSocket hub.
+    QString serverUrl() const;
+    bool validAccessToken(Secret *token, QString *error) const;
+
+    // Creates a Bitwarden Send (text or file), encrypts payload client-side,
+    // and returns the shareable URL.
+    bool createSend(const BwSendOptions &options, QString *shareUrl, QString *error) const;
 
     void list(QStringList *entries, QStringList *groups) const override;
     QHash<QString, EntryMeta> entryMeta() const override;
