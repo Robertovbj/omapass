@@ -1,8 +1,12 @@
 #include "browserproxy.h"
 
 #include <QCoreApplication>
+#include <QElapsedTimer>
+#include <QFileInfo>
 #include <QLocalSocket>
+#include <QProcess>
 #include <QSocketNotifier>
+#include <QThread>
 #include <QtEndian>
 
 #include <cstring>
@@ -74,9 +78,32 @@ int run(int argc, char *argv[]) {
     QCoreApplication app(argc, argv);
 
     QLocalSocket socket;
-    socket.connectToServer(BrowserServer::socketPath());
-    if (!socket.waitForConnected(1000))
-        return 0;
+    const QString socketPath = BrowserServer::socketPath();
+    socket.connectToServer(socketPath);
+    if (!socket.waitForConnected(250)) {
+        // omapass is not running yet: start it so clicking the browser
+        // extension's icon opens the vault instead of failing silently.
+        const QString appImage = qEnvironmentVariable("APPIMAGE").trimmed();
+        const QString executable = (!appImage.isEmpty() && QFileInfo::exists(appImage))
+            ? appImage : QCoreApplication::applicationFilePath();
+        if (!QProcess::startDetached(executable, {}))
+            return 0;
+
+        QElapsedTimer deadline;
+        deadline.start();
+        bool connected = false;
+        while (deadline.elapsed() < 6000) {
+            QThread::msleep(150);
+            socket.abort();
+            socket.connectToServer(socketPath);
+            if (socket.waitForConnected(250)) {
+                connected = true;
+                break;
+            }
+        }
+        if (!connected)
+            return 0;
+    }
 
     QByteArray fromBrowser;
     QByteArray fromApp;

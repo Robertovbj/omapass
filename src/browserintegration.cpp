@@ -2,7 +2,9 @@
 
 #include <QCryptographicHash>
 
+#include <QCoreApplication>
 #include <QDateTime>
+#include <QProcess>
 #include <QDir>
 #include <QFutureWatcher>
 #include <QJsonObject>
@@ -267,6 +269,16 @@ bool BrowserIntegration::unlocked() const {
 }
 
 void BrowserIntegration::showUnlock() {
+#ifdef Q_OS_LINUX
+    // Wayland compositors ignore raise/requestActivate from background windows;
+    // on Hyprland we can explicitly ask the compositor to focus our window.
+    if (!qEnvironmentVariable("HYPRLAND_INSTANCE_SIGNATURE").isEmpty()) {
+        QProcess::startDetached(
+            QStringLiteral("hyprctl"),
+            {QStringLiteral("dispatch"), QStringLiteral("focuswindow"),
+             QStringLiteral("pid:") + QString::number(QCoreApplication::applicationPid())});
+    }
+#endif
     emit raiseRequested();
 }
 

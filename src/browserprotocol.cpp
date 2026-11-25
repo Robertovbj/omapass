@@ -243,7 +243,8 @@ void BrowserSession::handle(const QJsonObject &request, const Reply &reply) {
         return;
     }
     if (!host->unlocked()) {
-        if (request.value(QStringLiteral("triggerUnlock")).toString() == trueString)
+        const QJsonValue trigger = request.value(QStringLiteral("triggerUnlock"));
+        if (trigger.toBool() || trigger.toString() == trueString)
             host->showUnlock();
         reply(errorReply(action, DatabaseNotOpened));
         return;
