@@ -164,4 +164,32 @@ TestCase {
         tryVerify(function() { return Math.abs(flick.contentY - end) < 1; }, 3000);
         verify(furthest <= end + 0.5, "nunca passa da borda para voltar depois");
     }
+
+    function test_modal_scrolls_with_jk_in_normal_mode() {
+        form.visible = true;
+        tryVerify(function() { return form.opened; }, 3000);
+        const flick = findChild(form.contentItem, "modalBody").contentItem;
+        tryVerify(function() { return flick.contentHeight > flick.height; }, 3000);
+        compare(flick.contentY, 0);
+
+        keyClick(Qt.Key_J);
+        verify(flick.contentY > 0, "j rola o modal para baixo no modo normal");
+        const afterJ = flick.contentY;
+
+        keyClick(Qt.Key_K);
+        verify(flick.contentY < afterJ, "k rola o modal para cima no modo normal");
+        compare(flick.contentY, 0);
+    }
+
+    function test_modal_scroll_follows_tab_focus() {
+        form.visible = true;
+        tryVerify(function() { return form.opened; }, 3000);
+        const flick = findChild(form.contentItem, "modalBody").contentItem;
+        tryVerify(function() { return flick.contentHeight > flick.height; }, 3000);
+        compare(flick.contentY, 0);
+
+        for (let i = 0; i < 8; ++i)
+            keyClick(Qt.Key_Tab);
+        verify(flick.contentY > 0, "navegar por Tab até campos abaixo rola o modal junto");
+    }
 }

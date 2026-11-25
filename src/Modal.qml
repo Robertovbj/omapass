@@ -61,8 +61,34 @@ Popup {
 
     function announceShown() {
         announcedShown = true;
+        if (bodyArea.contentItem)
+            bodyArea.contentItem.contentY = 0;
         takeKeyboard();
         shown();
+    }
+
+    function ensureVisible(item) {
+        const flick = bodyArea.contentItem;
+        if (!item || !flick || flick.contentHeight <= flick.height)
+            return;
+        const pos = item.mapToItem(bodyColumn, 0, 0);
+        const margin = Math.round(12 * root.s);
+        const top = pos.y - margin;
+        const bottom = pos.y + item.height + margin;
+        const maxY = Math.max(0, flick.contentHeight - flick.height);
+        if (top < flick.contentY)
+            flick.contentY = Math.max(0, top);
+        else if (bottom > flick.contentY + flick.height)
+            flick.contentY = Math.min(maxY, bottom - flick.height);
+    }
+
+    function scrollBy(delta) {
+        const flick = bodyArea.contentItem;
+        if (!flick || flick.contentHeight <= flick.height)
+            return false;
+        const maxY = Math.max(0, flick.contentHeight - flick.height);
+        flick.contentY = Math.max(0, Math.min(maxY, flick.contentY + delta));
+        return true;
     }
 
     // The Tab chain of a sheet with fields: moves the keyboard `step` places
@@ -79,6 +105,7 @@ Popup {
             index = step > 0 ? -1 : 0;
         const target = live[(index + step + live.length) % live.length];
         (target.field || target).forceActiveFocus();
+        ensureVisible(target);
     }
 
     default property alias body: bodyColumn.data
@@ -143,11 +170,39 @@ Popup {
                 if (event.key === Qt.Key_Escape) {
                     root.dismissed();
                     event.accepted = true;
-                } else if (event.key === Qt.Key_Tab && root.firstField && root.firstField.visible && root.firstField.enabled) {
+                    return;
+                }
+                if (event.key === Qt.Key_Tab && root.firstField && root.firstField.visible && root.firstField.enabled) {
                     root.firstField.forceActiveFocus();
+                    root.ensureVisible(root.firstField);
                     event.accepted = true;
-                } else {
-                    root.keyPressed(event);
+                    return;
+                }
+                event.accepted = false;
+                root.keyPressed(event);
+                if (event.accepted)
+                    return;
+
+                const step = Math.round(60 * root.s);
+                const halfPage = Math.max(step, Math.round(bodyArea.availableHeight / 2));
+                if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_D) {
+                    if (root.scrollBy(halfPage))
+                        event.accepted = true;
+                } else if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_U) {
+                    if (root.scrollBy(-halfPage))
+                        event.accepted = true;
+                } else if (event.key === Qt.Key_J || event.key === Qt.Key_Down) {
+                    if (root.scrollBy(step))
+                        event.accepted = true;
+                } else if (event.key === Qt.Key_K || event.key === Qt.Key_Up) {
+                    if (root.scrollBy(-step))
+                        event.accepted = true;
+                } else if (event.key === Qt.Key_PageDown) {
+                    if (root.scrollBy(halfPage))
+                        event.accepted = true;
+                } else if (event.key === Qt.Key_PageUp) {
+                    if (root.scrollBy(-halfPage))
+                        event.accepted = true;
                 }
             }
         }
