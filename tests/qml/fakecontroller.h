@@ -90,6 +90,7 @@ class FakeController : public QObject {
     Q_PROPERTY(bool passBackend MEMBER m_passBackend CONSTANT)
     Q_PROPERTY(bool bitwardenBackend MEMBER m_bitwardenBackend CONSTANT)
     Q_PROPERTY(bool onePasswordBackend MEMBER m_onePasswordBackend CONSTANT)
+    Q_PROPERTY(QStringList groups MEMBER m_groups)
     Q_PROPERTY(bool pinConfigured MEMBER m_pinConfigured CONSTANT)
     Q_PROPERTY(bool syncing MEMBER m_syncing CONSTANT)
 
@@ -191,7 +192,16 @@ public:
         emit copied();
     }
     Q_INVOKABLE void forgetShownOtp() {}
-    Q_INVOKABLE QStringList matchingGroups(const QString &) const { return {}; }
+    // Groups the form suggests: every one for an empty field, else those
+    // that contain what was typed. Empty unless a test fills it.
+    Q_INVOKABLE QStringList matchingGroups(const QString &prefix) const {
+        QStringList matches;
+        for (const QString &group : m_groups) {
+            if (group.contains(prefix, Qt::CaseInsensitive))
+                matches.append(group);
+        }
+        return matches;
+    }
     // PinSetupModal's warning under the PIN, and what it says is wrong.
     Q_INVOKABLE QString pinWeakWarning(const QString &) const { return QString(); }
     Q_INVOKABLE QString validatePin(const QString &, const QString &, bool) const { return QString(); }
@@ -253,6 +263,7 @@ private:
     bool m_passBackend = false;
     bool m_bitwardenBackend = false;
     bool m_onePasswordBackend = false;
+    QStringList m_groups;
     bool m_pinConfigured = false;
     bool m_syncing = false;
     bool m_scanning = true;

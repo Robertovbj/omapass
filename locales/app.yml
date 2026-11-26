@@ -1047,6 +1047,9 @@ common.note_label:
 common.group_label:
   pt-BR: "Grupo"
   en: "Group"
+common.no_group_placeholder:
+  pt-BR: "Sem grupo (raiz)"
+  en: "No group (root)"
 common.edit_entry_title:
   pt-BR: "Editar entrada"
   en: "Edit entry"
