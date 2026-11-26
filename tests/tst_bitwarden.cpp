@@ -120,8 +120,8 @@ private slots:
         const BwIndex index = buildBwIndex(bwItemsById(items), bwFoldersById(folders));
         QCOMPARE(index.groups, QStringList({QStringLiteral("Empty"), QStringLiteral("Work"),
                                             QStringLiteral("Work/Mail")}));
-        QCOMPARE(index.entries, QStringList({QStringLiteral("Bank"), QStringLiteral("Lost"),
-                                             QStringLiteral("Work/Mail/Gmail")}));
+        QCOMPARE(index.entries, QStringList({QStringLiteral("A note"), QStringLiteral("Bank"),
+                                             QStringLiteral("Lost"), QStringLiteral("Work/Mail/Gmail")}));
         QCOMPARE(index.items.value(QStringLiteral("Work/Mail/Gmail")).id, QStringLiteral("i1"));
         QCOMPARE(index.folders.value(QStringLiteral("Work/Mail")), QStringLiteral("f1"));
         QVERIFY(!index.folders.contains(QStringLiteral("Work")));
@@ -314,7 +314,7 @@ private slots:
         QCOMPARE(folders.size(), 1);
 
         const QJsonArray expectedItems = expected.value("items").toArray();
-        // The secure note and the login in the trash are left out.
+        // The secure note is listed; the login in the trash is left out.
         QCOMPARE(items.size(), expectedItems.size());
         for (const QJsonValue &value : expectedItems) {
             const QJsonObject want = value.toObject();

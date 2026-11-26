@@ -35,6 +35,13 @@
       "uri": "ssh://srv",
       "notes": "compartilhado",
       "totp": null
+    },
+    {
+      "id": "c4",
+      "name": "Nota",
+      "folderId": null,
+      "organizationId": null,
+      "notes": "só uma nota"
     }
   ]
 }

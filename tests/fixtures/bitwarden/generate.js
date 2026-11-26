@@ -75,7 +75,7 @@ function buildFixtures() {
     // A whole data.json the way bw stores an account, with every shape the
     // reader has to handle: a folder, a login with its own item key, a legacy
     // login encrypted straight with the user key, an organisation login, a
-    // secure note (ignored) and a login in the trash (ignored).
+    // secure note and a login in the trash (ignored).
     const userId = "11111111-2222-3333-4444-555555555555";
     const orgId = "99999999-8888-7777-6666-555555555555";
     const userKey = PC.make_user_key_aes256_cbc_hmac();
@@ -145,9 +145,11 @@ function buildFixtures() {
     };
 
     // What reading that data.json must produce, in `bw list items` terms.
+    // The note has no login, so its username, password, uri and totp are
+    // left undefined and drop out of the JSON.
     const expected = {
         folders: { f1: "Trabalho/Email" },
-        items: plainItems.filter((i) => i.type === 1 && !i.deleted).map((i) => ({
+        items: plainItems.filter((i) => (i.type === 1 || i.type === 2) && !i.deleted).map((i) => ({
             id: i.id, name: i.name, folderId: i.folderId, organizationId: i.organizationId,
             username: i.username, password: i.password, uri: i.uri, notes: i.notes, totp: i.totp,
         })),
