@@ -513,11 +513,11 @@ void BwAccount::decryptVault(const BwAccountState &state, const BwKeys &keys,
             items->insert(item->value(QStringLiteral("id")).toString(), *item);
             continue;
         }
-        // Other kinds and the trash are left out on purpose; only a login or
-        // an SSH key that should be listed counts as lost.
+        // Other kinds and the trash are left out on purpose; only a login,
+        // secure note or SSH key that should be listed counts as lost.
         const int type = cipher.value(QStringLiteral("type")).toInt();
         const QJsonValue deleted = cipher.value(QStringLiteral("deletedDate"));
-        if ((type == 1 || type == 5) && (deleted.isNull() || deleted.isUndefined()))
+        if ((type == 1 || type == 2 || type == 5) && (deleted.isNull() || deleted.isUndefined()))
             ++failed;
     }
 

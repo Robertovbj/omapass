@@ -374,10 +374,10 @@ private slots:
     }
 
     void bitwardenCountsOnlyWhatShouldHaveOpened() {
-        // A secure note (not listed) and a login in the trash are left out on
+        // A card (not listed) and a login in the trash are left out on
         // purpose; neither counts as lost.
         BwAccountState state = bwStateFromFixture();
-        state.ciphers.append(QJsonObject{{"id", "nota"}, {"type", 2}, {"name", "7.bmV3"}});
+        state.ciphers.append(QJsonObject{{"id", "cartao"}, {"type", 3}, {"name", "7.bmV3"}});
         state.ciphers.append(QJsonObject{{"id", "lixo"}, {"type", 1}, {"name", "7.bmV3"},
                                          {"deletedDate", "2026-01-01T00:00:00Z"}});
         BwKeys keys;
@@ -389,10 +389,15 @@ private slots:
         BwAccount::decryptVault(state, keys, &items, &folders, &undecryptable);
         QCOMPARE(undecryptable, 0);
 
+        // An unreadable secure note counts as lost, since notes are listed.
+        state.ciphers.append(QJsonObject{{"id", "nota"}, {"type", 2}, {"name", "7.bmV3"}});
+        BwAccount::decryptVault(state, keys, &items, &folders, &undecryptable);
+        QCOMPARE(undecryptable, 1);
+
         // A folder whose name does not open does count.
         state.folders.append(QJsonObject{{"id", "pasta"}, {"name", "2.aXY=|ZGF0YQ==|bWFj"}});
         BwAccount::decryptVault(state, keys, &items, &folders, &undecryptable);
-        QCOMPARE(undecryptable, 1);
+        QCOMPARE(undecryptable, 2);
     }
 
     void bitwardenKdfOutsideTheSafeRangeIsRefused() {

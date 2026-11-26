@@ -54,6 +54,17 @@ otool -L "$binary" | awk 'NR > 1 && $1 ~ /^\// && $1 !~ /^\/(System\/Library|usr
 
 ln -s /Applications "$stage/Applications"
 image="omapass-$version-macos-x64.dmg"
-hdiutil create -format UDZO -volname Omapass -srcfolder "$stage" "$build/$image"
+# O Spotlight/diskarbitration no runner macOS às vezes segura a imagem
+# recém-montada durante a criação ("Resource busy"); algumas tentativas resolvem.
+for tentativa in 1 2 3 4 5; do
+    rm -f "$build/$image"
+    if hdiutil create -format UDZO -volname Omapass -srcfolder "$stage" "$build/$image"; then
+        break
+    fi
+    if [[ "$tentativa" -eq 5 ]]; then
+        exit 1
+    fi
+    sleep 5
+done
 hdiutil verify "$build/$image"
 mv -f "$build/$image" "$ROOT/dist/$image"
