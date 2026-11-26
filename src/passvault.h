@@ -18,6 +18,7 @@ public:
     bool editEntry(const QString &oldPath, const QString &newPath, const QString &group,
                    const EntryData &data, QString *error) const override;
     bool removeEntry(const QString &entryPath, QString *error) const override;
+    bool createGroup(const QString &group, QString *error) const override;
     bool renameGroup(const QString &oldGroup, const QString &newName, QString *error) const override;
     bool removeGroup(const QString &group, QString *error) const override;
 

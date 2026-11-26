@@ -426,14 +426,14 @@ void AppController::setSyncing(bool syncing) {
         QTimer::singleShot(0, this, &AppController::finishPendingLock);
 }
 
-void AppController::startBackgroundSync() {
+void AppController::startBackgroundSync(bool force) {
     auto *vault = dynamic_cast<BitwardenVault *>(m_vault.data());
     if (!vault)
         return;
 
     setSyncing(true);
     auto *watcher = new QFutureWatcher<TaskResult>(this);
-    connect(watcher, &QFutureWatcher<TaskResult>::finished, this, [this, watcher]() {
+    connect(watcher, &QFutureWatcher<TaskResult>::finished, this, [this, watcher, force]() {
         const TaskResult result = watcher->result();
         watcher->deleteLater();
         setSyncing(false);
@@ -442,19 +442,27 @@ void AppController::startBackgroundSync() {
         if (result.ok) {
             refreshEntries();
             showVaultWarning();
+            if (force)
+                showMessage(I18n::t(QStringLiteral("bitwarden.synced")), false);
         } else
             showMessage(I18n::t(QStringLiteral("bitwarden.sync_error"), QStringLiteral("err"), result.error),
                         true);
         startBitwardenRealtime();
     });
 
-    const QFuture<TaskResult> future = QtConcurrent::run([vault]() {
+    const QFuture<TaskResult> future = QtConcurrent::run([vault, force]() {
         TaskResult result;
-        result.ok = vault->sync(&result.error);
+        result.ok = vault->sync(&result.error, force);
         return result;
     });
     m_syncTask = QFuture<void>(future);
     watcher->setFuture(future);
+}
+
+void AppController::syncBitwarden() {
+    if (!bitwardenBackend() || m_busy || m_syncing)
+        return;
+    startBackgroundSync(true);
 }
 
 void AppController::startBitwardenRealtime() {
@@ -551,11 +559,31 @@ bool AppController::eventFilter(QObject *watched, QEvent *event) {
 }
 
 QVariantList AppController::openDatabases() const {
-    QVariantList result;
+    QHash<QString, DbRef> byPath;
     if (m_vault)
-        result.append(describe({m_vault->path(), m_vault->kind()}));
+        byPath.insert(m_vault->path(), {m_vault->path(), m_vault->kind()});
     for (const auto &item : m_parked)
-        result.append(describe({item.vault->path(), item.vault->kind()}));
+        byPath.insert(item.vault->path(), {item.vault->path(), item.vault->kind()});
+
+    QVariantList result;
+    QSet<QString> seen;
+    auto appendRef = [&](const DbRef &ref) {
+        if (seen.contains(ref.path))
+            return;
+        seen.insert(ref.path);
+        QVariantMap item = describe(ref);
+        item.insert(QStringLiteral("active"), m_vault && m_vault->path() == ref.path);
+        result.append(item);
+    };
+
+    for (const QString &path : std::as_const(m_openOrder)) {
+        if (byPath.contains(path))
+            appendRef(byPath.value(path));
+    }
+    if (m_vault)
+        appendRef({m_vault->path(), m_vault->kind()});
+    for (const auto &item : m_parked)
+        appendRef({item.vault->path(), item.vault->kind()});
     return result;
 }
 
@@ -588,9 +616,19 @@ void AppController::switchDatabase(const QString &path) {
     displayVault();
 }
 
+void AppController::switchDatabaseAt(int index) {
+    if (index < 0 || index >= m_openOrder.size())
+        return;
+    const QString path = m_openOrder.at(index);
+    if (m_vault && m_vault->path() == path && m_stage == QLatin1String("entries"))
+        return;
+    switchDatabase(path);
+}
+
 void AppController::closeParked() {
     m_browser.waitForReads();
     for (auto &v : m_parked) {
+        m_openOrder.removeAll(v.vault->path());
         const QString error = v.ssh.clear();
         if (!error.isEmpty())
             qWarning().noquote() << error;
@@ -620,6 +658,7 @@ void AppController::finishPendingLock() {
         m_browser.waitForReads();
         const QString error = it->ssh.clear();
         it->vault->close();
+        m_openOrder.removeAll(path);
         m_parked.erase(it);
         m_browser.vaultChanged();
         emit stageChanged();
@@ -660,7 +699,9 @@ void AppController::lock() {
     }
     m_lockPendingPath.clear();
     stopBitwardenRealtime();
+    const QString closedPath = m_vault->path();
     const QString sshError = closeVault();
+    m_openOrder.removeAll(closedPath);
     if (!m_parked.isEmpty()) {
         switchDatabase(m_parked.constLast().vault->path());
     } else {
@@ -1103,6 +1144,8 @@ void AppController::adoptVault(const DbRef &ref, Vault *vault) {
     }
     parkVault();
     m_vault.reset(vault);
+    if (!m_openOrder.contains(ref.path))
+        m_openOrder.append(ref.path);
     m_history.recordUse(ref.path);
     displayVault();
     startSshKeys();
@@ -1132,6 +1175,8 @@ void AppController::displayVault() {
     loadIconChoice();
     clearMessage();
     m_query.clear();
+    m_activeSection = QStringLiteral("all");
+    m_expandedSidebarNodes.clear();
     refreshEntries();
     m_browser.vaultChanged();
 
@@ -1166,8 +1211,301 @@ void AppController::refreshEntries() {
 
     if (m_vault)
         m_history.sortItems(m_allEntries, m_vault->path());
+    rebuildSidebar();
     rebuildRows();
     startMetaLoad();
+}
+
+void AppController::rebuildSidebar() {
+    m_sidebarItems.clear();
+    if (m_vault.isNull()) {
+        emit sidebarChanged();
+        return;
+    }
+
+    struct TreeNode {
+        QString name;
+        QString fullPath;
+        int count = 0;
+        QHash<QString, std::shared_ptr<TreeNode>> children;
+    };
+
+    auto ensurePath = [](const std::shared_ptr<TreeNode> &root, const QString &rawPath) {
+        const QStringList parts = rawPath.split(QLatin1Char('/'), Qt::SkipEmptyParts);
+        auto cur = root;
+        QString built;
+        for (const QString &part : parts) {
+            built = built.isEmpty() ? part : built + QLatin1Char('/') + part;
+            auto next = cur->children.value(part);
+            if (!next) {
+                next = std::make_shared<TreeNode>();
+                next->name = part;
+                next->fullPath = built;
+                cur->children.insert(part, next);
+            }
+            cur = next;
+        }
+        return cur;
+    };
+
+    auto incrementPath = [&](const std::shared_ptr<TreeNode> &root, const QString &rawPath,
+                             QSet<QString> *counted) {
+        const QStringList parts = rawPath.split(QLatin1Char('/'), Qt::SkipEmptyParts);
+        auto cur = root;
+        QString built;
+        for (const QString &part : parts) {
+            built = built.isEmpty() ? part : built + QLatin1Char('/') + part;
+            auto next = cur->children.value(part);
+            if (!next) {
+                next = std::make_shared<TreeNode>();
+                next->name = part;
+                next->fullPath = built;
+                cur->children.insert(part, next);
+            }
+            if (!counted->contains(built)) {
+                counted->insert(built);
+                next->count += 1;
+            }
+            cur = next;
+        }
+    };
+
+    std::function<void(const std::shared_ptr<TreeNode> &, int, const QString &, const QString &,
+                       const QString &)> appendTree =
+        [&](const std::shared_ptr<TreeNode> &parent, int depth, const QString &sectionPrefix,
+            const QString &expandPrefix, const QString &parentId) {
+            QList<std::shared_ptr<TreeNode>> nodes = parent->children.values();
+            std::sort(nodes.begin(), nodes.end(), [](const auto &a, const auto &b) {
+                return a->name.compare(b->name, Qt::CaseInsensitive) < 0;
+            });
+            for (const auto &node : std::as_const(nodes)) {
+                const QString id = sectionPrefix + node->fullPath;
+                const QString expandKey = expandPrefix + node->fullPath;
+                const bool hasChildren = !node->children.isEmpty();
+                const bool expanded = hasChildren && m_expandedSidebarNodes.contains(expandKey);
+                m_sidebarItems.append(QVariantMap{
+                    {QStringLiteral("id"), id},
+                    {QStringLiteral("label"), node->name},
+                    {QStringLiteral("kind"), QStringLiteral("item")},
+                    {QStringLiteral("depth"), depth},
+                    {QStringLiteral("hasChildren"), hasChildren},
+                    {QStringLiteral("expanded"), expanded},
+                    {QStringLiteral("expandKey"), expandKey},
+                    {QStringLiteral("parentId"), parentId},
+                    {QStringLiteral("count"), node->count}
+                });
+                if (expanded)
+                    appendTree(node, depth + 1, sectionPrefix, expandPrefix, id);
+            }
+        };
+
+    m_sidebarItems.append(QVariantMap{
+        {QStringLiteral("id"), QStringLiteral("all")},
+        {QStringLiteral("label"), I18n::t(QStringLiteral("sidebar.all"))},
+        {QStringLiteral("kind"), QStringLiteral("section")},
+        {QStringLiteral("depth"), 0},
+        {QStringLiteral("hasChildren"), false},
+        {QStringLiteral("expanded"), false},
+        {QStringLiteral("expandKey"), QString()},
+        {QStringLiteral("parentId"), QString()},
+        {QStringLiteral("count"), m_allEntries.size()}
+    });
+
+    if (auto *bw = dynamic_cast<BitwardenVault *>(m_vault.data())) {
+        const auto trash = bw->trashItems();
+        const auto sends = bw->sends();
+        m_sidebarItems.append(QVariantMap{
+            {QStringLiteral("id"), QStringLiteral("trash")},
+            {QStringLiteral("label"), I18n::t(QStringLiteral("sidebar.trash"))},
+            {QStringLiteral("kind"), QStringLiteral("section")},
+            {QStringLiteral("depth"), 0},
+            {QStringLiteral("hasChildren"), false},
+            {QStringLiteral("expanded"), false},
+            {QStringLiteral("expandKey"), QString()},
+            {QStringLiteral("parentId"), QString()},
+            {QStringLiteral("count"), trash.size()}
+        });
+        m_sidebarItems.append(QVariantMap{
+            {QStringLiteral("id"), QStringLiteral("sends")},
+            {QStringLiteral("label"), I18n::t(QStringLiteral("sidebar.sends"))},
+            {QStringLiteral("kind"), QStringLiteral("section")},
+            {QStringLiteral("depth"), 0},
+            {QStringLiteral("hasChildren"), false},
+            {QStringLiteral("expanded"), false},
+            {QStringLiteral("expandKey"), QString()},
+            {QStringLiteral("parentId"), QString()},
+            {QStringLiteral("count"), sends.size()}
+        });
+
+        const auto cols = bw->collections();
+        if (!cols.isEmpty()) {
+            auto colRoot = std::make_shared<TreeNode>();
+            QHash<QString, QString> colNameById;
+            for (const BwCollectionItem &c : cols) {
+                if (c.name.isEmpty())
+                    continue;
+                colNameById.insert(c.id, c.name);
+                ensurePath(colRoot, c.name);
+            }
+            for (const QString &path : std::as_const(m_allEntries)) {
+                if (isEmptyGroup(path))
+                    continue;
+                const EntryMeta meta = m_lazyMeta.contains(path) ? m_lazyMeta.value(path)
+                                                                 : m_listedMeta.value(path);
+                QSet<QString> counted;
+                for (const QString &cid : meta.collectionIds) {
+                    const QString cname = colNameById.value(cid);
+                    if (!cname.isEmpty())
+                        incrementPath(colRoot, cname, &counted);
+                }
+            }
+            m_sidebarItems.append(QVariantMap{
+                {QStringLiteral("kind"), QStringLiteral("header")},
+                {QStringLiteral("label"), I18n::t(QStringLiteral("sidebar.collections"))}
+            });
+            appendTree(colRoot, 0, QStringLiteral("collection:"), QStringLiteral("col:"), QString());
+        }
+    }
+
+    if (!m_groups.isEmpty()) {
+        auto grpRoot = std::make_shared<TreeNode>();
+        for (const QString &g : std::as_const(m_groups)) {
+            if (!g.isEmpty())
+                ensurePath(grpRoot, g);
+        }
+        for (const QString &path : std::as_const(m_allEntries)) {
+            if (isEmptyGroup(path))
+                continue;
+            const QString grp = parentGroup(path);
+            if (!grp.isEmpty()) {
+                QSet<QString> counted;
+                incrementPath(grpRoot, grp, &counted);
+            }
+        }
+        m_sidebarItems.append(QVariantMap{
+            {QStringLiteral("kind"), QStringLiteral("header")},
+            {QStringLiteral("label"), I18n::t(QStringLiteral("sidebar.groups"))}
+        });
+        appendTree(grpRoot, 0, QStringLiteral("group:"), QStringLiteral("grp:"), QString());
+    }
+
+    emit sidebarChanged();
+}
+
+void AppController::toggleSidebarNode(const QString &expandKey) {
+    if (expandKey.isEmpty())
+        return;
+    if (m_expandedSidebarNodes.contains(expandKey))
+        m_expandedSidebarNodes.remove(expandKey);
+    else
+        m_expandedSidebarNodes.insert(expandKey);
+    rebuildSidebar();
+}
+
+void AppController::setSidebarNodeExpanded(const QString &expandKey, bool expanded) {
+    if (expandKey.isEmpty())
+        return;
+    if (expanded == m_expandedSidebarNodes.contains(expandKey))
+        return;
+    if (expanded)
+        m_expandedSidebarNodes.insert(expandKey);
+    else
+        m_expandedSidebarNodes.remove(expandKey);
+    rebuildSidebar();
+}
+
+QVariantList AppController::bitwardenCollections() const {
+    QVariantList list;
+    if (auto *bw = dynamic_cast<BitwardenVault *>(m_vault.data())) {
+        for (const BwCollectionItem &c : bw->collections()) {
+            list.append(QVariantMap{
+                {QStringLiteral("id"), c.id},
+                {QStringLiteral("name"), c.name},
+                {QStringLiteral("organizationId"), c.organizationId}
+            });
+        }
+    }
+    return list;
+}
+
+QVariantList AppController::bitwardenOrganizations() const {
+    QVariantList list;
+    if (auto *bw = dynamic_cast<BitwardenVault *>(m_vault.data())) {
+        for (const BwOrganizationItem &o : bw->organizations()) {
+            list.append(QVariantMap{
+                {QStringLiteral("id"), o.id},
+                {QStringLiteral("name"), o.name}
+            });
+        }
+    }
+    return list;
+}
+
+bool AppController::createGroup(const QString &name) {
+    if (!vaultReadyForChanges())
+        return false;
+    QString trimmed = name.trimmed();
+    while (trimmed.endsWith(QLatin1Char('/')))
+        trimmed.chop(1);
+    if (trimmed.isEmpty()) {
+        showMessage(I18n::t(QStringLiteral("app.group_invalid")), true);
+        return false;
+    }
+    const Vault *vault = m_vault.data();
+    runInBackground(
+        [vault, trimmed]() {
+            TaskResult r;
+            r.ok = vault->createGroup(trimmed, &r.error);
+            return r;
+        },
+        [this](const TaskResult &r) {
+            if (r.ok) {
+                showMessage(I18n::t(QStringLiteral("app.group_created")), false);
+                refreshEntries();
+            } else {
+                showMessage(r.error.isEmpty() ? I18n::t(QStringLiteral("app.group_create_error")) : r.error,
+                            true);
+            }
+        });
+    return true;
+}
+
+bool AppController::createBitwardenCollection(const QString &organizationId, const QString &name) {
+    if (!vaultReadyForChanges())
+        return false;
+    auto *bw = dynamic_cast<BitwardenVault *>(m_vault.data());
+    if (!bw)
+        return false;
+    QString trimmed = name.trimmed();
+    while (trimmed.endsWith(QLatin1Char('/')))
+        trimmed.chop(1);
+    if (trimmed.isEmpty() || organizationId.isEmpty()) {
+        showMessage(I18n::t(QStringLiteral("app.group_invalid")), true);
+        return false;
+    }
+    runInBackground(
+        [bw, organizationId, trimmed]() {
+            TaskResult r;
+            r.ok = bw->createCollection(organizationId, trimmed, &r.error);
+            return r;
+        },
+        [this](const TaskResult &r) {
+            if (r.ok) {
+                showMessage(I18n::t(QStringLiteral("bitwarden.collection_created")), false);
+                refreshEntries();
+            } else {
+                showMessage(r.error.isEmpty() ? I18n::t(QStringLiteral("app.group_create_error")) : r.error,
+                            true);
+            }
+        });
+    return true;
+}
+
+void AppController::selectSection(const QString &section) {
+    if (section.isEmpty() || m_activeSection == section)
+        return;
+    m_activeSection = section;
+    rebuildRows();
 }
 
 // Rows and what the search reads for each, from the entries and whatever
@@ -1178,6 +1516,84 @@ void AppController::rebuildRows() {
     m_allRows.clear();
     m_entryHaystacks.clear();
     m_rowOf.clear();
+
+    if (m_activeSection == QLatin1String("trash")) {
+        if (auto *bw = dynamic_cast<BitwardenVault *>(m_vault.data())) {
+            const auto trash = bw->trashItems();
+            for (const BwTrashItem &t : trash) {
+                const QString typeLabel = t.type == QLatin1String("ssh") ? I18n::t(QStringLiteral("ui.type_ssh"))
+                                        : t.type == QLatin1String("note") ? I18n::t(QStringLiteral("ui.type_note"))
+                                        : t.type == QLatin1String("card") ? I18n::t(QStringLiteral("ui.type_card"))
+                                        : t.type == QLatin1String("identity") ? I18n::t(QStringLiteral("ui.type_identity"))
+                                                                              : I18n::t(QStringLiteral("ui.type_login"));
+                const QString path = QStringLiteral("trash:") + t.id;
+                QVariantMap row;
+                row.insert(QStringLiteral("path"), path);
+                row.insert(QStringLiteral("name"), t.name);
+                row.insert(QStringLiteral("group"), I18n::t(QStringLiteral("sidebar.trash")));
+                row.insert(QStringLiteral("collections"), I18n::t(QStringLiteral("sidebar.trash")));
+                row.insert(QStringLiteral("type"), QStringLiteral("trash"));
+                row.insert(QStringLiteral("typeLabel"), typeLabel);
+                row.insert(QStringLiteral("username"), t.username);
+                row.insert(QStringLiteral("url"), t.deletedDate);
+                row.insert(QStringLiteral("hasOtp"), false);
+                m_rowOf.insert(path, m_allRows.size());
+                m_allRows.append(row);
+                m_entryHaystacks.append(t.name + QLatin1Char(' ') + typeLabel + QLatin1Char(' ')
+                                        + t.username + QLatin1Char(' ') + t.deletedDate);
+            }
+        }
+        applyEntryFilter();
+        return;
+    }
+
+    if (m_activeSection == QLatin1String("sends")) {
+        if (auto *bw = dynamic_cast<BitwardenVault *>(m_vault.data())) {
+            const auto sends = bw->sends();
+            for (const BwSendItem &s : sends) {
+                const QString typeLabel = s.type == 1 ? I18n::t(QStringLiteral("bitwarden.send_type_file"))
+                                                      : I18n::t(QStringLiteral("bitwarden.send_type_text"));
+                const QString path = QStringLiteral("send:") + s.id;
+                const QString accesses = s.maxAccessCount > 0
+                    ? QStringLiteral("%1/%2").arg(s.accessCount).arg(s.maxAccessCount)
+                    : QString::number(s.accessCount);
+                QVariantMap row;
+                row.insert(QStringLiteral("path"), path);
+                row.insert(QStringLiteral("name"), s.name);
+                row.insert(QStringLiteral("group"), s.deletionDate);
+                row.insert(QStringLiteral("collections"), s.deletionDate);
+                row.insert(QStringLiteral("type"), QStringLiteral("send"));
+                row.insert(QStringLiteral("typeLabel"), typeLabel);
+                row.insert(QStringLiteral("username"), accesses);
+                row.insert(QStringLiteral("url"), s.url);
+                row.insert(QStringLiteral("hasOtp"), false);
+                m_rowOf.insert(path, m_allRows.size());
+                m_allRows.append(row);
+                m_entryHaystacks.append(s.name + QLatin1Char(' ') + typeLabel + QLatin1Char(' ') + s.url);
+            }
+        }
+        applyEntryFilter();
+        return;
+    }
+
+    const bool filterGroup = m_activeSection.startsWith(QLatin1String("group:"));
+    const QString wantedGroup = filterGroup ? m_activeSection.mid(6) : QString();
+    const bool filterCollection = m_activeSection.startsWith(QLatin1String("collection:"));
+    const QString wantedCollection = filterCollection ? m_activeSection.mid(11) : QString();
+
+    QHash<QString, QString> collectionNameById;
+    QSet<QString> matchingCollectionIds;
+    if (auto *bw = dynamic_cast<BitwardenVault *>(m_vault.data())) {
+        for (const BwCollectionItem &c : bw->collections()) {
+            collectionNameById.insert(c.id, c.name);
+            if (filterCollection
+                && (c.id == wantedCollection || c.name == wantedCollection
+                    || c.name.startsWith(wantedCollection + QLatin1Char('/')))) {
+                matchingCollectionIds.insert(c.id);
+            }
+        }
+    }
+
     for (const QString &path : std::as_const(m_allEntries)) {
         QString type;
         QString name;
@@ -1185,9 +1601,12 @@ void AppController::rebuildRows() {
         QString username;
         QString url;
         QStringList extraUrls;
+        QStringList collectionIds;
         bool hasOtp = false;
 
         if (isEmptyGroup(path)) {
+            if (filterCollection)
+                continue;
             type = QStringLiteral("group");
             group = groupNameOf(path);
             name = emptySuffix.mid(1);
@@ -1200,17 +1619,43 @@ void AppController::rebuildRows() {
             username = entry.username;
             url = entry.url;
             extraUrls = entry.extraUrls;
+            collectionIds = entry.collectionIds;
             hasOtp = entry.hasOtp;
         }
 
+        if (filterGroup && group != wantedGroup && !group.startsWith(wantedGroup + QLatin1Char('/')))
+            continue;
+        if (filterCollection) {
+            bool inCollection = false;
+            for (const QString &cid : std::as_const(collectionIds)) {
+                if (matchingCollectionIds.contains(cid)) {
+                    inCollection = true;
+                    break;
+                }
+            }
+            if (!inCollection)
+                continue;
+        }
+
+        QStringList collectionNames;
+        for (const QString &cid : std::as_const(collectionIds)) {
+            const QString cname = collectionNameById.value(cid);
+            if (!cname.isEmpty() && !collectionNames.contains(cname))
+                collectionNames.append(cname);
+        }
+        const QString collectionsText = collectionNames.join(QStringLiteral(", "));
+
         const QString typeLabel = type == QLatin1String("ssh") ? I18n::t(QStringLiteral("ui.type_ssh"))
                                 : type == QLatin1String("note") ? I18n::t(QStringLiteral("ui.type_note"))
+                                : type == QLatin1String("card") ? I18n::t(QStringLiteral("ui.type_card"))
+                                : type == QLatin1String("identity") ? I18n::t(QStringLiteral("ui.type_identity"))
                                 : type == QLatin1String("login") ? I18n::t(QStringLiteral("ui.type_login"))
                                                                   : I18n::t(QStringLiteral("ui.type_group"));
         QVariantMap row;
         row.insert(QStringLiteral("path"), path);
         row.insert(QStringLiteral("name"), name);
         row.insert(QStringLiteral("group"), group);
+        row.insert(QStringLiteral("collections"), collectionsText);
         row.insert(QStringLiteral("type"), type);
         row.insert(QStringLiteral("typeLabel"), typeLabel);
         row.insert(QStringLiteral("username"), username);
@@ -1221,8 +1666,9 @@ void AppController::rebuildRows() {
         m_rowOf.insert(path, m_allRows.size());
         m_allRows.append(row);
         // The path carries name and group; the rest is what the columns add.
-        m_entryHaystacks.append(path + QLatin1Char(' ') + typeLabel + QLatin1Char(' ') + username
-                                + QLatin1Char(' ') + url + QLatin1Char(' ') + extraUrls.join(QLatin1Char(' '))
+        m_entryHaystacks.append(path + QLatin1Char(' ') + collectionsText + QLatin1Char(' ') + typeLabel
+                                + QLatin1Char(' ') + username + QLatin1Char(' ') + url + QLatin1Char(' ')
+                                + extraUrls.join(QLatin1Char(' '))
                                 + (hasOtp ? QStringLiteral(" otp") : QString()));
     }
     applyEntryFilter();
@@ -1272,8 +1718,9 @@ void AppController::applyEntryFilter() {
     QVariantList rows;
     m_filteredEntries.clear();
     for (int index : std::as_const(m_shownRows)) {
-        m_filteredEntries.append(m_allEntries.at(index));
-        rows.append(m_allRows.at(index));
+        const QVariantMap map = m_allRows.at(index).toMap();
+        m_filteredEntries.append(map.value(QStringLiteral("path")).toString());
+        rows.append(map);
     }
     m_rowsModel.setRows(rows);
     emit entriesChanged();
@@ -1342,11 +1789,25 @@ bool AppController::isEmptyGroup(const QString &entry) const {
 }
 
 bool AppController::isNoteEntry(const QString &entry) const {
+    return entryKind(entry) == QLatin1String("note");
+}
+
+QString AppController::entryKind(const QString &entry) const {
     if (entry.isEmpty() || isEmptyGroup(entry))
-        return false;
+        return QString();
     const EntryMeta meta = m_lazyMeta.contains(entry) ? m_lazyMeta.value(entry)
                                                       : m_listedMeta.value(entry);
-    return meta.type == QLatin1String("note");
+    return meta.type;
+}
+
+QString AppController::entryLabelFor(const QString &entry) const {
+    const int idx = m_rowOf.value(entry, -1);
+    if (idx >= 0 && idx < m_allRows.size()) {
+        const QString name = m_allRows.at(idx).toMap().value(QStringLiteral("name")).toString();
+        if (!name.isEmpty())
+            return name;
+    }
+    return entry;
 }
 
 QString AppController::groupNameOf(const QString &entry) const {
@@ -1360,10 +1821,11 @@ QVariantMap AppController::entryMenuFields(const QString &entry) const {
     if (!m_vault || entry.isEmpty() || isEmptyGroup(entry) || !m_vault->fetchEntry(entry, &data, &error))
         return {};
     // A native Bitwarden SSH item exposes its private key through fetchPassword;
-    // a secure note has no password at all.
+    // notes, cards and identities have no login password.
     const QString entryType = m_listedMeta.value(entry).type;
-    const bool noPassword = entryType == QLatin1String("ssh") || entryType == QLatin1String("note");
-    return {{QStringLiteral("hasPassword"), !noPassword && !data.password.isEmpty()},
+    const bool noPassword = entryType == QLatin1String("ssh") || entryType == QLatin1String("note")
+                            || entryType == QLatin1String("card") || entryType == QLatin1String("identity");
+    return {{QStringLiteral("hasPassword"), !noPassword && data.viewPassword && !data.password.isEmpty()},
             {QStringLiteral("hasUsername"), !data.username.trimmed().isEmpty()},
             {QStringLiteral("hasUrl"), !data.url.trimmed().isEmpty()},
             {QStringLiteral("hasOtp"), !data.otp.isEmpty() && Totp::parse(data.otp.toString()).has_value()}};
@@ -1648,13 +2110,92 @@ QVariantMap AppController::entryDetails(const QString &entry) {
     m_shownOtpEntry = entry;
     m_shownOtp = data.otp.isEmpty() ? std::nullopt : Totp::parse(data.otp.toString());
 
-    return {{QStringLiteral("title"), m_vault->titleFor(entry, fallback)},
-            {QStringLiteral("isNote"), data.isNote},
-            {QStringLiteral("username"), data.username},
-            {QStringLiteral("url"), data.url},
-            {QStringLiteral("extraUrls"), data.extraUrls},
-            {QStringLiteral("notes"), data.notes},
-            {QStringLiteral("hasOtp"), m_shownOtp.has_value()}};
+    QVariantList customFieldsList;
+    for (const CustomField &cf : data.customFields) {
+        const bool hidden = cf.type == 1;
+        customFieldsList.append(QVariantMap{
+            {QStringLiteral("name"), cf.name},
+            {QStringLiteral("value"), (hidden && !data.viewPassword) ? QString() : cf.value.toString()},
+            {QStringLiteral("type"), cf.type},
+            {QStringLiteral("restricted"), hidden && !data.viewPassword}
+        });
+    }
+    const EntryMeta meta = m_lazyMeta.contains(entry) ? m_lazyMeta.value(entry)
+                                                      : m_listedMeta.value(entry);
+    const bool isSsh = meta.ssh.has_value() || meta.type == QLatin1String("ssh");
+    QString sshPublicKey = data.sshPublicKey;
+    if (isSsh && sshPublicKey.isEmpty()) {
+        Secret key;
+        if (m_vault->kind() != VaultKind::Keepass)
+            key = data.password;
+        else if (meta.ssh)
+            m_vault->fetchSshKey(entry, meta.ssh->id, &key, &error);
+        if (!key.isEmpty())
+            sshPublicKey = SshAgent::publicIdentity(key);
+    }
+
+    QString collectionsText;
+    if (auto *bw = dynamic_cast<BitwardenVault *>(m_vault.data())) {
+        QHash<QString, QString> colNames;
+        for (const BwCollectionItem &c : bw->collections())
+            colNames.insert(c.id, c.name);
+        QStringList names;
+        for (const QString &cid : meta.collectionIds) {
+            const QString n = colNames.value(cid);
+            if (!n.isEmpty() && !names.contains(n))
+                names.append(n);
+        }
+        collectionsText = names.join(QStringLiteral(", "));
+    }
+
+    QVariantMap details{{QStringLiteral("title"), m_vault->titleFor(entry, fallback)},
+                        {QStringLiteral("group"), parentGroup(entry)},
+                        {QStringLiteral("collections"), collectionsText},
+                        {QStringLiteral("type"), isSsh ? QStringLiteral("ssh")
+                                               : data.isNote ? QStringLiteral("note")
+                                               : data.isCard ? QStringLiteral("card")
+                                               : data.isIdentity ? QStringLiteral("identity")
+                                                                 : QStringLiteral("login")},
+                        {QStringLiteral("isSsh"), isSsh},
+                        {QStringLiteral("sshPublicKey"), sshPublicKey},
+                        {QStringLiteral("isNote"), data.isNote},
+                        {QStringLiteral("isCard"), data.isCard},
+                        {QStringLiteral("isIdentity"), data.isIdentity},
+                        {QStringLiteral("viewPassword"), data.viewPassword},
+                        {QStringLiteral("customFields"), customFieldsList},
+                        {QStringLiteral("username"), data.username},
+                        {QStringLiteral("url"), data.url},
+                        {QStringLiteral("extraUrls"), data.extraUrls},
+                        {QStringLiteral("notes"), data.notes},
+                        {QStringLiteral("hasOtp"), m_shownOtp.has_value()}};
+    if (data.isCard) {
+        details.insert(QStringLiteral("cardholderName"), data.card.cardholderName);
+        details.insert(QStringLiteral("cardBrand"), data.card.brand);
+        details.insert(QStringLiteral("cardNumber"), data.card.number.toString());
+        details.insert(QStringLiteral("cardExpMonth"), data.card.expMonth);
+        details.insert(QStringLiteral("cardExpYear"), data.card.expYear);
+        details.insert(QStringLiteral("cardCode"), data.card.code.toString());
+    } else if (data.isIdentity) {
+        details.insert(QStringLiteral("idTitle"), data.identity.title);
+        details.insert(QStringLiteral("idFirstName"), data.identity.firstName);
+        details.insert(QStringLiteral("idMiddleName"), data.identity.middleName);
+        details.insert(QStringLiteral("idLastName"), data.identity.lastName);
+        details.insert(QStringLiteral("idCompany"), data.identity.company);
+        details.insert(QStringLiteral("idEmail"), data.identity.email);
+        details.insert(QStringLiteral("idPhone"), data.identity.phone);
+        details.insert(QStringLiteral("idAddress1"), data.identity.address1);
+        details.insert(QStringLiteral("idAddress2"), data.identity.address2);
+        details.insert(QStringLiteral("idAddress3"), data.identity.address3);
+        details.insert(QStringLiteral("idCity"), data.identity.city);
+        details.insert(QStringLiteral("idState"), data.identity.state);
+        details.insert(QStringLiteral("idPostalCode"), data.identity.postalCode);
+        details.insert(QStringLiteral("idCountry"), data.identity.country);
+        details.insert(QStringLiteral("idSsn"), data.identity.ssn.toString());
+        details.insert(QStringLiteral("idPassportNumber"), data.identity.passportNumber.toString());
+        details.insert(QStringLiteral("idLicenseNumber"), data.identity.licenseNumber.toString());
+        details.insert(QStringLiteral("idUsername"), data.identity.username);
+    }
+    return details;
 }
 
 QVariantMap AppController::otpNow() const {
@@ -1700,6 +2241,34 @@ QVariantMap AppController::entryFields(const QString &entry) {
     const auto ssh = m_listedMeta.value(entry).ssh;
     if (data.isNote) {
         fields.insert(QStringLiteral("type"), QStringLiteral("note"));
+    } else if (data.isCard) {
+        fields.insert(QStringLiteral("type"), QStringLiteral("card"));
+        fields.insert(QStringLiteral("cardholderName"), data.card.cardholderName);
+        fields.insert(QStringLiteral("cardBrand"), data.card.brand);
+        fields.insert(QStringLiteral("cardNumber"), data.card.number.toString());
+        fields.insert(QStringLiteral("cardExpMonth"), data.card.expMonth);
+        fields.insert(QStringLiteral("cardExpYear"), data.card.expYear);
+        fields.insert(QStringLiteral("cardCode"), data.card.code.toString());
+    } else if (data.isIdentity) {
+        fields.insert(QStringLiteral("type"), QStringLiteral("identity"));
+        fields.insert(QStringLiteral("idTitle"), data.identity.title);
+        fields.insert(QStringLiteral("idFirstName"), data.identity.firstName);
+        fields.insert(QStringLiteral("idMiddleName"), data.identity.middleName);
+        fields.insert(QStringLiteral("idLastName"), data.identity.lastName);
+        fields.insert(QStringLiteral("idCompany"), data.identity.company);
+        fields.insert(QStringLiteral("idEmail"), data.identity.email);
+        fields.insert(QStringLiteral("idPhone"), data.identity.phone);
+        fields.insert(QStringLiteral("idAddress1"), data.identity.address1);
+        fields.insert(QStringLiteral("idAddress2"), data.identity.address2);
+        fields.insert(QStringLiteral("idAddress3"), data.identity.address3);
+        fields.insert(QStringLiteral("idCity"), data.identity.city);
+        fields.insert(QStringLiteral("idState"), data.identity.state);
+        fields.insert(QStringLiteral("idPostalCode"), data.identity.postalCode);
+        fields.insert(QStringLiteral("idCountry"), data.identity.country);
+        fields.insert(QStringLiteral("idSsn"), data.identity.ssn.toString());
+        fields.insert(QStringLiteral("idPassportNumber"), data.identity.passportNumber.toString());
+        fields.insert(QStringLiteral("idLicenseNumber"), data.identity.licenseNumber.toString());
+        fields.insert(QStringLiteral("idUsername"), data.identity.username);
     } else if (ssh) {
         const bool attachment = m_vault->kind() == VaultKind::Keepass;
         fields.insert(QStringLiteral("type"), QStringLiteral("ssh"));
@@ -1722,6 +2291,29 @@ QVariantMap AppController::entryFields(const QString &entry) {
     fields.insert(QStringLiteral("notes"), data.notes);
     fields.insert(QStringLiteral("extra"), data.extra);
     fields.insert(QStringLiteral("otp"), data.otp.toString());
+    fields.insert(QStringLiteral("viewPassword"), data.viewPassword);
+    const EntryMeta meta = m_listedMeta.value(entry);
+    fields.insert(QStringLiteral("collectionIds"), meta.collectionIds);
+    QString orgId;
+    if (auto *bw = dynamic_cast<BitwardenVault *>(m_vault.data())) {
+        for (const BwCollectionItem &c : bw->collections()) {
+            if (meta.collectionIds.contains(c.id) && !c.organizationId.isEmpty()) {
+                orgId = c.organizationId;
+                break;
+            }
+        }
+    }
+    fields.insert(QStringLiteral("organizationId"), orgId);
+    QVariantList customFieldsList;
+    for (const CustomField &cf : data.customFields) {
+        const bool hidden = cf.type == 1;
+        customFieldsList.append(QVariantMap{
+            {QStringLiteral("name"), cf.name},
+            {QStringLiteral("value"), (hidden && !data.viewPassword) ? QString() : cf.value.toString()},
+            {QStringLiteral("type"), cf.type}
+        });
+    }
+    fields.insert(QStringLiteral("customFields"), customFieldsList);
     return fields;
 }
 
@@ -1732,6 +2324,11 @@ bool AppController::saveEntry(const QVariantMap &fields) {
     QString group = fields.value(QStringLiteral("group")).toString().trimmed();
     while (group.endsWith(QLatin1Char('/')))
         group.chop(1);
+
+    if (!group.isEmpty() && !m_groups.contains(group)) {
+        showMessage(I18n::t(QStringLiteral("app.group_not_found")), true);
+        return false;
+    }
 
     const QString title = fields.value(QStringLiteral("title")).toString().trimmed();
     if (title.isEmpty()) {
@@ -1748,6 +2345,40 @@ bool AppController::saveEntry(const QVariantMap &fields) {
         if (!bitwardenBackend())
             return false;
         data.isNote = true;
+        data.notes = fields.value(QStringLiteral("notes")).toString();
+    } else if (entryType == QLatin1String("card")) {
+        if (!bitwardenBackend())
+            return false;
+        data.isCard = true;
+        data.card.cardholderName = fields.value(QStringLiteral("cardholderName")).toString().trimmed();
+        data.card.brand = fields.value(QStringLiteral("cardBrand")).toString().trimmed();
+        data.card.number = Secret(fields.value(QStringLiteral("cardNumber")).toString().trimmed());
+        data.card.expMonth = fields.value(QStringLiteral("cardExpMonth")).toString().trimmed();
+        data.card.expYear = fields.value(QStringLiteral("cardExpYear")).toString().trimmed();
+        data.card.code = Secret(fields.value(QStringLiteral("cardCode")).toString().trimmed());
+        data.notes = fields.value(QStringLiteral("notes")).toString();
+    } else if (entryType == QLatin1String("identity")) {
+        if (!bitwardenBackend())
+            return false;
+        data.isIdentity = true;
+        data.identity.title = fields.value(QStringLiteral("idTitle")).toString().trimmed();
+        data.identity.firstName = fields.value(QStringLiteral("idFirstName")).toString().trimmed();
+        data.identity.middleName = fields.value(QStringLiteral("idMiddleName")).toString().trimmed();
+        data.identity.lastName = fields.value(QStringLiteral("idLastName")).toString().trimmed();
+        data.identity.company = fields.value(QStringLiteral("idCompany")).toString().trimmed();
+        data.identity.email = fields.value(QStringLiteral("idEmail")).toString().trimmed();
+        data.identity.phone = fields.value(QStringLiteral("idPhone")).toString().trimmed();
+        data.identity.address1 = fields.value(QStringLiteral("idAddress1")).toString().trimmed();
+        data.identity.address2 = fields.value(QStringLiteral("idAddress2")).toString().trimmed();
+        data.identity.address3 = fields.value(QStringLiteral("idAddress3")).toString().trimmed();
+        data.identity.city = fields.value(QStringLiteral("idCity")).toString().trimmed();
+        data.identity.state = fields.value(QStringLiteral("idState")).toString().trimmed();
+        data.identity.postalCode = fields.value(QStringLiteral("idPostalCode")).toString().trimmed();
+        data.identity.country = fields.value(QStringLiteral("idCountry")).toString().trimmed();
+        data.identity.ssn = Secret(fields.value(QStringLiteral("idSsn")).toString().trimmed());
+        data.identity.passportNumber = Secret(fields.value(QStringLiteral("idPassportNumber")).toString().trimmed());
+        data.identity.licenseNumber = Secret(fields.value(QStringLiteral("idLicenseNumber")).toString().trimmed());
+        data.identity.username = fields.value(QStringLiteral("idUsername")).toString().trimmed();
         data.notes = fields.value(QStringLiteral("notes")).toString();
     } else {
         data.username = fields.value(QStringLiteral("username")).toString().trimmed();
@@ -1817,6 +2448,25 @@ bool AppController::saveEntry(const QVariantMap &fields) {
                 return false;
             }
             data.otp = Secret(*otp);
+        }
+    }
+
+    if (fields.contains(QStringLiteral("collectionIds"))) {
+        data.collectionsLoaded = true;
+        data.collectionIds = fields.value(QStringLiteral("collectionIds")).toStringList();
+    }
+
+    if (fields.contains(QStringLiteral("customFields"))) {
+        data.customFieldsLoaded = true;
+        const QVariantList cfList = fields.value(QStringLiteral("customFields")).toList();
+        for (const QVariant &v : cfList) {
+            const QVariantMap m = v.toMap();
+            CustomField cf;
+            cf.name = m.value(QStringLiteral("name")).toString();
+            cf.value = Secret(m.value(QStringLiteral("value")).toString());
+            cf.type = m.value(QStringLiteral("type"), 0).toInt();
+            if (!cf.name.trimmed().isEmpty() || !cf.value.isEmpty())
+                data.customFields.append(cf);
         }
     }
 
@@ -2316,12 +2966,88 @@ bool AppController::createBitwardenSend(const QVariantMap &fields) {
             if (result.ok) {
                 Clipboard::copy(result.url);
                 showMessage(I18n::t(QStringLiteral("bitwarden.send_created")), false);
+                refreshEntries();
             } else {
                 showMessage(I18n::t(QStringLiteral("bitwarden.send_error"), QStringLiteral("err"), result.error),
                             true);
             }
         });
     return true;
+}
+
+void AppController::restoreTrashEntry(const QString &cipherId) {
+    if (!vaultReadyForChanges() || !bitwardenBackend() || cipherId.isEmpty())
+        return;
+    auto *vault = dynamic_cast<BitwardenVault *>(m_vault.data());
+    if (!vault)
+        return;
+    runInBackground(
+        [vault, cipherId]() {
+            TaskResult result;
+            result.ok = vault->restoreCipher(cipherId, &result.error);
+            return result;
+        },
+        [this](const TaskResult &result) {
+            showMessage(result.ok ? I18n::t(QStringLiteral("bitwarden.restored"))
+                                  : I18n::t(QStringLiteral("bitwarden.restore_error"), QStringLiteral("err"), result.error),
+                        !result.ok);
+            refreshEntries();
+        });
+}
+
+void AppController::purgeTrashEntry(const QString &cipherId) {
+    if (!vaultReadyForChanges() || !bitwardenBackend() || cipherId.isEmpty())
+        return;
+    auto *vault = dynamic_cast<BitwardenVault *>(m_vault.data());
+    if (!vault)
+        return;
+    runInBackground(
+        [vault, cipherId]() {
+            TaskResult result;
+            result.ok = vault->purgeCipher(cipherId, &result.error);
+            return result;
+        },
+        [this](const TaskResult &result) {
+            showMessage(result.ok ? I18n::t(QStringLiteral("bitwarden.purged"))
+                                  : I18n::t(QStringLiteral("app.delete_error"), QStringLiteral("err"), result.error),
+                        !result.ok);
+            refreshEntries();
+        });
+}
+
+void AppController::deleteBitwardenSend(const QString &sendId) {
+    if (!vaultReadyForChanges() || !bitwardenBackend() || sendId.isEmpty())
+        return;
+    auto *vault = dynamic_cast<BitwardenVault *>(m_vault.data());
+    if (!vault)
+        return;
+    runInBackground(
+        [vault, sendId]() {
+            TaskResult result;
+            result.ok = vault->deleteSend(sendId, &result.error);
+            return result;
+        },
+        [this](const TaskResult &result) {
+            showMessage(result.ok ? I18n::t(QStringLiteral("bitwarden.send_deleted"))
+                                  : I18n::t(QStringLiteral("app.delete_error"), QStringLiteral("err"), result.error),
+                        !result.ok);
+            refreshEntries();
+        });
+}
+
+QString AppController::sendUrlFor(const QString &sendPath) const {
+    if (!sendPath.startsWith(QLatin1String("send:")))
+        return QString();
+    const QString id = sendPath.mid(5);
+    const auto *bw = dynamic_cast<const BitwardenVault *>(m_vault.data());
+    if (!bw)
+        return QString();
+    const auto list = bw->sends();
+    for (const BwSendItem &s : list) {
+        if (s.id == id)
+            return s.url;
+    }
+    return QString();
 }
 
 void AppController::addOnePasswordAccount() {

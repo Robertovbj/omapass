@@ -6,6 +6,7 @@
 #include <QPromise>
 #include <QThreadPool>
 #include <QObject>
+#include <QSet>
 #include <QSharedPointer>
 #include <QStringList>
 #include <QTimer>
@@ -86,6 +87,10 @@ class AppController : public QObject, public BrowserApp {
     Q_PROPERTY(QObject *entryRows READ entryRows CONSTANT)
     Q_PROPERTY(QString query READ query WRITE setQuery NOTIFY entriesChanged)
     Q_PROPERTY(QStringList groups READ groups NOTIFY entriesChanged)
+    Q_PROPERTY(QVariantList bitwardenCollections READ bitwardenCollections NOTIFY entriesChanged)
+    Q_PROPERTY(QVariantList bitwardenOrganizations READ bitwardenOrganizations NOTIFY entriesChanged)
+    Q_PROPERTY(QString activeSection READ activeSection NOTIFY entriesChanged)
+    Q_PROPERTY(QVariantList sidebarItems READ sidebarItems NOTIFY sidebarChanged)
 
     // The browser extension's side: its questions to the user, and whether
     // it is being answered (see BrowserIntegration).
@@ -141,6 +146,10 @@ public:
     Q_INVOKABLE QString entryPathAt(int index) const { return m_rowsModel.pathAt(index); }
     void setQuery(const QString &query);
     QStringList groups() const { return m_groups; }
+    QVariantList bitwardenCollections() const;
+    QVariantList bitwardenOrganizations() const;
+    QString activeSection() const { return m_activeSection; }
+    QVariantList sidebarItems() const { return m_sidebarItems; }
 
     QObject *browser() { return &m_browser; }
 
@@ -168,6 +177,7 @@ public:
     // thing the inactivity timer does, on demand.
     QVariantList openDatabases() const;
     Q_INVOKABLE void switchDatabase(const QString &path);
+    Q_INVOKABLE void switchDatabaseAt(int index);
     Q_INVOKABLE void chooseAnotherDatabase();
     Q_INVOKABLE void lock();
     void lockAll();
@@ -192,7 +202,17 @@ public:
     Q_INVOKABLE void cancelBitwardenLogin();
     Q_INVOKABLE bool isBitwardenDatabase(int index) const;
     Q_INVOKABLE void logoutBitwarden(int index);
+    Q_INVOKABLE void syncBitwarden();
     Q_INVOKABLE bool createBitwardenSend(const QVariantMap &fields);
+    Q_INVOKABLE bool createGroup(const QString &name);
+    Q_INVOKABLE bool createBitwardenCollection(const QString &organizationId, const QString &name);
+    Q_INVOKABLE void selectSection(const QString &section);
+    Q_INVOKABLE void toggleSidebarNode(const QString &expandKey);
+    Q_INVOKABLE void setSidebarNodeExpanded(const QString &expandKey, bool expanded);
+    Q_INVOKABLE void restoreTrashEntry(const QString &cipherId);
+    Q_INVOKABLE void purgeTrashEntry(const QString &cipherId);
+    Q_INVOKABLE void deleteBitwardenSend(const QString &sendId);
+    Q_INVOKABLE QString sendUrlFor(const QString &sendPath) const;
     Q_INVOKABLE QString validatePin(const QString &pin, const QString &confirm,
                                     bool allowText = false) const;
     Q_INVOKABLE QString pinWeakWarning(const QString &pin) const;
@@ -215,6 +235,8 @@ public:
     // Entries
     Q_INVOKABLE bool isEmptyGroup(const QString &entry) const;
     Q_INVOKABLE bool isNoteEntry(const QString &entry) const;
+    Q_INVOKABLE QString entryKind(const QString &entry) const;
+    Q_INVOKABLE QString entryLabelFor(const QString &entry) const;
     Q_INVOKABLE QString groupNameOf(const QString &entry) const;
     // Drops the wait for an account check; the list takes the keyboard back.
     Q_INVOKABLE void cancelAccountCheck();
@@ -288,6 +310,7 @@ signals:
     void pendingDatabaseChanged();
     void unlockErrorChanged();
     void entriesChanged();
+    void sidebarChanged();
     void messageChanged();
     void databaseCreated();
     void loginChanged();
@@ -319,7 +342,7 @@ private:
     // silence while busy, which looks exactly like a shortcut that does
     // nothing.
     bool requireIdle();
-    void startBackgroundSync();
+    void startBackgroundSync(bool force = false);
     void applyLockSettings();
     void setSyncing(bool syncing);
     void setUnlockError(const QString &error);
@@ -426,6 +449,7 @@ private:
         QHash<QString, EntryMeta> meta;
     };
     QList<ParkedVault> m_parked;
+    QStringList m_openOrder;
     QSharedPointer<Vault> m_vault;
     void parkVault();
     void displayVault();
@@ -487,6 +511,10 @@ private:
     QTimer m_metaFlush;                       // batches arrivals into one repaint
     QStringList m_metaArrived;                // paths that came in since the last repaint
     QStringList m_groups;
+    QString m_activeSection = QStringLiteral("all");
+    QSet<QString> m_expandedSidebarNodes;
+    QVariantList m_sidebarItems;
+    void rebuildSidebar();
     QString m_query;
 
     QString m_messageText;

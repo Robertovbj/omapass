@@ -414,6 +414,7 @@ bool BitwardenVault::createSend(const BwSendOptions &options, QString *shareUrl,
         {QStringLiteral("hideEmail"), options.hideEmail},
     };
 
+    QJsonObject createdSend;
     QString accessId;
     if (options.type == 0) {
         const std::optional<QString> encText = BwCrypto::encrypt(options.text.toUtf8(), *sendKey);
@@ -428,7 +429,8 @@ bool BitwardenVault::createSend(const BwSendOptions &options, QString *shareUrl,
         const BwResponse response = request("POST", QStringLiteral("/sends"), error, body);
         if (!response.ok())
             return false;
-        accessId = response.json.value(QStringLiteral("accessId")).toString();
+        createdSend = response.json;
+        accessId = createdSend.value(QStringLiteral("accessId")).toString();
     } else {
         const std::optional<QString> encFileName = BwCrypto::encrypt(fileName.toUtf8(), *sendKey);
         const std::optional<QByteArray> encFile = BwCrypto::encryptBuffer(fileBytes, *sendKey);
@@ -448,6 +450,7 @@ bool BitwardenVault::createSend(const BwSendOptions &options, QString *shareUrl,
             const int uploadType = v2Response.json.value(QStringLiteral("fileUploadType")).toInt(0);
             const QString uploadUrl = v2Response.json.value(QStringLiteral("url")).toString();
             const QJsonObject sendResponse = v2Response.json.value(QStringLiteral("sendResponse")).toObject();
+            createdSend = sendResponse;
             const QString sendId = sendResponse.value(QStringLiteral("id")).toString();
             const QString fileId = sendResponse.value(QStringLiteral("file")).toObject()
                                        .value(QStringLiteral("id")).toString();
@@ -483,6 +486,7 @@ bool BitwardenVault::createSend(const BwSendOptions &options, QString *shareUrl,
                 *error = failureMessage(legacy);
                 return false;
             }
+            createdSend = legacy.json;
             accessId = legacy.json.value(QStringLiteral("accessId")).toString();
         } else {
             *error = v2Error;
@@ -494,6 +498,14 @@ bool BitwardenVault::createSend(const BwSendOptions &options, QString *shareUrl,
         *error = I18n::t(QStringLiteral("bitwarden.send_error"), QStringLiteral("err"), QStringLiteral("accessId"));
         return false;
     }
+    if (!createdSend.value(QStringLiteral("id")).toString().isEmpty()) {
+        {
+            const QMutexLocker locker(&m_mutex);
+            upsert(&m_state.sends, createdSend);
+            rebuild();
+        }
+        persist();
+    }
     *shareUrl = BwCrypto::sendUrl(server, accessId, seed);
     return true;
 }
@@ -501,6 +513,211 @@ bool BitwardenVault::createSend(const BwSendOptions &options, QString *shareUrl,
 void BitwardenVault::rebuild() const {
     BwAccount::decryptVault(m_state, m_keys, &m_items, &m_folders, &m_undecryptable);
     m_index = buildBwIndex(m_items, m_folders);
+
+    m_collections.clear();
+    for (const QJsonValue &v : m_state.collections) {
+        const QJsonObject col = v.toObject();
+        const QString id = col.value(QStringLiteral("id")).toString();
+        const QString orgId = col.value(QStringLiteral("organizationId")).toString();
+        const QString name = BwAccount::decryptCollection(col, m_keys);
+        if (!id.isEmpty() && !name.isEmpty())
+            m_collections.append({id, name, orgId});
+    }
+    std::sort(m_collections.begin(), m_collections.end(),
+              [](const BwCollectionItem &a, const BwCollectionItem &b) {
+                  return a.name.compare(b.name, Qt::CaseInsensitive) < 0;
+              });
+
+    m_trash.clear();
+    for (const QJsonValue &v : m_state.ciphers) {
+        const QJsonObject cipher = v.toObject();
+        const QJsonValue deleted = cipher.value(QStringLiteral("deletedDate"));
+        if (deleted.isNull() || deleted.isUndefined())
+            continue;
+        const std::optional<QJsonObject> item = BwAccount::decryptCipher(cipher, m_keys, true);
+        if (!item)
+            continue;
+        BwTrashItem t;
+        t.id = item->value(QStringLiteral("id")).toString();
+        t.name = bwDisplayName(item->value(QStringLiteral("name")).toString());
+        const int type = item->value(QStringLiteral("type")).toInt();
+        t.type = type == 5 ? QStringLiteral("ssh")
+               : type == 2 ? QStringLiteral("note")
+               : type == 3 ? QStringLiteral("card")
+               : type == 4 ? QStringLiteral("identity")
+                           : QStringLiteral("login");
+        t.username = bwEntryData(*item).username;
+        t.deletedDate = deleted.toString().left(10);
+        m_trash.append(t);
+    }
+    std::sort(m_trash.begin(), m_trash.end(), [](const BwTrashItem &a, const BwTrashItem &b) {
+        return a.name.compare(b.name, Qt::CaseInsensitive) < 0;
+    });
+
+    m_sends.clear();
+    for (const QJsonValue &v : m_state.sends) {
+        const std::optional<QJsonObject> dec = BwAccount::decryptSend(v.toObject(), m_keys.user, m_state.server);
+        if (!dec)
+            continue;
+        BwSendItem s;
+        s.id = dec->value(QStringLiteral("id")).toString();
+        s.name = dec->value(QStringLiteral("name")).toString();
+        s.type = dec->value(QStringLiteral("type")).toInt();
+        s.url = dec->value(QStringLiteral("url")).toString();
+        s.accessCount = dec->value(QStringLiteral("accessCount")).toInt();
+        s.maxAccessCount = dec->value(QStringLiteral("maxAccessCount")).toInt();
+        s.deletionDate = dec->value(QStringLiteral("deletionDate")).toString().left(10);
+        s.disabled = dec->value(QStringLiteral("disabled")).toBool();
+        m_sends.append(s);
+    }
+    std::sort(m_sends.begin(), m_sends.end(), [](const BwSendItem &a, const BwSendItem &b) {
+        return a.name.compare(b.name, Qt::CaseInsensitive) < 0;
+    });
+}
+
+QVector<BwCollectionItem> BitwardenVault::collections() const {
+    const QMutexLocker locker(&m_mutex);
+    return m_collections;
+}
+
+QVector<BwOrganizationItem> BitwardenVault::organizations() const {
+    const QMutexLocker locker(&m_mutex);
+    QVector<BwOrganizationItem> result;
+    for (auto it = m_keys.organizations.cbegin(); it != m_keys.organizations.cend(); ++it) {
+        const QString id = it.key();
+        QString name = m_state.organizationNames.value(id).toString();
+        if (name.isEmpty())
+            name = id.left(8);
+        result.append({id, name});
+    }
+    std::sort(result.begin(), result.end(),
+              [](const BwOrganizationItem &a, const BwOrganizationItem &b) {
+                  return a.name.compare(b.name, Qt::CaseInsensitive) < 0;
+              });
+    return result;
+}
+
+bool BitwardenVault::createCollection(const QString &organizationId, const QString &name,
+                                      QString *error) const {
+    const QString trimmed = name.trimmed();
+    if (organizationId.isEmpty() || trimmed.isEmpty()) {
+        if (error)
+            *error = I18n::t(QStringLiteral("app.group_invalid"));
+        return false;
+    }
+
+    BwKey orgKey;
+    {
+        const QMutexLocker locker(&m_mutex);
+        if (!m_keys.organizations.contains(organizationId)) {
+            if (error)
+                *error = I18n::t(QStringLiteral("bitwarden.org_key_missing"));
+            return false;
+        }
+        orgKey = m_keys.organizations.value(organizationId);
+    }
+
+    const std::optional<QString> encName = BwCrypto::encrypt(trimmed.toUtf8(), orgKey);
+    if (!encName) {
+        if (error)
+            *error = I18n::t(QStringLiteral("app.group_create_error"));
+        return false;
+    }
+
+    const QJsonObject body{
+        {QStringLiteral("name"), *encName},
+        {QStringLiteral("externalId"), QJsonValue::Null},
+        {QStringLiteral("groups"), QJsonArray()},
+        {QStringLiteral("users"), QJsonArray()}
+    };
+    const BwResponse response = request(
+        "POST", QStringLiteral("/organizations/%1/collections").arg(organizationId), error, body);
+    if (!response.ok())
+        return false;
+
+    QJsonObject created = response.json;
+    if (!created.value(QStringLiteral("id")).toString().isEmpty()) {
+        if (created.value(QStringLiteral("organizationId")).toString().isEmpty())
+            created.insert(QStringLiteral("organizationId"), organizationId);
+        {
+            const QMutexLocker locker(&m_mutex);
+            upsert(&m_state.collections, created);
+            rebuild();
+        }
+        persist();
+    }
+    return true;
+}
+
+bool BitwardenVault::createGroup(const QString &group, QString *error) const {
+    const QString trimmed = group.trimmed();
+    if (trimmed.isEmpty()) {
+        if (error)
+            *error = I18n::t(QStringLiteral("app.group_invalid"));
+        return false;
+    }
+    QString folderId;
+    return ensureFolder(trimmed, &folderId, error);
+}
+
+QVector<BwTrashItem> BitwardenVault::trashItems() const {
+    const QMutexLocker locker(&m_mutex);
+    return m_trash;
+}
+
+QVector<BwSendItem> BitwardenVault::sends() const {
+    const QMutexLocker locker(&m_mutex);
+    return m_sends;
+}
+
+bool BitwardenVault::restoreCipher(const QString &cipherId, QString *error) const {
+    if (cipherId.isEmpty())
+        return false;
+    const BwResponse response = request("PUT", QStringLiteral("/ciphers/%1/restore").arg(cipherId), error);
+    if (!response.ok())
+        return false;
+    if (!response.json.value(QStringLiteral("id")).toString().isEmpty()) {
+        storeCipher(response.json);
+        const QMutexLocker locker(&m_mutex);
+        rebuild();
+    } else {
+        QString ignored;
+        syncCipher(cipherId, &ignored);
+        const QMutexLocker locker(&m_mutex);
+        rebuild();
+    }
+    return true;
+}
+
+bool BitwardenVault::purgeCipher(const QString &cipherId, QString *error) const {
+    if (cipherId.isEmpty())
+        return false;
+    const BwResponse response = request("DELETE", QStringLiteral("/ciphers/%1").arg(cipherId), error);
+    if (!response.ok())
+        return false;
+    {
+        const QMutexLocker locker(&m_mutex);
+        removeById(&m_state.ciphers, cipherId);
+        m_items.remove(cipherId);
+        rebuild();
+    }
+    persist();
+    return true;
+}
+
+bool BitwardenVault::deleteSend(const QString &sendId, QString *error) const {
+    if (sendId.isEmpty())
+        return false;
+    const BwResponse response = request("DELETE", QStringLiteral("/sends/%1").arg(sendId), error);
+    if (!response.ok())
+        return false;
+    {
+        const QMutexLocker locker(&m_mutex);
+        removeById(&m_state.sends, sendId);
+        rebuild();
+    }
+    persist();
+    return true;
 }
 
 QString BitwardenVault::warning() const {
@@ -612,12 +829,47 @@ QHash<QString, EntryMeta> BitwardenVault::entryMeta() const {
     for (auto it = m_index.items.cbegin(); it != m_index.items.cend(); ++it) {
         const QJsonObject item = m_items.value(it.value().id);
         EntryMeta entry;
+        const QJsonArray colIds = item.value(QStringLiteral("collectionIds")).toArray();
+        for (const QJsonValue &cv : colIds) {
+            const QString cid = cv.toString();
+            if (!cid.isEmpty())
+                entry.collectionIds.append(cid);
+        }
         const int type = item.value(QStringLiteral("type")).toInt();
         if (type == 5) {
             entry.type = QStringLiteral("ssh");
             entry.ssh = SshKeyConfig{it.value().id, {}};
         } else if (type == 2) {
             entry.type = QStringLiteral("note");
+        } else if (type == 3) {
+            entry.type = QStringLiteral("card");
+            const EntryData data = bwEntryData(item);
+            QString digits;
+            const QString num = data.card.number.toString();
+            for (const QChar c : num) {
+                if (c.isDigit())
+                    digits.append(c);
+            }
+            QString summary;
+            if (!data.card.brand.isEmpty())
+                summary = data.card.brand;
+            if (digits.size() >= 4) {
+                const QString tail = QStringLiteral("•••• ") + digits.right(4);
+                summary = summary.isEmpty() ? tail : summary + QLatin1Char(' ') + tail;
+            }
+            if (summary.isEmpty())
+                summary = data.card.cardholderName;
+            entry.username = summary;
+        } else if (type == 4) {
+            entry.type = QStringLiteral("identity");
+            const EntryData data = bwEntryData(item);
+            QStringList nameParts;
+            if (!data.identity.firstName.isEmpty())
+                nameParts.append(data.identity.firstName);
+            if (!data.identity.lastName.isEmpty())
+                nameParts.append(data.identity.lastName);
+            entry.username = nameParts.isEmpty() ? data.identity.email : nameParts.join(QLatin1Char(' '));
+            entry.url = data.identity.email;
         } else {
             const EntryData data = bwEntryData(item);
             entry.username = data.username;
@@ -670,21 +922,55 @@ bool BitwardenVault::addEntry(const QString &entryPath, const QString &group, co
     if (!ensureFolder(group, &folderId, error))
         return false;
 
-    BwKey user;
+    BwKey key;
     QString userId;
+    QString orgId;
+    QStringList selectedCollections;
     {
         const QMutexLocker locker(&m_mutex);
-        user = m_keys.user;
+        key = m_keys.user;
         userId = m_state.userId;
+        if (!data.collectionIds.isEmpty()) {
+            for (const BwCollectionItem &c : m_collections) {
+                if (!data.collectionIds.contains(c.id))
+                    continue;
+                if (orgId.isEmpty() && !c.organizationId.isEmpty()
+                    && m_keys.organizations.contains(c.organizationId)) {
+                    orgId = c.organizationId;
+                }
+                if (!orgId.isEmpty() && c.organizationId == orgId)
+                    selectedCollections.append(c.id);
+            }
+            if (!orgId.isEmpty())
+                key = m_keys.organizations.value(orgId);
+        }
     }
 
-    const BwResponse response = request(
-        "POST", QStringLiteral("/ciphers"), error,
-        BwAccount::cipherRequest(QJsonObject(), QString(), lastSegment(entryPath), folderId, data, user,
-                                 userId));
+    QJsonObject cipherBody = BwAccount::cipherRequest(
+        QJsonObject(), QString(), lastSegment(entryPath), folderId, data, key, userId);
+
+    BwResponse response;
+    if (!orgId.isEmpty() && !selectedCollections.isEmpty()) {
+        cipherBody.insert(QStringLiteral("organizationId"), orgId);
+        QJsonArray colIds;
+        for (const QString &cid : selectedCollections)
+            colIds.append(cid);
+        const QJsonObject wrapper{
+            {QStringLiteral("cipher"), cipherBody},
+            {QStringLiteral("collectionIds"), colIds}
+        };
+        response = request("POST", QStringLiteral("/ciphers/create"), error, wrapper);
+    } else {
+        response = request("POST", QStringLiteral("/ciphers"), error, cipherBody);
+    }
     if (!response.ok())
         return false;
-    storeCipher(response.json);
+    QJsonObject created = response.json;
+    if (created.value(QStringLiteral("id")).toString().isEmpty()
+        && created.value(QStringLiteral("cipher")).isObject()) {
+        created = created.value(QStringLiteral("cipher")).toObject();
+    }
+    storeCipher(created);
     return true;
 }
 
@@ -701,11 +987,31 @@ bool BitwardenVault::editEntry(const QString &oldPath, const QString &newPath, c
     QJsonObject cipher;
     std::optional<BwKey> key;
     QString userId;
+    QString existingOrgId;
+    QString targetOrgId;
+    QStringList selectedCollections;
+    QStringList existingCollections;
     {
         const QMutexLocker locker(&m_mutex);
         userId = m_state.userId;
         cipher = findById(m_state.ciphers, ref.id);
         key = BwAccount::cipherKey(cipher, m_keys);
+        existingOrgId = cipher.value(QStringLiteral("organizationId")).toString();
+        for (const QJsonValue &v : cipher.value(QStringLiteral("collectionIds")).toArray())
+            existingCollections.append(v.toString());
+        if (data.collectionsLoaded && !data.collectionIds.isEmpty()) {
+            targetOrgId = existingOrgId;
+            for (const BwCollectionItem &c : m_collections) {
+                if (!data.collectionIds.contains(c.id))
+                    continue;
+                if (targetOrgId.isEmpty() && !c.organizationId.isEmpty()
+                    && m_keys.organizations.contains(c.organizationId)) {
+                    targetOrgId = c.organizationId;
+                }
+                if (!targetOrgId.isEmpty() && c.organizationId == targetOrgId)
+                    selectedCollections.append(c.id);
+            }
+        }
     }
     if (cipher.isEmpty() || !key) {
         *error = I18n::t(QStringLiteral("bitwarden.entry_not_found"), QStringLiteral("entry"), oldPath);
@@ -722,6 +1028,44 @@ bool BitwardenVault::editEntry(const QString &oldPath, const QString &newPath, c
     const QString name = title == lastSegment(oldPath) ? ref.name : title;
 
     QString previousPassword = bwEntryData(item).password.toString();
+
+    // Moving a personal item into an organization's collection(s) uses /share.
+    if (existingOrgId.isEmpty() && !targetOrgId.isEmpty() && !selectedCollections.isEmpty()) {
+        BwKey orgKey;
+        {
+            const QMutexLocker locker(&m_mutex);
+            orgKey = m_keys.organizations.value(targetOrgId);
+        }
+        QJsonObject shareCipher =
+            BwAccount::cipherRequest(cipher, previousPassword, name, folderId, data, orgKey, userId);
+        previousPassword.fill(QChar(0));
+        shareCipher.insert(QStringLiteral("organizationId"), targetOrgId);
+        shareCipher.remove(QStringLiteral("key"));
+        QJsonArray colIds;
+        for (const QString &cid : selectedCollections)
+            colIds.append(cid);
+        const QJsonObject shareBody{
+            {QStringLiteral("cipher"), shareCipher},
+            {QStringLiteral("collectionIds"), colIds}
+        };
+        const BwResponse response =
+            request("PUT", QStringLiteral("/ciphers/%1/share").arg(ref.id), error, shareBody);
+        if (!response.ok())
+            return false;
+        QJsonObject updated = response.json;
+        if (updated.value(QStringLiteral("id")).toString().isEmpty()
+            && updated.value(QStringLiteral("cipher")).isObject()) {
+            updated = updated.value(QStringLiteral("cipher")).toObject();
+        }
+        if (!updated.value(QStringLiteral("id")).toString().isEmpty()) {
+            storeCipher(updated);
+        } else {
+            QString ignored;
+            syncCipher(ref.id, &ignored);
+        }
+        return true;
+    }
+
     const QJsonObject body =
         BwAccount::cipherRequest(cipher, previousPassword, name, folderId, data, *key, userId);
     previousPassword.fill(QChar(0));
@@ -740,6 +1084,25 @@ bool BitwardenVault::editEntry(const QString &oldPath, const QString &newPath, c
         QString ignored;
         syncCipher(ref.id, &ignored);
     }
+
+    if (!existingOrgId.isEmpty() && data.collectionsLoaded && !selectedCollections.isEmpty()) {
+        QStringList sortedOld = existingCollections;
+        QStringList sortedNew = selectedCollections;
+        sortedOld.sort();
+        sortedNew.sort();
+        if (sortedOld != sortedNew) {
+            QJsonArray colIds;
+            for (const QString &cid : selectedCollections)
+                colIds.append(cid);
+            const BwResponse colResp = request(
+                "PUT", QStringLiteral("/ciphers/%1/collections").arg(ref.id), error,
+                QJsonObject{{QStringLiteral("collectionIds"), colIds}});
+            if (!colResp.ok())
+                return false;
+            QString ignored;
+            syncCipher(ref.id, &ignored);
+        }
+    }
     return true;
 }
 
@@ -757,9 +1120,12 @@ bool BitwardenVault::removeEntry(const QString &entryPath, QString *error) const
 
     {
         const QMutexLocker locker(&m_mutex);
-        removeById(&m_state.ciphers, ref.id);
-        m_items.remove(ref.id);
-        m_index = buildBwIndex(m_items, m_folders);
+        QJsonObject trashed = findById(m_state.ciphers, ref.id);
+        if (!trashed.isEmpty()) {
+            trashed.insert(QStringLiteral("deletedDate"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
+            upsert(&m_state.ciphers, trashed);
+        }
+        rebuild();
     }
     persist();
     return true;
@@ -830,9 +1196,14 @@ bool BitwardenVault::removeGroup(const QString &group, QString *error) const {
 
 void BitwardenVault::close() {
     m_accessToken.clear();
-    const QMutexLocker locker(&m_mutex);
-    m_keys = BwKeys();
-    m_items.clear();
-    m_folders.clear();
-    m_index = BwIndex();
+    {
+        const QMutexLocker locker(&m_mutex);
+        m_keys = BwKeys();
+        m_items.clear();
+        m_folders.clear();
+        m_collections.clear();
+        m_trash.clear();
+        m_sends.clear();
+        m_index = BwIndex();
+    }
 }

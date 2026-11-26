@@ -1538,6 +1538,13 @@ QList<QPair<QString, KdbxEntry>> KdbxDatabase::allEntries(bool includeRecycled) 
     return all;
 }
 
+QString KdbxDatabase::createGroup(const QString &group) {
+    const QString trimmed = group.trimmed();
+    if (trimmed.isEmpty())
+        return I18n::t(QStringLiteral("keepass.corrupt"));
+    return d->ensureGroup(trimmed) ? QString() : I18n::t(QStringLiteral("keepass.corrupt"));
+}
+
 QString KdbxDatabase::addEntry(const QString &group, const KdbxEntry &data) {
     XNode *target = d->ensureGroup(group);
     if (!target)

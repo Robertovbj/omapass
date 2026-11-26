@@ -85,12 +85,16 @@ class FakeController : public QObject {
     Q_PROPERTY(QObject *browser READ browser CONSTANT)
     Q_PROPERTY(QVariantList entryRows READ entryRows CONSTANT)
     Q_PROPERTY(QString query MEMBER m_query NOTIFY queryChanged)
+    Q_PROPERTY(QString activeSection MEMBER m_activeSection NOTIFY queryChanged)
+    Q_PROPERTY(QVariantList sidebarItems MEMBER m_sidebarItems NOTIFY sidebarChanged)
     Q_PROPERTY(QVariantList openDatabases READ openDatabases CONSTANT)
     Q_PROPERTY(QString vaultLabel READ vaultLabel CONSTANT)
     Q_PROPERTY(bool passBackend MEMBER m_passBackend CONSTANT)
     Q_PROPERTY(bool bitwardenBackend MEMBER m_bitwardenBackend CONSTANT)
     Q_PROPERTY(bool onePasswordBackend MEMBER m_onePasswordBackend CONSTANT)
     Q_PROPERTY(QStringList groups MEMBER m_groups)
+    Q_PROPERTY(QVariantList bitwardenCollections MEMBER m_bitwardenCollections CONSTANT)
+    Q_PROPERTY(QVariantList bitwardenOrganizations MEMBER m_bitwardenOrganizations CONSTANT)
     Q_PROPERTY(bool pinConfigured MEMBER m_pinConfigured CONSTANT)
     Q_PROPERTY(bool syncing MEMBER m_syncing CONSTANT)
 
@@ -104,6 +108,11 @@ public:
                 QVariantMap{{"name", "Trabalho"}, {"kind", "pass"}, {"path", "/trabalho"}}};
     }
     Q_INVOKABLE void switchDatabase(const QString &path) { emit databaseSwitched(path); }
+    Q_INVOKABLE void switchDatabaseAt(int index) {
+        const QVariantList dbs = openDatabases();
+        if (index >= 0 && index < dbs.size())
+            emit databaseSwitched(dbs.at(index).toMap().value(QStringLiteral("path")).toString());
+    }
     Q_INVOKABLE void chooseAnotherDatabase() { emit databasePickerRequested(); }
     QString vaultLabel() const { return QStringLiteral("Cofre"); }
 
@@ -119,7 +128,19 @@ public:
     }
     Q_INVOKABLE bool isEmptyGroup(const QString &) const { return false; }
     Q_INVOKABLE bool isNoteEntry(const QString &) const { return false; }
+    Q_INVOKABLE QString entryKind(const QString &) const { return QStringLiteral("login"); }
+    Q_INVOKABLE QString entryLabelFor(const QString &entry) const { return entry; }
     Q_INVOKABLE bool createBitwardenSend(const QVariantMap &) { return true; }
+    Q_INVOKABLE bool createGroup(const QString &) { return true; }
+    Q_INVOKABLE bool createBitwardenCollection(const QString &, const QString &) { return true; }
+    Q_INVOKABLE void syncBitwarden() {}
+    Q_INVOKABLE void selectSection(const QString &section) { m_activeSection = section; emit queryChanged(); }
+    Q_INVOKABLE void toggleSidebarNode(const QString &) { emit sidebarChanged(); }
+    Q_INVOKABLE void setSidebarNodeExpanded(const QString &, bool) { emit sidebarChanged(); }
+    Q_INVOKABLE void restoreTrashEntry(const QString &) {}
+    Q_INVOKABLE void purgeTrashEntry(const QString &) {}
+    Q_INVOKABLE void deleteBitwardenSend(const QString &) {}
+    Q_INVOKABLE QString sendUrlFor(const QString &) const { return QString(); }
     Q_INVOKABLE QVariantMap entryMenuFields(const QString &entry) const {
         return {{QStringLiteral("hasPassword"), entry == entryPathAt(0)},
                 {QStringLiteral("hasUsername"), entry == entryPathAt(1)},
@@ -248,6 +269,7 @@ signals:
     void databaseSwitched(const QString &path);
     void databasePickerRequested();
     void queryChanged();
+    void sidebarChanged();
     void copied();
     void scanningChanged();
     void databasesChanged();
@@ -260,10 +282,14 @@ signals:
 
 private:
     QString m_query;
+    QString m_activeSection = QStringLiteral("all");
+    QVariantList m_sidebarItems;
     bool m_passBackend = false;
     bool m_bitwardenBackend = false;
     bool m_onePasswordBackend = false;
     QStringList m_groups;
+    QVariantList m_bitwardenCollections;
+    QVariantList m_bitwardenOrganizations;
     bool m_pinConfigured = false;
     bool m_syncing = false;
     bool m_scanning = true;

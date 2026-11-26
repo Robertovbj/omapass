@@ -30,8 +30,11 @@ struct BwAccountState {
     QString userKey;         // EncString, wrapped with the stretched master key
     QString privateKey;      // EncString, wrapped with the user key
     QString refreshToken;    // EncString, wrapped with the user key; empty when logged out
-    QJsonObject organizationKeys;  // organization id → RSA EncString of its key
-    QJsonArray folders;      // as /sync returns them
+    QJsonObject organizationKeys;   // organization id → RSA EncString of its key
+    QJsonObject organizationNames;  // organization id → plain display name
+    QJsonArray folders;             // as /sync returns them
+    QJsonArray collections;  // organisation collections as /sync returns them
+    QJsonArray sends;        // Bitwarden Sends as /sync returns them
     QJsonArray ciphers;
 };
 
@@ -81,11 +84,17 @@ void applySync(BwAccountState *state, const QJsonObject &sync);
 std::optional<BwKey> cipherKey(const QJsonObject &cipher, const BwKeys &keys);
 
 // One cipher decrypted into the shape the rest of omapass reads (that of
-// `bw list items`). Only live logins: empty for other types, items in the
-// trash or ones that do not decrypt.
-std::optional<QJsonObject> decryptCipher(const QJsonObject &cipher, const BwKeys &keys);
+// `bw list items`). Empty for unsupported types, items in the trash (unless
+// `includeDeleted` is true) or ones that do not decrypt.
+std::optional<QJsonObject> decryptCipher(const QJsonObject &cipher, const BwKeys &keys,
+                                         bool includeDeleted = false);
 // A folder's name; empty when it does not decrypt.
 QString decryptFolder(const QJsonObject &folder, const BwKey &user);
+// A collection's name; empty when its organization key is missing or it fails.
+QString decryptCollection(const QJsonObject &collection, const BwKeys &keys);
+// A Bitwarden Send decrypted for listing; nullopt if it cannot be opened.
+std::optional<QJsonObject> decryptSend(const QJsonObject &send, const BwKey &user,
+                                       const QString &server);
 
 // The body of a create (`encrypted` empty) or edit (`encrypted` the cipher
 // as the server has it) of a login: name, folder, username, password, TOTP,

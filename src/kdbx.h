@@ -84,6 +84,7 @@ public:
     QString editEntry(const QString &oldPath, const QString &group, const KdbxEntry &entry);
     // To the recycle bin when the database has one on, deleted otherwise.
     QString removeEntry(const QString &path);
+    QString createGroup(const QString &path);
     QString renameGroup(const QString &oldPath, const QString &newName);
 
     // Custom icons, as KeePassXC keeps them: PNGs in the database's icon

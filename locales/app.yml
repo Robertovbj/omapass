@@ -556,6 +556,114 @@ bitwarden.wait_sync:
 bitwarden.syncing:
   pt-BR: "Sincronizando com o Bitwarden…"
   en: "Syncing with Bitwarden…"
+bitwarden.synced:
+  pt-BR: "Cofre do Bitwarden sincronizado."
+  en: "Bitwarden vault synced."
+bitwarden.restored:
+  pt-BR: "Item restaurado da lixeira."
+  en: "Item restored from trash."
+bitwarden.restore_error:
+  pt-BR: "Erro ao restaurar item: %{err}"
+  en: "Error restoring item: %{err}"
+bitwarden.purged:
+  pt-BR: "Item excluído permanentemente."
+  en: "Item permanently deleted."
+bitwarden.send_deleted:
+  pt-BR: "Bitwarden Send excluído."
+  en: "Bitwarden Send deleted."
+sidebar.all:
+  pt-BR: "Todos os itens"
+  en: "All items"
+sidebar.trash:
+  pt-BR: "Lixeira"
+  en: "Trash"
+sidebar.sends:
+  pt-BR: "Sends"
+  en: "Sends"
+sidebar.collections:
+  pt-BR: "COLEÇÕES"
+  en: "COLLECTIONS"
+sidebar.groups:
+  pt-BR: "GRUPOS"
+  en: "GROUPS"
+sidebar.new_group:
+  pt-BR: "Novo grupo"
+  en: "New group"
+sidebar.new_collection:
+  pt-BR: "Nova coleção"
+  en: "New collection"
+sidebar.group_name_label:
+  pt-BR: "Nome do grupo"
+  en: "Group name"
+sidebar.group_name_placeholder:
+  pt-BR: "Ex.: Trabalho/Infra"
+  en: "e.g. Work/Infra"
+sidebar.collection_name_label:
+  pt-BR: "Nome da coleção"
+  en: "Collection name"
+sidebar.collection_name_placeholder:
+  pt-BR: "Ex.: Engenharia/Produção"
+  en: "e.g. Engineering/Production"
+sidebar.organization_label:
+  pt-BR: "Organização"
+  en: "Organization"
+app.group_created:
+  pt-BR: "Grupo criado."
+  en: "Group created."
+app.group_invalid:
+  pt-BR: "Informe um nome válido."
+  en: "Enter a valid name."
+app.group_create_error:
+  pt-BR: "Não foi possível criar o grupo."
+  en: "Could not create the group."
+app.group_not_found:
+  pt-BR: "Grupo não encontrado. Crie o grupo pelo botão + na barra lateral."
+  en: "Group not found. Create it using the + button in the sidebar."
+bitwarden.collection_created:
+  pt-BR: "Coleção criada."
+  en: "Collection created."
+bitwarden.org_key_missing:
+  pt-BR: "Chave da organização indisponível."
+  en: "Organization key unavailable."
+common.collections_label:
+  pt-BR: "Coleções"
+  en: "Collections"
+common.ssh_public_key_label:
+  pt-BR: "Chave pública SSH"
+  en: "SSH public key"
+ui.help_sidebar:
+  pt-BR: "Mostrar ou ocultar menu lateral"
+  en: "Toggle sidebar"
+ui.help_sync:
+  pt-BR: "Sincronizar cofre Bitwarden"
+  en: "Sync Bitwarden vault"
+ui.context_restore:
+  pt-BR: "Restaurar da lixeira"
+  en: "Restore from trash"
+ui.context_purge:
+  pt-BR: "Excluir permanentemente"
+  en: "Delete permanently"
+ui.context_copy_send_url:
+  pt-BR: "Copiar link do Send"
+  en: "Copy Send link"
+common.custom_fields_label:
+  pt-BR: "Campos personalizados"
+  en: "Custom fields"
+common.add_custom_field:
+  pt-BR: "+ Adicionar campo"
+  en: "+ Add field"
+common.field_name:
+  pt-BR: "Nome"
+  en: "Name"
+common.field_value:
+  pt-BR: "Valor"
+  en: "Value"
+common.field_hidden:
+  pt-BR: "Oculto"
+  en: "Hidden"
+common.field_restricted:
+  pt-BR: "Oculto (sem permissão)"
+  en: "Hidden (no permission)"
 bitwarden.sync_error:
   pt-BR: "Falha ao sincronizar com o Bitwarden (mostrando a cópia local): %{err}"
   en: "Bitwarden sync failed (showing the local copy): %{err}"
@@ -910,6 +1018,12 @@ ui.type_ssh:
 ui.type_note:
   pt-BR: "nota"
   en: "note"
+ui.type_card:
+  pt-BR: "cartão"
+  en: "card"
+ui.type_identity:
+  pt-BR: "identidade"
+  en: "identity"
 ui.type_group:
   pt-BR: "grupo"
   en: "group"
@@ -922,9 +1036,12 @@ ui.column_name:
 ui.column_group:
   pt-BR: "Grupo"
   en: "Group"
+ui.column_collection:
+  pt-BR: "Coleções"
+  en: "Collections"
 ui.column_login:
-  pt-BR: "Login"
-  en: "Login"
+  pt-BR: "Usuário"
+  en: "Username"
 ui.column_url:
   pt-BR: "URL"
   en: "URL"
@@ -940,6 +1057,12 @@ ui.mode_search_title:
 ui.confirm_delete:
   pt-BR: "Excluir “%{entry}”? Isso não pode ser desfeito."
   en: "Delete “%{entry}”? This can’t be undone."
+ui.confirm_purge:
+  pt-BR: "Excluir “%{entry}” permanentemente da lixeira? Isso não pode ser desfeito."
+  en: "Permanently delete “%{entry}” from trash? This can’t be undone."
+ui.confirm_delete_send:
+  pt-BR: "Excluir o Send “%{entry}”? O link deixará de funcionar."
+  en: "Delete Send “%{entry}”? The link will stop working."
 ui.rename_group_title:
   pt-BR: "Renomear grupo"
   en: "Rename group"
@@ -1044,6 +1167,84 @@ common.notes_label:
 common.note_label:
   pt-BR: "Nota segura"
   en: "Secure note"
+common.card_label:
+  pt-BR: "Cartão"
+  en: "Card"
+common.identity_label:
+  pt-BR: "Identidade"
+  en: "Identity"
+card.cardholder_label:
+  pt-BR: "Nome do titular"
+  en: "Cardholder name"
+card.brand_label:
+  pt-BR: "Bandeira"
+  en: "Brand"
+card.number_label:
+  pt-BR: "Número do cartão"
+  en: "Card number"
+card.exp_month_label:
+  pt-BR: "Mês de validade"
+  en: "Expiration month"
+card.exp_year_label:
+  pt-BR: "Ano de validade"
+  en: "Expiration year"
+card.expiration_label:
+  pt-BR: "Validade"
+  en: "Expiration"
+card.code_label:
+  pt-BR: "Código de segurança (CVV)"
+  en: "Security code (CVV)"
+identity.title_label:
+  pt-BR: "Tratamento"
+  en: "Title"
+identity.first_name_label:
+  pt-BR: "Nome"
+  en: "First name"
+identity.middle_name_label:
+  pt-BR: "Nome do meio"
+  en: "Middle name"
+identity.last_name_label:
+  pt-BR: "Sobrenome"
+  en: "Last name"
+identity.company_label:
+  pt-BR: "Empresa"
+  en: "Company"
+identity.email_label:
+  pt-BR: "E-mail"
+  en: "Email"
+identity.phone_label:
+  pt-BR: "Telefone"
+  en: "Phone"
+identity.address1_label:
+  pt-BR: "Endereço 1"
+  en: "Address 1"
+identity.address2_label:
+  pt-BR: "Endereço 2"
+  en: "Address 2"
+identity.address3_label:
+  pt-BR: "Endereço 3"
+  en: "Address 3"
+identity.city_label:
+  pt-BR: "Cidade"
+  en: "City"
+identity.state_label:
+  pt-BR: "Estado"
+  en: "State / Province"
+identity.postal_code_label:
+  pt-BR: "CEP"
+  en: "Postal code"
+identity.country_label:
+  pt-BR: "País"
+  en: "Country"
+identity.ssn_label:
+  pt-BR: "CPF / SSN"
+  en: "SSN / Tax ID"
+identity.passport_label:
+  pt-BR: "Passaporte"
+  en: "Passport number"
+identity.license_label:
+  pt-BR: "CNH / Documento"
+  en: "License number"
 common.group_label:
   pt-BR: "Grupo"
   en: "Group"

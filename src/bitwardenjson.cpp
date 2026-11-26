@@ -91,7 +91,7 @@ BwIndex buildBwIndex(const QHash<QString, QJsonObject> &items, const QHash<QStri
 
     for (const QJsonObject &item : items) {
         const int type = item.value(QStringLiteral("type")).toInt();
-        if (type != 1 && type != 2 && type != 5)
+        if (type < 1 || type > 5)
             continue;
         const QJsonValue deleted = item.value(QStringLiteral("deletedDate"));
         if (!deleted.isNull() && !deleted.isUndefined())
@@ -125,12 +125,71 @@ BwIndex buildBwIndex(const QHash<QString, QJsonObject> &items, const QHash<QStri
     return index;
 }
 
+namespace {
+
+void populateCommonItemFields(const QJsonObject &item, EntryData *data) {
+    data->viewPassword = item.value(QStringLiteral("viewPassword")).toBool(true);
+    data->customFieldsLoaded = true;
+    const QJsonArray fields = item.value(QStringLiteral("fields")).toArray();
+    for (const QJsonValue &fv : fields) {
+        const QJsonObject fo = fv.toObject();
+        CustomField cf;
+        cf.type = fo.value(QStringLiteral("type")).toInt();
+        cf.name = fo.value(QStringLiteral("name")).toString();
+        cf.value = Secret(fo.value(QStringLiteral("value")).toString());
+        data->customFields.append(cf);
+    }
+}
+
+}
+
 EntryData bwEntryData(const QJsonObject &item) {
     const int type = item.value(QStringLiteral("type")).toInt();
     if (type == 2) {
         EntryData data;
         data.isNote = true;
         data.notes = item.value(QStringLiteral("notes")).toString();
+        populateCommonItemFields(item, &data);
+        return data;
+    }
+    if (type == 3) {
+        const QJsonObject card = item.value(QStringLiteral("card")).toObject();
+        EntryData data;
+        data.isCard = true;
+        data.card.cardholderName = card.value(QStringLiteral("cardholderName")).toString();
+        data.card.brand = card.value(QStringLiteral("brand")).toString();
+        data.card.number = Secret(card.value(QStringLiteral("number")).toString());
+        data.card.expMonth = card.value(QStringLiteral("expMonth")).toString();
+        data.card.expYear = card.value(QStringLiteral("expYear")).toString();
+        data.card.code = Secret(card.value(QStringLiteral("code")).toString());
+        data.notes = item.value(QStringLiteral("notes")).toString();
+        populateCommonItemFields(item, &data);
+        return data;
+    }
+    if (type == 4) {
+        const QJsonObject id = item.value(QStringLiteral("identity")).toObject();
+        EntryData data;
+        data.isIdentity = true;
+        data.identity.title = id.value(QStringLiteral("title")).toString();
+        data.identity.firstName = id.value(QStringLiteral("firstName")).toString();
+        data.identity.middleName = id.value(QStringLiteral("middleName")).toString();
+        data.identity.lastName = id.value(QStringLiteral("lastName")).toString();
+        data.identity.company = id.value(QStringLiteral("company")).toString();
+        data.identity.email = id.value(QStringLiteral("email")).toString();
+        data.identity.phone = id.value(QStringLiteral("phone")).toString();
+        data.identity.address1 = id.value(QStringLiteral("address1")).toString();
+        data.identity.address2 = id.value(QStringLiteral("address2")).toString();
+        data.identity.address3 = id.value(QStringLiteral("address3")).toString();
+        data.identity.city = id.value(QStringLiteral("city")).toString();
+        data.identity.state = id.value(QStringLiteral("state")).toString();
+        data.identity.postalCode = id.value(QStringLiteral("postalCode")).toString();
+        data.identity.country = id.value(QStringLiteral("country")).toString();
+        data.identity.ssn = Secret(id.value(QStringLiteral("ssn")).toString());
+        data.identity.passportNumber = Secret(id.value(QStringLiteral("passportNumber")).toString());
+        data.identity.licenseNumber = Secret(id.value(QStringLiteral("licenseNumber")).toString());
+        data.identity.username = id.value(QStringLiteral("username")).toString();
+        data.notes = item.value(QStringLiteral("notes")).toString();
+        populateCommonItemFields(item, &data);
         return data;
     }
     if (type == 5) {
@@ -148,6 +207,7 @@ EntryData bwEntryData(const QJsonObject &item) {
         data.password = Secret(key);
         data.sshPublicKey = item.value(QStringLiteral("sshKey")).toObject().value(QStringLiteral("publicKey")).toString();
         data.notes = item.value(QStringLiteral("notes")).toString();
+        populateCommonItemFields(item, &data);
         return data;
     }
 
@@ -166,6 +226,7 @@ EntryData bwEntryData(const QJsonObject &item) {
     }
     data.notes = item.value(QStringLiteral("notes")).toString();
     data.otp = Secret(login.value(QStringLiteral("totp")).toString());
+    populateCommonItemFields(item, &data);
     return data;
 }
 

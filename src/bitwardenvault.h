@@ -30,6 +30,36 @@
 //   nothing.
 // - While the vault is open its items, passwords included, are held in
 //   memory; they are dropped when it is locked.
+struct BwCollectionItem {
+    QString id;
+    QString name;
+    QString organizationId;
+};
+
+struct BwOrganizationItem {
+    QString id;
+    QString name;
+};
+
+struct BwTrashItem {
+    QString id;
+    QString name;
+    QString type;
+    QString username;
+    QString deletedDate;
+};
+
+struct BwSendItem {
+    QString id;
+    QString name;
+    int type = 0;  // 0 = Text, 1 = File
+    QString url;
+    int accessCount = 0;
+    int maxAccessCount = 0;
+    QString deletionDate;
+    bool disabled = false;
+};
+
 struct BwSendOptions {
     int type = 0;  // 0 = Text, 1 = File
     QString name;
@@ -89,6 +119,16 @@ public:
     // and returns the shareable URL.
     bool createSend(const BwSendOptions &options, QString *shareUrl, QString *error) const;
 
+    // Collections, Organizations, Trash, and Sends for the sidebar views.
+    QVector<BwCollectionItem> collections() const;
+    QVector<BwOrganizationItem> organizations() const;
+    QVector<BwTrashItem> trashItems() const;
+    QVector<BwSendItem> sends() const;
+    bool createCollection(const QString &organizationId, const QString &name, QString *error) const;
+    bool restoreCipher(const QString &cipherId, QString *error) const;
+    bool purgeCipher(const QString &cipherId, QString *error) const;
+    bool deleteSend(const QString &sendId, QString *error) const;
+
     void list(QStringList *entries, QStringList *groups) const override;
     QHash<QString, EntryMeta> entryMeta() const override;
     bool fetchSshKey(const QString &entryPath, const QString &id, Secret *key,
@@ -101,6 +141,7 @@ public:
     bool editEntry(const QString &oldPath, const QString &newPath, const QString &group,
                    const EntryData &data, QString *error) const override;
     bool removeEntry(const QString &entryPath, QString *error) const override;
+    bool createGroup(const QString &group, QString *error) const override;
     bool renameGroup(const QString &oldGroup, const QString &newName, QString *error) const override;
     bool removeGroup(const QString &group, QString *error) const override;
     void close() override;
@@ -139,6 +180,9 @@ private:
 
     mutable QHash<QString, QJsonObject> m_items;  // id → decrypted item
     mutable QHash<QString, QString> m_folders;    // id → name
+    mutable QVector<BwCollectionItem> m_collections;
+    mutable QVector<BwTrashItem> m_trash;
+    mutable QVector<BwSendItem> m_sends;
     mutable BwIndex m_index;
     mutable int m_undecryptable = 0;              // left out by the last rebuild
 };

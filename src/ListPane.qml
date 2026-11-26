@@ -103,7 +103,11 @@ FocusScope {
     signal deleteRequested()
     signal generateRequested()
     signal sendRequested()
+    signal syncRequested()
+    signal toggleSidebarRequested()
+    signal focusSidebarRequested()
     signal pinToggleRequested()
+    signal copyPasswordRequested()
     signal copyUsernameRequested()
     signal copyOtpRequested()
     signal copyUrlRequested()
@@ -173,25 +177,25 @@ FocusScope {
                 return false;
             pane.headingMenuRequested(pane.width / 2, headerBar.height);
             return true;
-        case Qt.Key_D: halfPageDown(); return true;
-        case Qt.Key_U: halfPageUp(); return true;
-        case Qt.Key_N: next(); return true;
-        case Qt.Key_P: previous(); return true;
-        case Qt.Key_A: pane.addRequested(); return true;
+        case Qt.Key_N: pane.addRequested(); return true;
         case Qt.Key_E: pane.editRequested(); return true;
         case Qt.Key_X: pane.deleteRequested(); return true;
         case Qt.Key_G: pane.generateRequested(); return true;
+        case Qt.Key_R: pane.syncRequested(); return true;
         case Qt.Key_S:
             if (event.modifiers & Qt.ShiftModifier) {
                 pane.sendRequested();
-                return true;
+            } else {
+                pane.toggleSidebarRequested();
             }
-            return false;
+            return true;
         case Qt.Key_I: pane.pinToggleRequested(); return true;
-        // B for the login as in KeePassXC; U, its key for the URL, already
-        // scrolls half a page here, so L (link) copies it and Shift+L opens
-        // it. Ctrl+O is taken by the settings, application-wide.
-        case Qt.Key_B: pane.copyUsernameRequested(); return true;
+        case Qt.Key_C:
+            if (searchInput.activeFocus && searchInput.selectedText.length > 0)
+                return false;
+            pane.copyPasswordRequested();
+            return true;
+        case Qt.Key_U: pane.copyUsernameRequested(); return true;
         // T for the one-time password, as in KeePassXC.
         case Qt.Key_T: pane.copyOtpRequested(); return true;
         case Qt.Key_L:
@@ -677,12 +681,24 @@ FocusScope {
                 pane.quitRequested();
                 break;
             case Qt.Key_J:
+            case Qt.Key_N:
             case Qt.Key_Down:
                 pane.next();
                 break;
             case Qt.Key_K:
+            case Qt.Key_P:
             case Qt.Key_Up:
                 pane.previous();
+                break;
+            case Qt.Key_D:
+                pane.halfPageDown();
+                break;
+            case Qt.Key_U:
+                pane.halfPageUp();
+                break;
+            case Qt.Key_H:
+            case Qt.Key_Left:
+                pane.focusSidebarRequested();
                 break;
             case Qt.Key_Return:
             case Qt.Key_Enter:

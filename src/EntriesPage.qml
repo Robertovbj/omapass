@@ -7,11 +7,15 @@ FocusScope {
     id: page
 
     property string mode: "list"
+    property bool sidebarOpen: false
+    property bool sidebarFocused: false
+    property int sidebarCursor: 0
     property string selectedEntry: ""
+    property string selectedEntryLabel: ""
     property string iconEntry: ""
     property string iconRequest: ""
 
-    readonly property bool menuOpen: actionsMenu.opened || databasesMenu.opened
+    readonly property bool menuOpen: actionsMenu.opened || databasesMenu.opened || sidebarAddMenu.opened
 
     Binding {
         target: window
@@ -45,7 +49,8 @@ FocusScope {
             return;
         }
         page.iconEntry = entry;
-        page.iconRequest = "entryIcon/" + JSON.stringify([controller.openDatabases[0].path, entry]);
+        const activeDb = controller.openDatabases.find(db => db.active) || controller.openDatabases[0];
+        page.iconRequest = "entryIcon/" + JSON.stringify([activeDb.path, entry]);
         if (filePicker.available)
             filePicker.openFile(page.iconRequest, i18n.t("ui.icon_pick_title"),
                                 [{ "name": i18n.t("ui.icon_filter"),
@@ -118,30 +123,342 @@ FocusScope {
         action(entry);
     }
 
-    function confirmDelete() {
-        const entry = currentEntry();
+    function confirmDelete(explicitEntry) {
+        const entry = (explicitEntry !== undefined && explicitEntry.length > 0) ? explicitEntry : currentEntry();
         if (entry.length === 0) {
             controller.showMessage(i18n.t("app.no_entry_selected"), true);
             return;
         }
 
         page.selectedEntry = entry;
+        page.selectedEntryLabel = (entry.startsWith("trash:") || entry.startsWith("send:"))
+            ? controller.entryLabelFor(entry) : entry;
         page.mode = "confirmDelete";
+    }
+
+    function focusSidebar() {
+        if (!page.sidebarOpen)
+            return;
+        const items = controller.sidebarItems;
+        let idx = -1;
+        for (let i = 0; i < items.length; ++i) {
+            if (items[i].id === controller.activeSection) {
+                idx = i;
+                break;
+            }
+        }
+        if (idx < 0) {
+            for (let i = 0; i < items.length; ++i) {
+                if (items[i].kind !== "header") {
+                    idx = i;
+                    break;
+                }
+            }
+        }
+        if (idx >= 0)
+            page.sidebarCursor = idx;
+        page.sidebarFocused = true;
+        sidebarList.forceActiveFocus();
+        Qt.callLater(sidebarList.forceActiveFocus);
+    }
+
+    function leaveSidebar() {
+        page.sidebarFocused = false;
+        pane.claimKeyboard();
+    }
+
+    function moveSidebarCursor(delta) {
+        const items = controller.sidebarItems;
+        if (items.length === 0)
+            return;
+        let idx = page.sidebarCursor;
+        for (let step = 0; step < items.length; ++step) {
+            idx = (idx + delta + items.length) % items.length;
+            if (items[idx].kind !== "header") {
+                page.sidebarCursor = idx;
+                sidebarList.positionViewAtIndex(idx, ListView.Contain);
+                return;
+            }
+        }
+    }
+
+    Rectangle {
+        id: sidebar
+        objectName: "entriesSidebar"
+        visible: page.sidebarOpen
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.left: parent.left
+        width: visible ? Math.round(230 * systemTheme.textScale) : 0
+        color: theme.panel
+
+        Rectangle {
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.right: parent.right
+            width: 1
+            color: theme.border
+        }
+
+        ListView {
+            id: sidebarList
+            objectName: "sidebarList"
+            anchors.fill: parent
+            anchors.margins: Math.round(10 * systemTheme.textScale)
+            anchors.rightMargin: Math.round(11 * systemTheme.textScale)
+            anchors.bottomMargin: Math.round(50 * systemTheme.textScale)
+            clip: true
+            spacing: Math.round(2 * systemTheme.textScale)
+            model: controller.sidebarItems
+            focus: page.sidebarFocused
+
+            onCountChanged: {
+                if (page.sidebarCursor >= count)
+                    page.sidebarCursor = Math.max(0, count - 1);
+            }
+
+            Keys.onPressed: function(event) {
+                if (!page.sidebarOpen || !page.sidebarFocused)
+                    return;
+                if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_S
+                    && !(event.modifiers & Qt.ShiftModifier)) {
+                    page.sidebarOpen = false;
+                    page.leaveSidebar();
+                    event.accepted = true;
+                    return;
+                }
+                if (event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))
+                    return;
+
+                const items = controller.sidebarItems;
+                const item = (page.sidebarCursor >= 0 && page.sidebarCursor < items.length)
+                    ? items[page.sidebarCursor] : null;
+
+                switch (event.key) {
+                case Qt.Key_Escape:
+                case Qt.Key_Tab:
+                    page.leaveSidebar();
+                    event.accepted = true;
+                    return;
+                case Qt.Key_J:
+                case Qt.Key_N:
+                case Qt.Key_Down:
+                    page.moveSidebarCursor(1);
+                    event.accepted = true;
+                    return;
+                case Qt.Key_K:
+                case Qt.Key_P:
+                case Qt.Key_Up:
+                    page.moveSidebarCursor(-1);
+                    event.accepted = true;
+                    return;
+                case Qt.Key_L:
+                case Qt.Key_Right:
+                    if (item && item.hasChildren && !item.expanded) {
+                        controller.setSidebarNodeExpanded(item.expandKey, true);
+                    } else {
+                        if (item && item.id)
+                            controller.selectSection(item.id);
+                        page.leaveSidebar();
+                    }
+                    event.accepted = true;
+                    return;
+                case Qt.Key_H:
+                case Qt.Key_Left:
+                    if (item && item.hasChildren && item.expanded) {
+                        controller.setSidebarNodeExpanded(item.expandKey, false);
+                    } else if (item && item.parentId && item.parentId.length > 0) {
+                        for (let i = 0; i < items.length; ++i) {
+                            if (items[i].id === item.parentId) {
+                                page.sidebarCursor = i;
+                                sidebarList.positionViewAtIndex(i, ListView.Contain);
+                                break;
+                            }
+                        }
+                    }
+                    event.accepted = true;
+                    return;
+                case Qt.Key_Space:
+                    if (item) {
+                        if (item.hasChildren)
+                            controller.toggleSidebarNode(item.expandKey);
+                        else if (item.id)
+                            controller.selectSection(item.id);
+                    }
+                    event.accepted = true;
+                    return;
+                case Qt.Key_Return:
+                case Qt.Key_Enter:
+                    if (item && item.id)
+                        controller.selectSection(item.id);
+                    page.leaveSidebar();
+                    event.accepted = true;
+                    return;
+                }
+            }
+
+            delegate: Item {
+                required property int index
+                required property var modelData
+                width: ListView.view.width
+                height: modelData.kind === "header"
+                    ? Math.round(28 * systemTheme.textScale)
+                    : Math.round(32 * systemTheme.textScale)
+
+                Text {
+                    visible: modelData.kind === "header"
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.leftMargin: Math.round(8 * systemTheme.textScale)
+                    anchors.bottomMargin: Math.round(4 * systemTheme.textScale)
+                    text: modelData.label
+                    color: theme.muted
+                    font.pixelSize: Math.round(11 * systemTheme.textScale)
+                    font.weight: Font.DemiBold
+                    elide: Text.ElideRight
+                }
+
+                Rectangle {
+                    visible: modelData.kind !== "header"
+                    anchors.fill: parent
+                    radius: Math.min(4, theme.radius)
+                    readonly property bool selected: controller.activeSection === modelData.id
+                    readonly property bool focusedRow: page.sidebarFocused && page.sidebarCursor === index
+                    readonly property int indentPx: Math.round((modelData.depth || 0) * 14 * systemTheme.textScale)
+                    color: focusedRow ? theme.selection
+                         : selected ? Qt.rgba(theme.selection.r, theme.selection.g, theme.selection.b, 0.45)
+                         : (hoverArea.containsMouse ? theme.hover : "transparent")
+                    border.width: selected && !focusedRow ? 1 : 0
+                    border.color: theme.accent
+
+                    Item {
+                        id: chevronBox
+                        visible: !!(modelData.hasChildren)
+                        anchors.left: parent.left
+                        anchors.leftMargin: Math.round(6 * systemTheme.textScale) + parent.indentPx
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Math.round(18 * systemTheme.textScale)
+                        height: parent.height
+                        z: 2
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: modelData.expanded ? "▾" : "▸"
+                            color: parent.parent.focusedRow ? theme.selectionText : theme.muted
+                            font.pixelSize: Math.round(12 * systemTheme.textScale)
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                page.sidebarCursor = index;
+                                controller.toggleSidebarNode(modelData.expandKey);
+                            }
+                        }
+                    }
+
+                    Text {
+                        anchors.left: parent.left
+                        anchors.right: countLabel.visible ? countLabel.left : parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.leftMargin: Math.round((modelData.hasChildren ? 26 : 12) * systemTheme.textScale) + parent.indentPx
+                        anchors.rightMargin: Math.round(6 * systemTheme.textScale)
+                        text: modelData.label
+                        color: parent.focusedRow ? theme.selectionText : theme.foreground
+                        font.pixelSize: Math.round(13 * systemTheme.textScale)
+                        font.weight: parent.selected || parent.focusedRow ? Font.DemiBold : Font.Normal
+                        elide: Text.ElideRight
+                    }
+
+                    Text {
+                        id: countLabel
+                        visible: modelData.count !== undefined
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.rightMargin: Math.round(10 * systemTheme.textScale)
+                        text: modelData.count !== undefined ? String(modelData.count) : ""
+                        color: parent.focusedRow ? theme.selectionText : theme.muted
+                        font.pixelSize: Math.round(11 * systemTheme.textScale)
+                    }
+
+                    MouseArea {
+                        id: hoverArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            page.sidebarCursor = index;
+                            controller.selectSection(modelData.id);
+                            page.leaveSidebar();
+                        }
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            id: sidebarAddButton
+            objectName: "sidebarAddButton"
+            visible: !controller.onePasswordBackend
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.rightMargin: Math.round(12 * systemTheme.textScale)
+            anchors.bottomMargin: Math.round(10 * systemTheme.textScale)
+            width: Math.round(32 * systemTheme.textScale)
+            height: width
+            radius: Math.min(6, theme.radius)
+            color: sidebarAddHover.containsMouse ? theme.accent : theme.background
+            border.width: 1
+            border.color: sidebarAddHover.containsMouse ? theme.accent : theme.border
+            z: 5
+
+            Text {
+                anchors.centerIn: parent
+                text: "+"
+                color: sidebarAddHover.containsMouse ? theme.selectionText : theme.foreground
+                font.pixelSize: Math.round(18 * systemTheme.textScale)
+                font.weight: Font.Medium
+            }
+
+            MouseArea {
+                id: sidebarAddHover
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    const pt = sidebarAddButton.mapToItem(page, sidebarAddButton.width, 0);
+                    const gap = Math.round(6 * systemTheme.textScale);
+                    const margin = Math.round(8 * systemTheme.textScale);
+                    sidebarAddMenu.anchorX = Math.max(margin, pt.x - sidebarAddMenu.width);
+                    sidebarAddMenu.anchorY = Math.max(margin, pt.y - sidebarAddMenu.height - gap);
+                    sidebarAddMenu.selected = 0;
+                    sidebarAddMenu.open();
+                }
+            }
+        }
     }
 
     ListPane {
         id: pane
         objectName: "entriesPane"
-        anchors.fill: parent
-        focus: page.mode === "list" && !page.menuOpen
-        acceptsKeys: page.mode === "list" && !page.menuOpen
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.left: sidebar.right
+        anchors.right: parent.right
+        focus: page.mode === "list" && !page.menuOpen && !page.sidebarFocused
+        acceptsKeys: page.mode === "list" && !page.menuOpen && !page.sidebarFocused
+        onActiveFocusChanged: if (activeFocus && page.sidebarFocused) page.sidebarFocused = false
 
         searchPlaceholder: i18n.t("ui.search_title")
         model: controller.entryRows
         columns: [
             { "key": "typeLabel", "title": i18n.t("ui.column_type"), "weight": 1 },
             { "key": "name", "title": i18n.t("ui.column_name"), "weight": 3 },
-            { "key": "group", "title": i18n.t("ui.column_group"), "weight": 2.5, "fit": true },
+            controller.bitwardenBackend
+                ? { "key": "collections", "title": i18n.t("ui.column_collection"), "weight": 2.5, "fit": true }
+                : { "key": "group", "title": i18n.t("ui.column_group"), "weight": 2.5, "fit": true },
             { "key": "username", "title": i18n.t("ui.column_login"), "weight": 2 },
             { "key": "url", "title": i18n.t("ui.column_url"), "weight": 2.5 }
         ]
@@ -191,18 +508,71 @@ FocusScope {
             const entry = page.currentEntry();
             if (entry.length === 0)
                 return;
-            if (controller.isNoteEntry(entry))
+            if (entry.startsWith("send:")) {
+                const url = controller.sendUrlFor(entry);
+                if (url.length > 0)
+                    controller.copyText(url);
+                return;
+            }
+            if (entry.startsWith("trash:")) {
+                actionsMenu.anchorX = -1;
+                actionsMenu.anchorY = -1;
+                actionsMenu.selected = 0;
+                actionsMenu.entry = entry;
+                actionsMenu.fields = ({});
+                actionsMenu.sshOptions = ({});
+                actionsMenu.open();
+                return;
+            }
+            const kind = controller.entryKind(entry);
+            if (kind === "note" || kind === "card" || kind === "identity")
                 page.openInfo();
             else
                 controller.copyPassword(entry);
         }
-        onDetailsRequested: page.openInfo()
+        onDetailsRequested: {
+            const entry = page.currentEntry();
+            if (!entry.startsWith("send:") && !entry.startsWith("trash:"))
+                page.openInfo();
+        }
         onAddRequested: page.openAddForm()
-        onEditRequested: page.editEntry(page.currentEntry())
+        onEditRequested: {
+            const entry = page.currentEntry();
+            if (!entry.startsWith("send:") && !entry.startsWith("trash:"))
+                page.editEntry(entry);
+        }
         onDeleteRequested: page.confirmDelete()
         onGenerateRequested: page.mode = "generate"
         onSendRequested: if (controller.bitwardenBackend) page.mode = "send"
+        onSyncRequested: controller.syncBitwarden()
+        onToggleSidebarRequested: {
+            if (!page.sidebarOpen) {
+                page.sidebarOpen = true;
+                page.focusSidebar();
+            } else if (!page.sidebarFocused) {
+                page.focusSidebar();
+            } else {
+                page.sidebarOpen = false;
+                page.leaveSidebar();
+            }
+        }
+        onFocusSidebarRequested: if (page.sidebarOpen) page.focusSidebar()
         onPinToggleRequested: page.togglePin()
+        onCopyPasswordRequested: {
+            const entry = page.currentEntry();
+            if (entry.length === 0) {
+                controller.showMessage(i18n.t("app.no_entry_selected"), true);
+                return;
+            }
+            if (entry.startsWith("send:")) {
+                const url = controller.sendUrlFor(entry);
+                if (url.length > 0)
+                    controller.copyText(url);
+                return;
+            }
+            if (!entry.startsWith("trash:"))
+                controller.copyPassword(entry);
+        }
         onCopyUsernameRequested: page.withEntry(controller.copyUsername)
         onCopyOtpRequested: page.withEntry(controller.copyOtp)
         onCopyUrlRequested: page.withEntry(controller.copyUrl)
@@ -251,6 +621,10 @@ FocusScope {
         property var fields: ({})
         property var sshOptions: ({})
         readonly property var groups: {
+            if (entry.startsWith("trash:"))
+                return [["restoreTrash", "purgeTrash"]];
+            if (entry.startsWith("send:"))
+                return [["copySendUrl", "deleteSend"]];
             const entryActions = [];
             if (fields.hasPassword)
                 entryActions.push("copyPassword");
@@ -278,6 +652,10 @@ FocusScope {
             "info": i18n.t("ui.context_info"),
             "edit": i18n.t("ui.context_edit"),
             "delete": i18n.t("ui.context_delete"),
+            "restoreTrash": i18n.t("ui.context_restore"),
+            "purgeTrash": i18n.t("ui.context_purge"),
+            "copySendUrl": i18n.t("ui.context_copy_send_url"),
+            "deleteSend": i18n.t("ui.context_delete"),
             "addSsh": i18n.t("ssh.add"),
             "removeSsh": i18n.t("ssh.remove"),
             "configureSsh": i18n.t("ssh.options")
@@ -324,7 +702,17 @@ FocusScope {
             else if (action === "edit")
                 page.editEntry(entry);
             else if (action === "delete")
-                page.confirmDelete();
+                page.confirmDelete(entry);
+            else if (action === "restoreTrash")
+                controller.restoreTrashEntry(entry.slice(6));
+            else if (action === "purgeTrash")
+                page.confirmDelete(entry);
+            else if (action === "copySendUrl") {
+                const url = controller.sendUrlFor(entry);
+                if (url.length > 0)
+                    controller.copyText(url);
+            } else if (action === "deleteSend")
+                page.confirmDelete(entry);
         }
         onClosed: pane.claimKeyboard()
     }
@@ -421,6 +809,8 @@ FocusScope {
         objectName: "entryFormModal"
         sshSupported: !controller.passBackend && !controller.onePasswordBackend && Qt.platform.os !== "windows"
         noteSupported: controller.bitwardenBackend
+        cardSupported: controller.bitwardenBackend
+        identitySupported: controller.bitwardenBackend
         status: controller.messageIsError ? controller.message : ""
         statusIsError: true
         visible: page.mode === "form"
@@ -476,6 +866,112 @@ FocusScope {
         onDismissed: page.mode = "list"
     }
 
+    ActionsMenu {
+        id: sidebarAddMenu
+        objectName: "sidebarAddMenu"
+        parent: page
+        readonly property bool canCreateCollection:
+            controller.bitwardenBackend && controller.bitwardenOrganizations.length > 0
+        readonly property var actionKeys: canCreateCollection ? ["newGroup", "newCollection"] : ["newGroup"]
+        options: canCreateCollection
+            ? [i18n.t("sidebar.new_group"), i18n.t("sidebar.new_collection")]
+            : [i18n.t("sidebar.new_group")]
+        onChosen: function(index) {
+            close();
+            if (actionKeys[index] === "newCollection")
+                page.mode = "createCollection";
+            else
+                page.mode = "createGroup";
+        }
+        onClosed: if (page.mode === "list") pane.claimKeyboard()
+    }
+
+    Modal {
+        id: createGroupModal
+        visible: page.mode === "createGroup"
+        firstField: newGroupNameField.field
+        heading: i18n.t("sidebar.new_group")
+        acceptText: i18n.t("common.save")
+        acceptEnabled: newGroupNameField.text.trim().length > 0
+        status: controller.hasMessage && controller.messageIsError ? controller.message : ""
+        statusIsError: true
+
+        function submit() {
+            if (!acceptEnabled)
+                return;
+            if (controller.createGroup(newGroupNameField.text))
+                page.mode = "list";
+        }
+
+        onShown: newGroupNameField.text = ""
+        onAcceptRequested: submit()
+        onDismissed: page.mode = "list"
+
+        Field {
+            id: newGroupNameField
+            width: parent.width
+            label: i18n.t("sidebar.group_name_label")
+            placeholderText: i18n.t("sidebar.group_name_placeholder")
+            onSubmitted: createGroupModal.submit()
+            onCancelled: createGroupModal.takeKeyboard()
+        }
+    }
+
+    Modal {
+        id: createCollectionModal
+        visible: page.mode === "createCollection"
+        firstField: newCollectionNameField.field
+        heading: i18n.t("sidebar.new_collection")
+        acceptText: i18n.t("common.save")
+        acceptEnabled: newCollectionNameField.text.trim().length > 0 && controller.bitwardenOrganizations.length > 0
+        status: controller.hasMessage && controller.messageIsError ? controller.message : ""
+        statusIsError: true
+
+        function submit() {
+            if (!acceptEnabled)
+                return;
+            const orgs = controller.bitwardenOrganizations;
+            const org = orgs[orgSelector.currentIndex] || orgs[0];
+            if (org && controller.createBitwardenCollection(org.id, newCollectionNameField.text))
+                page.mode = "list";
+        }
+
+        onShown: {
+            orgSelector.currentIndex = 0;
+            newCollectionNameField.text = "";
+        }
+        onAcceptRequested: submit()
+        onDismissed: page.mode = "list"
+
+        Column {
+            visible: controller.bitwardenOrganizations.length > 1
+            width: parent.width
+            spacing: Math.round(6 * systemTheme.textScale)
+
+            Text {
+                text: i18n.t("sidebar.organization_label")
+                color: theme.muted
+                font.pixelSize: Math.round(13 * systemTheme.textScale)
+            }
+
+            Segmented {
+                id: orgSelector
+                options: controller.bitwardenOrganizations.map(function(o) { return o.name; })
+                onSubmitted: createCollectionModal.submit()
+                onCancelled: createCollectionModal.takeKeyboard()
+            }
+        }
+
+        Field {
+            id: newCollectionNameField
+            width: parent.width
+            label: i18n.t("sidebar.collection_name_label")
+            placeholderText: i18n.t("sidebar.collection_name_placeholder")
+            onSubmitted: createCollectionModal.submit()
+            onCancelled: createCollectionModal.takeKeyboard()
+        }
+    }
+
     RenameGroupModal {
         id: renameModal
         visible: page.mode === "rename"
@@ -491,10 +987,19 @@ FocusScope {
         visible: page.mode === "confirmDelete"
         acceptText: i18n.t("common.delete")
         destructive: true
-        question: i18n.t("ui.confirm_delete", { "entry": page.selectedEntry })
+        question: page.selectedEntry.startsWith("trash:")
+            ? i18n.t("ui.confirm_purge", { "entry": page.selectedEntryLabel })
+            : page.selectedEntry.startsWith("send:")
+                ? i18n.t("ui.confirm_delete_send", { "entry": page.selectedEntryLabel })
+                : i18n.t("ui.confirm_delete", { "entry": page.selectedEntryLabel })
 
         onAccepted: {
-            controller.deleteEntry(page.selectedEntry);
+            if (page.selectedEntry.startsWith("trash:"))
+                controller.purgeTrashEntry(page.selectedEntry.slice(6));
+            else if (page.selectedEntry.startsWith("send:"))
+                controller.deleteBitwardenSend(page.selectedEntry.slice(5));
+            else
+                controller.deleteEntry(page.selectedEntry);
             page.mode = "list";
         }
         onDismissed: page.mode = "list"
@@ -505,27 +1010,28 @@ FocusScope {
         sections: [
             {
                 "title": i18n.t("help.actions_section"),
-                "items": [["Enter", i18n.t("ui.help_copy_password")],
-                          ["Ctrl+B", i18n.t("ui.help_copy_username")],
+                "items": [["Enter / Ctrl+C", i18n.t("ui.help_copy_password")],
+                          ["Ctrl+U", i18n.t("ui.help_copy_username")],
                           ["Ctrl+L", i18n.t("ui.help_copy_url")],
                           ["Ctrl+Shift+L", i18n.t("ui.help_open_url")],
                           ["Ctrl+T", i18n.t("ui.help_copy_otp")],
                           ["Tab", i18n.t("ui.help_view_details")],
                           [i18n.t("common.space_key"), i18n.t("ui.help_open_menu")],
-                          ["Ctrl+A", i18n.t("ui.help_add_entry")],
+                          ["Ctrl+N", i18n.t("ui.help_add_entry")],
                           ["Ctrl+E", i18n.t("ui.help_edit_entry")],
                           ["Ctrl+X", i18n.t("ui.help_delete_entry")],
                           ["Ctrl+G", i18n.t("generator.help")],
+                          ["Ctrl+S", i18n.t("ui.help_sidebar")],
                           ["Ctrl+Shift+S", i18n.t("bitwarden.send_help")],
+                          ["Ctrl+R", i18n.t("ui.help_sync")],
                           ["Ctrl+I", i18n.t("pin.help")]]
             },
             {
                 "title": i18n.t("help.nav_section"),
-                "items": [["j / k", i18n.t("help.move_selection")],
+                "items": [["j / k / n / p", i18n.t("help.move_selection")],
                           ["g g / G", i18n.t("help.go_top_bottom")],
-                          ["Ctrl+U / Ctrl+D", i18n.t("help.half_page")],
-                          ["Ctrl+N / Ctrl+P", i18n.t("help.next_prev")],
-                          ["Ctrl+Tab", i18n.t("db_app.switch_database")]]
+                          ["u / d", i18n.t("help.half_page")],
+                          ["Ctrl+Tab / Ctrl+1..9", i18n.t("db_app.switch_database")]]
             },
             {
                 "title": i18n.t("help.search_section"),

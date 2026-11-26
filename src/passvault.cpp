@@ -1,5 +1,7 @@
 #include "passvault.h"
 
+#include <QDir>
+
 #include "i18n.h"
 #include "passstore.h"
 
@@ -89,6 +91,22 @@ bool PassVault::editEntry(const QString &oldPath, const QString &newPath, const 
 
 bool PassVault::removeEntry(const QString &entryPath, QString *error) const {
     return PassStore(path()).remove(entryPath, error);
+}
+
+bool PassVault::createGroup(const QString &group, QString *error) const {
+    const QString cleaned = QDir::cleanPath(group.trimmed());
+    if (cleaned.isEmpty() || cleaned == QLatin1String(".") || cleaned.startsWith(QLatin1String(".."))
+        || QDir::isAbsolutePath(cleaned)) {
+        if (error)
+            *error = I18n::t(QStringLiteral("app.group_invalid"));
+        return false;
+    }
+    if (!QDir(path()).mkpath(cleaned)) {
+        if (error)
+            *error = I18n::t(QStringLiteral("app.group_create_error"));
+        return false;
+    }
+    return true;
 }
 
 bool PassVault::renameGroup(const QString &oldGroup, const QString &newName, QString *error) const {

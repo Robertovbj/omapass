@@ -374,10 +374,10 @@ private slots:
     }
 
     void bitwardenCountsOnlyWhatShouldHaveOpened() {
-        // A card (not listed) and a login in the trash are left out on
-        // purpose; neither counts as lost.
+        // An unsupported cipher type (not listed) and a login in the trash are
+        // left out on purpose; neither counts as lost.
         BwAccountState state = bwStateFromFixture();
-        state.ciphers.append(QJsonObject{{"id", "cartao"}, {"type", 3}, {"name", "7.bmV3"}});
+        state.ciphers.append(QJsonObject{{"id", "desconhecido"}, {"type", 99}, {"name", "7.bmV3"}});
         state.ciphers.append(QJsonObject{{"id", "lixo"}, {"type", 1}, {"name", "7.bmV3"},
                                          {"deletedDate", "2026-01-01T00:00:00Z"}});
         BwKeys keys;
@@ -389,15 +389,17 @@ private slots:
         BwAccount::decryptVault(state, keys, &items, &folders, &undecryptable);
         QCOMPARE(undecryptable, 0);
 
-        // An unreadable secure note counts as lost, since notes are listed.
+        // Unreadable note, card and identity count as lost since they are listed.
         state.ciphers.append(QJsonObject{{"id", "nota"}, {"type", 2}, {"name", "7.bmV3"}});
+        state.ciphers.append(QJsonObject{{"id", "cartao"}, {"type", 3}, {"name", "7.bmV3"}});
+        state.ciphers.append(QJsonObject{{"id", "identidade"}, {"type", 4}, {"name", "7.bmV3"}});
         BwAccount::decryptVault(state, keys, &items, &folders, &undecryptable);
-        QCOMPARE(undecryptable, 1);
+        QCOMPARE(undecryptable, 3);
 
         // A folder whose name does not open does count.
         state.folders.append(QJsonObject{{"id", "pasta"}, {"name", "2.aXY=|ZGF0YQ==|bWFj"}});
         BwAccount::decryptVault(state, keys, &items, &folders, &undecryptable);
-        QCOMPARE(undecryptable, 2);
+        QCOMPARE(undecryptable, 4);
     }
 
     void bitwardenKdfOutsideTheSafeRangeIsRefused() {
@@ -850,6 +852,134 @@ private slots:
         QVERIFY(!login.contains("uri"));
         QCOMPARE(decrypted(login.value("username"), *key), QStringLiteral("novo@exemplo.com"));
         QCOMPARE(decrypted(login.value("password"), *key), QStringLiteral("nova-senha"));
+    }
+
+    void bitwardenCardAndIdentityDecryptIndexAndRequest() {
+        const auto key = BwCrypto::keyFromBytes(BwCrypto::randomBytes(64));
+        QVERIFY(key);
+        BwKeys keys;
+        keys.user = *key;
+
+        // Card (type 3)
+        EntryData cardData;
+        cardData.isCard = true;
+        cardData.card.cardholderName = QStringLiteral("Higor");
+        cardData.card.brand = QStringLiteral("Visa");
+        cardData.card.number = Secret(QStringLiteral("4111111111111234"));
+        cardData.card.expMonth = QStringLiteral("12");
+        cardData.card.expYear = QStringLiteral("2029");
+        cardData.card.code = Secret(QStringLiteral("987"));
+        cardData.notes = QStringLiteral("Cartao principal");
+
+        QJsonObject cardReq = BwAccount::cipherRequest({}, {}, QStringLiteral("Nubank"), QString(),
+                                                       cardData, *key, QStringLiteral("u1"));
+        QCOMPARE(cardReq.value("type").toInt(), 3);
+        QVERIFY(!cardReq.contains("login"));
+        cardReq.insert(QStringLiteral("id"), QStringLiteral("card-1"));
+        const std::optional<QJsonObject> decCard = BwAccount::decryptCipher(cardReq, keys);
+        QVERIFY(decCard);
+        const EntryData parsedCard = bwEntryData(*decCard);
+        QVERIFY(parsedCard.isCard);
+        QCOMPARE(parsedCard.card.cardholderName, QStringLiteral("Higor"));
+        QCOMPARE(parsedCard.card.brand, QStringLiteral("Visa"));
+        QCOMPARE(parsedCard.card.number.toString(), QStringLiteral("4111111111111234"));
+        QCOMPARE(parsedCard.card.expMonth, QStringLiteral("12"));
+        QCOMPARE(parsedCard.card.expYear, QStringLiteral("2029"));
+        QCOMPARE(parsedCard.card.code.toString(), QStringLiteral("987"));
+        QCOMPARE(parsedCard.notes, QStringLiteral("Cartao principal"));
+
+        // Identity (type 4)
+        EntryData idData;
+        idData.isIdentity = true;
+        idData.identity.firstName = QStringLiteral("Higor");
+        idData.identity.lastName = QStringLiteral("Goncalves");
+        idData.identity.email = QStringLiteral("higor@exemplo.com");
+        idData.identity.phone = QStringLiteral("+55 11 99999-0000");
+        idData.identity.city = QStringLiteral("Limeira");
+        idData.identity.postalCode = QStringLiteral("13480-000");
+        idData.identity.ssn = Secret(QStringLiteral("123.456.789-00"));
+
+        QJsonObject idReq = BwAccount::cipherRequest({}, {}, QStringLiteral("Dados Pessoais"), QString(),
+                                                     idData, *key, QStringLiteral("u1"));
+        QCOMPARE(idReq.value("type").toInt(), 4);
+        QVERIFY(!idReq.contains("login"));
+        idReq.insert(QStringLiteral("id"), QStringLiteral("id-1"));
+        const std::optional<QJsonObject> decId = BwAccount::decryptCipher(idReq, keys);
+        QVERIFY(decId);
+        const EntryData parsedId = bwEntryData(*decId);
+        QVERIFY(parsedId.isIdentity);
+        QCOMPARE(parsedId.identity.firstName, QStringLiteral("Higor"));
+        QCOMPARE(parsedId.identity.lastName, QStringLiteral("Goncalves"));
+        QCOMPARE(parsedId.identity.email, QStringLiteral("higor@exemplo.com"));
+        QCOMPARE(parsedId.identity.city, QStringLiteral("Limeira"));
+        QCOMPARE(parsedId.identity.ssn.toString(), QStringLiteral("123.456.789-00"));
+
+        const BwIndex index = buildBwIndex({{QStringLiteral("card-1"), *decCard},
+                                            {QStringLiteral("id-1"), *decId}}, {});
+        QCOMPARE(index.entries, QStringList({QStringLiteral("Dados Pessoais"), QStringLiteral("Nubank")}));
+    }
+
+    void bitwardenCustomFieldsCollectionsTrashAndSends() {
+        const auto userKey = BwCrypto::keyFromBytes(BwCrypto::randomBytes(64));
+        const auto orgKey = BwCrypto::keyFromBytes(BwCrypto::randomBytes(64));
+        QVERIFY(userKey && orgKey);
+        BwKeys keys;
+        keys.user = *userKey;
+        keys.organizations.insert(QStringLiteral("org-1"), *orgKey);
+
+        // Custom fields + viewPassword + Trash (includeDeleted)
+        EntryData data;
+        data.username = QStringLiteral("user");
+        data.password = Secret(QStringLiteral("pass"));
+        data.customFieldsLoaded = true;
+        data.customFields.append({QStringLiteral("PIN"), Secret(QStringLiteral("4321")), 1});
+        data.customFields.append({QStringLiteral("Ambiente"), Secret(QStringLiteral("prod")), 0});
+
+        QJsonObject cipher = BwAccount::cipherRequest({}, {}, QStringLiteral("Srv"), QString(),
+                                                      data, *userKey, QStringLiteral("u1"));
+        cipher.insert(QStringLiteral("id"), QStringLiteral("c-cf"));
+        cipher.insert(QStringLiteral("viewPassword"), false);
+        cipher.insert(QStringLiteral("deletedDate"), QStringLiteral("2026-11-26T10:00:00Z"));
+
+        // Excluded from normal decrypt, included when includeDeleted == true.
+        QVERIFY(!BwAccount::decryptCipher(cipher, keys, false));
+        const std::optional<QJsonObject> trashed = BwAccount::decryptCipher(cipher, keys, true);
+        QVERIFY(trashed);
+        const EntryData parsed = bwEntryData(*trashed);
+        QCOMPARE(parsed.viewPassword, false);
+        QCOMPARE(parsed.customFields.size(), 2);
+        QCOMPARE(parsed.customFields.at(0).name, QStringLiteral("PIN"));
+        QCOMPARE(parsed.customFields.at(0).value.toString(), QStringLiteral("4321"));
+        QCOMPARE(parsed.customFields.at(0).type, 1);
+
+        // Collection decryption
+        const QJsonObject col{
+            {QStringLiteral("id"), QStringLiteral("col-1")},
+            {QStringLiteral("organizationId"), QStringLiteral("org-1")},
+            {QStringLiteral("name"), *BwCrypto::encrypt(QByteArray("Infraestrutura"), *orgKey)}
+        };
+        QCOMPARE(BwAccount::decryptCollection(col, keys), QStringLiteral("Infraestrutura"));
+
+        // Send decryption
+        const BwBytes seed = BwCrypto::randomBytes(16);
+        const auto sendKey = BwCrypto::deriveSendKey(seed);
+        QVERIFY(sendKey);
+        const QByteArray seedBytes(reinterpret_cast<const char *>(seed.data()), qsizetype(seed.size()));
+        const QJsonObject send{
+            {QStringLiteral("id"), QStringLiteral("s-1")},
+            {QStringLiteral("accessId"), QStringLiteral("acc123")},
+            {QStringLiteral("type"), 0},
+            {QStringLiteral("key"), *BwCrypto::encrypt(seedBytes, *userKey)},
+            {QStringLiteral("name"), *BwCrypto::encrypt(QByteArray("Senha temporaria"), *sendKey)},
+            {QStringLiteral("accessCount"), 1},
+            {QStringLiteral("maxAccessCount"), 5},
+            {QStringLiteral("deletionDate"), QStringLiteral("2026-12-01T00:00:00Z")}
+        };
+        const std::optional<QJsonObject> decSend =
+            BwAccount::decryptSend(send, *userKey, QStringLiteral("https://limeira.dev.internal"));
+        QVERIFY(decSend);
+        QCOMPARE(decSend->value("name").toString(), QStringLiteral("Senha temporaria"));
+        QVERIFY(decSend->value("url").toString().startsWith(QStringLiteral("https://limeira.dev.internal/#/send/acc123/")));
     }
 };
 

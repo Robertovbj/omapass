@@ -307,13 +307,13 @@ FocusScope {
                 "title": i18n.t("help.nav_section"),
                 "items": [["j / k", i18n.t("help.move_selection")],
                           ["g g / G", i18n.t("help.go_top_bottom")],
-                          ["Ctrl+U / Ctrl+D", i18n.t("help.half_page")],
-                          ["Ctrl+N / Ctrl+P", i18n.t("help.next_prev")]]
+                          ["u / d", i18n.t("help.half_page")],
+                          ["n / p", i18n.t("help.next_prev")]]
             },
             {
                 "title": i18n.t("help.actions_section"),
                 "items": [["Enter", i18n.t("db_app.help_select_db")],
-                          ["Ctrl+A", i18n.t("db_app.help_create_new_db")],
+                          ["Ctrl+N", i18n.t("db_app.help_create_new_db")],
                           ["Ctrl+G", i18n.t("generator.help")],
                           ["Ctrl+X", i18n.t("db_app.help_logout")]]
             },

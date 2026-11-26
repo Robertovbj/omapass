@@ -234,6 +234,13 @@ bool KeepassVault::removeEntry(const QString &entryPath, QString *error) const {
     return finish(m_db->removeEntry(entryPath), error);
 }
 
+bool KeepassVault::createGroup(const QString &group, QString *error) const {
+    const QMutexLocker locker(&m_mutex);
+    if (!refresh(error))
+        return false;
+    return finish(m_db->createGroup(group), error);
+}
+
 bool KeepassVault::renameGroup(const QString &oldGroup, const QString &newName, QString *error) const {
     const QMutexLocker locker(&m_mutex);
     if (!refresh(error))

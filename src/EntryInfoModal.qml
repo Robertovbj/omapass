@@ -13,9 +13,58 @@ Modal {
 
     property bool passBackend: false
     property var details: ({})
+    readonly property bool isSsh: !!root.details.isSsh
     readonly property bool isNote: !!root.details.isNote
-    readonly property bool hasOtp: !!root.details.hasOtp
-    readonly property bool hasExtraUrls: !root.isNote && (root.details.extraUrls || []).length > 0
+    readonly property bool isCard: !!root.details.isCard
+    readonly property bool isIdentity: !!root.details.isIdentity
+    readonly property bool isNonLogin: root.isSsh || root.isNote || root.isCard || root.isIdentity
+    readonly property bool hasOtp: !root.isNonLogin && !!root.details.hasOtp
+    readonly property bool hasExtraUrls: !root.isNonLogin && (root.details.extraUrls || []).length > 0
+    readonly property bool showNotes: !root.passBackend && (!root.isNonLogin || root.isNote || (root.details.notes || "").length > 0)
+    readonly property var structuredFields: {
+        const list = [];
+        function add(label, value, secret, mono) {
+            if (value && String(value).length > 0)
+                list.push({ "label": label, "value": String(value), "secret": !!secret, "mono": !!mono });
+        }
+        if (root.isSsh) {
+            add(i18n.t("common.ssh_public_key_label"), root.details.sshPublicKey, false, true);
+        } else if (root.isCard) {
+            add(i18n.t("card.cardholder_label"), root.details.cardholderName, false, false);
+            add(i18n.t("card.brand_label"), root.details.cardBrand, false, false);
+            add(i18n.t("card.number_label"), root.details.cardNumber, true, true);
+            const expM = root.details.cardExpMonth || "";
+            const expY = root.details.cardExpYear || "";
+            if (expM || expY)
+                add(i18n.t("card.expiration_label"), expM && expY ? (expM + "/" + expY) : (expM || expY), false, true);
+            add(i18n.t("card.code_label"), root.details.cardCode, true, true);
+        } else if (root.isIdentity) {
+            add(i18n.t("identity.title_label"), root.details.idTitle, false, false);
+            add(i18n.t("identity.first_name_label"), root.details.idFirstName, false, false);
+            add(i18n.t("identity.middle_name_label"), root.details.idMiddleName, false, false);
+            add(i18n.t("identity.last_name_label"), root.details.idLastName, false, false);
+            add(i18n.t("identity.company_label"), root.details.idCompany, false, false);
+            add(i18n.t("identity.email_label"), root.details.idEmail, false, false);
+            add(i18n.t("identity.phone_label"), root.details.idPhone, false, false);
+            add(i18n.t("common.username_label"), root.details.idUsername, false, false);
+            add(i18n.t("identity.address1_label"), root.details.idAddress1, false, false);
+            add(i18n.t("identity.address2_label"), root.details.idAddress2, false, false);
+            add(i18n.t("identity.address3_label"), root.details.idAddress3, false, false);
+            add(i18n.t("identity.city_label"), root.details.idCity, false, false);
+            add(i18n.t("identity.state_label"), root.details.idState, false, false);
+            add(i18n.t("identity.postal_code_label"), root.details.idPostalCode, false, false);
+            add(i18n.t("identity.country_label"), root.details.idCountry, false, false);
+            add(i18n.t("identity.ssn_label"), root.details.idSsn, true, true);
+            add(i18n.t("identity.passport_label"), root.details.idPassportNumber, true, true);
+            add(i18n.t("identity.license_label"), root.details.idLicenseNumber, true, true);
+        }
+        return list;
+    }
+
+    function structuredView(index) {
+        const field = structuredViews.itemAt(index);
+        return field ? field.view : null;
+    }
 
     // The Tab chain through the additional URLs, which come and go with the
     // entry shown.
@@ -49,7 +98,11 @@ Modal {
     }
 
     heading: root.details.title || i18n.t("common.entry_info_title")
-    subtitle: i18n.t("common.entry_info_title")
+    subtitle: root.isSsh ? "SSH"
+            : root.isNote ? i18n.t("common.note_label")
+            : root.isCard ? i18n.t("common.card_label")
+            : root.isIdentity ? i18n.t("common.identity_label")
+            : i18n.t("common.entry_info_title")
     acceptText: i18n.t("ui.context_edit")
     cancelText: i18n.t("common.close")
     cardWidth: Math.round(600 * s)
@@ -184,14 +237,38 @@ Modal {
         label: i18n.t("common.title_word")
         value: root.details.title || ""
         nextField: root.passBackend ? (root.hasOtp ? otpView.view : titleView.view)
-                 : root.isNote ? notesView.view : usernameView.view
-        previousField: root.passBackend ? (root.hasOtp ? otpView.view : titleView.view) : notesView.view
+                 : root.structuredFields.length > 0 ? root.structuredView(0)
+                 : root.isNonLogin ? (root.showNotes ? notesView.view : (customFieldViews.count > 0 ? customFieldViews.itemAt(0).view : titleView.view))
+                 : usernameView.view
+        previousField: root.passBackend ? (root.hasOtp ? otpView.view : titleView.view)
+                     : (customFieldViews.count > 0 ? customFieldViews.itemAt(customFieldViews.count - 1).view
+                        : (root.showNotes ? notesView.view
+                           : (root.structuredFields.length > 0 ? root.structuredView(structuredViews.count - 1) : titleView.view)))
+    }
+
+    Repeater {
+        id: structuredViews
+        model: root.structuredFields
+
+        InfoField {
+            required property var modelData
+            required property int index
+
+            label: modelData.label
+            value: modelData.value
+            monospace: modelData.mono
+            copyAction: modelData.secret ? function() { controller.copySecret(modelData.value); } : null
+            nextField: index + 1 < structuredViews.count ? root.structuredView(index + 1)
+                     : (root.showNotes ? notesView.view
+                        : (customFieldViews.count > 0 ? customFieldViews.itemAt(0).view : titleView.view))
+            previousField: index > 0 ? root.structuredView(index - 1) : titleView.view
+        }
     }
 
     InfoField {
         id: usernameView
         objectName: "usernameField"
-        visible: !root.passBackend && !root.isNote
+        visible: !root.passBackend && !root.isNonLogin
         label: i18n.t("ui.info_login")
         value: root.details.username || ""
         nextField: urlView.view
@@ -200,7 +277,7 @@ Modal {
 
     InfoField {
         id: urlView
-        visible: !root.passBackend && !root.isNote
+        visible: !root.passBackend && !root.isNonLogin
         label: "URL"
         value: root.details.url || ""
         openAction: root.details.url ? function() { controller.openAddress(root.details.url); } : null
@@ -212,7 +289,7 @@ Modal {
     // like the main one.
     Repeater {
         id: extraUrlViews
-        model: (root.passBackend || root.isNote) ? [] : (root.details.extraUrls || [])
+        model: (root.passBackend || root.isNonLogin) ? [] : (root.details.extraUrls || [])
 
         InfoField {
             required property string modelData
@@ -266,11 +343,46 @@ Modal {
     InfoField {
         id: notesView
         objectName: "notesField"
-        visible: !root.passBackend
+        visible: root.showNotes
         label: i18n.t("common.notes_label")
         value: root.details.notes || ""
         rows: root.isNote ? 10 : 5
-        nextField: titleView.view
-        previousField: root.isNote ? titleView.view : (root.hasOtp ? otpView.view : root.lastUrlView())
+        nextField: customFieldViews.count > 0 ? customFieldViews.itemAt(0).view : titleView.view
+        previousField: root.structuredFields.length > 0 ? root.structuredView(structuredViews.count - 1)
+                     : root.isNonLogin ? titleView.view
+                     : (root.hasOtp ? otpView.view : root.lastUrlView())
+    }
+
+    InfoField {
+        id: collectionsInfoView
+        visible: !root.passBackend && (root.details.collections || "").length > 0
+        label: i18n.t("common.collections_label")
+        value: root.details.collections || ""
+    }
+
+    InfoField {
+        id: groupInfoView
+        visible: !root.passBackend && (root.details.group || "").length > 0
+        label: i18n.t("common.group_label")
+        value: root.details.group || ""
+    }
+
+    Repeater {
+        id: customFieldViews
+        model: root.passBackend ? [] : (root.details.customFields || [])
+
+        InfoField {
+            required property var modelData
+            required property int index
+
+            label: modelData.name || i18n.t("common.custom_fields_label")
+            value: modelData.restricted ? i18n.t("common.field_restricted") : (modelData.value || "")
+            selectable: !modelData.restricted
+            monospace: modelData.type === 1 && !modelData.restricted
+            copyAction: modelData.restricted ? function() {}
+                      : (modelData.type === 1 ? function() { controller.copySecret(modelData.value || ""); } : null)
+            nextField: index + 1 < customFieldViews.count ? customFieldViews.itemAt(index + 1).view : titleView.view
+            previousField: index > 0 ? customFieldViews.itemAt(index - 1).view : notesView.view
+        }
     }
 }

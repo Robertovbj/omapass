@@ -24,11 +24,53 @@ struct DbRef {
     VaultKind kind = VaultKind::Keepass;
 };
 
+struct CardData {
+    QString cardholderName;
+    QString brand;
+    Secret number;
+    QString expMonth;
+    QString expYear;
+    Secret code;
+};
+
+struct IdentityData {
+    QString title;
+    QString firstName;
+    QString middleName;
+    QString lastName;
+    QString company;
+    QString email;
+    QString phone;
+    QString address1;
+    QString address2;
+    QString address3;
+    QString city;
+    QString state;
+    QString postalCode;
+    QString country;
+    Secret ssn;
+    Secret passportNumber;
+    Secret licenseNumber;
+    QString username;
+};
+
+struct CustomField {
+    QString name;
+    Secret value;
+    int type = 0;  // 0 = Text, 1 = Hidden, 2 = Boolean
+};
+
 // An entry's fields, as the union of what the formats carry. `extra` is only
 // used by the pass backend, to preserve lines it does not model when an
 // entry that already had them is edited.
 struct EntryData {
     bool isNote = false;
+    bool isCard = false;
+    bool isIdentity = false;
+    bool viewPassword = true;
+    bool customFieldsLoaded = false;
+    bool collectionsLoaded = false;
+    QStringList collectionIds;
     QString sshPublicKey;  // OpenSSH public key, including its optional comment.
     QString username;
     Secret password;
@@ -43,16 +85,20 @@ struct EntryData {
     // URI, but a bare base32 secret or `steam://` from Bitwarden and
     // 1Password; Totp::parse reads all of them. Empty when there is none.
     Secret otp;
+    CardData card;
+    IdentityData identity;
+    QVector<CustomField> customFields;
 };
 
 // What the entry list shows next to a path without reading each entry. `type`
-// is "login", "ssh" or "note"; username and url are empty where the backend
-// cannot give them cheaply.
+// is "login", "ssh", "note", "card" or "identity"; username and url are empty
+// where the backend cannot give them cheaply.
 struct EntryMeta {
     QString type = QStringLiteral("login");
     QString username;
     QString url;
     QStringList extraUrls;
+    QStringList collectionIds;
     bool hasOtp = false;
     std::optional<SshKeyConfig> ssh;
 };
@@ -151,6 +197,7 @@ public:
                            const EntryData &data, QString *error) const = 0;
     virtual bool removeEntry(const QString &entryPath, QString *error) const = 0;
 
+    virtual bool createGroup(const QString &, QString *) const { return false; }
     // Renames the last segment of `oldGroup` to `newName`, keeping the parent
     // group and everything below it intact.
     virtual bool renameGroup(const QString &oldGroup, const QString &newName,

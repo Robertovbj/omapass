@@ -45,6 +45,26 @@ QJsonObject decryptLogin(const QJsonObject &cipher, const BwKey &key) {
     };
 }
 
+QJsonObject decryptCard(const QJsonObject &cipher, const BwKey &key) {
+    const QJsonObject card = cipher.value(QStringLiteral("card")).toObject();
+    QJsonObject out;
+    for (const char *field : {"cardholderName", "brand", "number", "expMonth", "expYear", "code"})
+        out.insert(QLatin1String(field), decryptField(card.value(QLatin1String(field)), key));
+    return out;
+}
+
+QJsonObject decryptIdentity(const QJsonObject &cipher, const BwKey &key) {
+    const QJsonObject id = cipher.value(QStringLiteral("identity")).toObject();
+    QJsonObject out;
+    for (const char *field : {"title", "firstName", "middleName", "lastName", "address1",
+                              "address2", "address3", "city", "state", "postalCode", "country",
+                              "company", "email", "phone", "ssn", "username", "passportNumber",
+                              "licenseNumber"}) {
+        out.insert(QLatin1String(field), decryptField(id.value(QLatin1String(field)), key));
+    }
+    return out;
+}
+
 // A field to send: encrypted, or null when there is nothing in it.
 QJsonValue encryptedField(const QString &text, const BwKey &key) {
     if (text.isEmpty())
@@ -139,7 +159,10 @@ std::optional<BwAccountState> BwAccount::load(const QString &path) {
     state.privateKey = root.value(QStringLiteral("privateKey")).toString();
     state.refreshToken = root.value(QStringLiteral("refreshToken")).toString();
     state.organizationKeys = root.value(QStringLiteral("organizationKeys")).toObject();
+    state.organizationNames = root.value(QStringLiteral("organizationNames")).toObject();
     state.folders = root.value(QStringLiteral("folders")).toArray();
+    state.collections = root.value(QStringLiteral("collections")).toArray();
+    state.sends = root.value(QStringLiteral("sends")).toArray();
     state.ciphers = root.value(QStringLiteral("ciphers")).toArray();
 
     if (state.email.isEmpty() || refPath(state.email, state.server) != path)
@@ -168,7 +191,10 @@ bool BwAccount::save(const BwAccountState &state, QString *error) {
         {QStringLiteral("privateKey"), state.privateKey},
         {QStringLiteral("refreshToken"), state.refreshToken},
         {QStringLiteral("organizationKeys"), state.organizationKeys},
+        {QStringLiteral("organizationNames"), state.organizationNames},
         {QStringLiteral("folders"), state.folders},
+        {QStringLiteral("collections"), state.collections},
+        {QStringLiteral("sends"), state.sends},
         {QStringLiteral("ciphers"), state.ciphers},
     };
 
@@ -279,17 +305,25 @@ void BwAccount::applySync(BwAccountState *state, const QJsonObject &sync) {
     }
 
     QJsonObject organizations;
+    QJsonObject organizationNames;
     const QJsonArray profileOrganizations = profile.value(QStringLiteral("organizations")).toArray();
     for (const QJsonValue &value : profileOrganizations) {
         const QJsonObject organization = value.toObject();
         const QString id = organization.value(QStringLiteral("id")).toString();
         const QString key = organization.value(QStringLiteral("key")).toString();
-        if (!id.isEmpty() && !key.isEmpty())
+        const QString name = organization.value(QStringLiteral("name")).toString();
+        if (!id.isEmpty() && !key.isEmpty()) {
             organizations.insert(id, key);
+            if (!name.isEmpty())
+                organizationNames.insert(id, name);
+        }
     }
     state->organizationKeys = organizations;
+    state->organizationNames = organizationNames;
 
     state->folders = sync.value(QStringLiteral("folders")).toArray();
+    state->collections = sync.value(QStringLiteral("collections")).toArray();
+    state->sends = sync.value(QStringLiteral("sends")).toArray();
     state->ciphers = sync.value(QStringLiteral("ciphers")).toArray();
 }
 
@@ -310,12 +344,13 @@ std::optional<BwKey> BwAccount::cipherKey(const QJsonObject &cipher, const BwKey
     return baseKey;
 }
 
-std::optional<QJsonObject> BwAccount::decryptCipher(const QJsonObject &cipher, const BwKeys &keys) {
+std::optional<QJsonObject> BwAccount::decryptCipher(const QJsonObject &cipher, const BwKeys &keys,
+                                                    bool includeDeleted) {
     const int type = cipher.value(QStringLiteral("type")).toInt();
-    if (type != 1 && type != 2 && type != 5)
+    if (type < 1 || type > 5)
         return std::nullopt;
     const QJsonValue deleted = cipher.value(QStringLiteral("deletedDate"));
-    if (!deleted.isNull() && !deleted.isUndefined())
+    if (!includeDeleted && !deleted.isNull() && !deleted.isUndefined())
         return std::nullopt;
 
     const std::optional<BwKey> key = cipherKey(cipher, keys);
@@ -331,14 +366,35 @@ std::optional<QJsonObject> BwAccount::decryptCipher(const QJsonObject &cipher, c
         item.insert(QStringLiteral("folderId"), cipher.value(QStringLiteral("folderId")));
         item.insert(QStringLiteral("collectionIds"), cipher.value(QStringLiteral("collectionIds")));
         item.insert(QStringLiteral("revisionDate"), cipher.value(QStringLiteral("revisionDate")));
-        item.insert(QStringLiteral("deletedDate"), QJsonValue::Null);
+        item.insert(QStringLiteral("deletedDate"), deleted.isUndefined() ? QJsonValue(QJsonValue::Null) : deleted);
+        item.insert(QStringLiteral("viewPassword"), cipher.value(QStringLiteral("viewPassword")).toBool(true));
         item.insert(QStringLiteral("name"), decryptField(cipher.value(QStringLiteral("name")), *key));
         item.insert(QStringLiteral("notes"), decryptField(cipher.value(QStringLiteral("notes")), *key));
+        const QJsonArray encFields = cipher.value(QStringLiteral("fields")).toArray();
+        if (!encFields.isEmpty()) {
+            QJsonArray decFields;
+            for (const QJsonValue &fv : encFields) {
+                const QJsonObject fo = fv.toObject();
+                const int fType = fo.value(QStringLiteral("type")).toInt();
+                QJsonObject df;
+                df.insert(QStringLiteral("type"), fType);
+                df.insert(QStringLiteral("name"), decryptField(fo.value(QStringLiteral("name")), *key));
+                df.insert(QStringLiteral("value"), decryptField(fo.value(QStringLiteral("value")), *key));
+                if (fo.contains(QStringLiteral("linkedId")))
+                    df.insert(QStringLiteral("linkedId"), fo.value(QStringLiteral("linkedId")));
+                decFields.append(df);
+            }
+            item.insert(QStringLiteral("fields"), decFields);
+        }
         if (type == 2) {
             QJsonObject note = cipher.value(QStringLiteral("secureNote")).toObject();
             if (!note.contains(QStringLiteral("type")))
                 note.insert(QStringLiteral("type"), 0);
             item.insert(QStringLiteral("secureNote"), note);
+        } else if (type == 3) {
+            item.insert(QStringLiteral("card"), decryptCard(cipher, *key));
+        } else if (type == 4) {
+            item.insert(QStringLiteral("identity"), decryptIdentity(cipher, *key));
         } else if (type == 5) {
             const QJsonObject ssh = cipher.value(QStringLiteral("sshKey")).toObject();
             item.insert(QStringLiteral("sshKey"),
@@ -363,6 +419,49 @@ QString BwAccount::decryptFolder(const QJsonObject &folder, const BwKey &user) {
     while (text.endsWith(QLatin1Char('/')))
         text.chop(1);
     return text;
+}
+
+QString BwAccount::decryptCollection(const QJsonObject &collection, const BwKeys &keys) {
+    const QString orgId = collection.value(QStringLiteral("organizationId")).toString();
+    if (orgId.isEmpty() || !keys.organizations.contains(orgId))
+        return QString();
+    const std::optional<QString> name =
+        BwCrypto::decryptString(collection.value(QStringLiteral("name")).toString(),
+                                keys.organizations.value(orgId));
+    return name ? name->trimmed() : QString();
+}
+
+std::optional<QJsonObject> BwAccount::decryptSend(const QJsonObject &send, const BwKey &user,
+                                                  const QString &server) {
+    const QString id = send.value(QStringLiteral("id")).toString();
+    const QString accessId = send.value(QStringLiteral("accessId")).toString();
+    const QString wrappedKey = send.value(QStringLiteral("key")).toString();
+    if (id.isEmpty() || accessId.isEmpty() || wrappedKey.isEmpty())
+        return std::nullopt;
+
+    const std::optional<BwBytes> seed = BwCrypto::decrypt(wrappedKey, user);
+    if (!seed || seed->size() != 16)
+        return std::nullopt;
+    const std::optional<BwKey> sendKey = BwCrypto::deriveSendKey(*seed);
+    if (!sendKey)
+        return std::nullopt;
+
+    const std::optional<QString> name =
+        BwCrypto::decryptString(send.value(QStringLiteral("name")).toString(), *sendKey);
+    if (!name)
+        return std::nullopt;
+
+    QJsonObject out;
+    out.insert(QStringLiteral("id"), id);
+    out.insert(QStringLiteral("accessId"), accessId);
+    out.insert(QStringLiteral("type"), send.value(QStringLiteral("type")).toInt());
+    out.insert(QStringLiteral("name"), *name);
+    out.insert(QStringLiteral("url"), BwCrypto::sendUrl(server, accessId, *seed));
+    out.insert(QStringLiteral("accessCount"), send.value(QStringLiteral("accessCount")).toInt());
+    out.insert(QStringLiteral("maxAccessCount"), send.value(QStringLiteral("maxAccessCount")).toInt());
+    out.insert(QStringLiteral("deletionDate"), send.value(QStringLiteral("deletionDate")).toString());
+    out.insert(QStringLiteral("disabled"), send.value(QStringLiteral("disabled")).toBool());
+    return out;
 }
 
 QJsonObject BwAccount::cipherRequest(const QJsonObject &encrypted, const QString &previousPassword,
@@ -403,16 +502,81 @@ QJsonObject BwAccount::cipherRequest(const QJsonObject &encrypted, const QString
     request.insert(QStringLiteral("notes"), encryptedField(data.notes, key));
     request.insert(QStringLiteral("folderId"), folderId.isEmpty() ? QJsonValue(QJsonValue::Null)
                                                                   : QJsonValue(folderId));
+    if (data.customFieldsLoaded) {
+        QJsonArray encFields;
+        for (const CustomField &f : data.customFields) {
+            if (f.name.trimmed().isEmpty() && f.value.isEmpty())
+                continue;
+            QJsonObject fo;
+            fo.insert(QStringLiteral("type"), f.type);
+            fo.insert(QStringLiteral("name"), encryptedField(f.name, key));
+            fo.insert(QStringLiteral("value"), encryptedField(f.value.toString(), key));
+            fo.insert(QStringLiteral("linkedId"), QJsonValue::Null);
+            encFields.append(fo);
+        }
+        request.insert(QStringLiteral("fields"), encFields.isEmpty() ? QJsonValue(QJsonValue::Null)
+                                                                     : QJsonValue(encFields));
+    }
 
     if ((data.isNote && (encrypted.isEmpty() || request.value(QStringLiteral("type")).toInt() == 2))
         || request.value(QStringLiteral("type")).toInt() == 2) {
         request.remove(QStringLiteral("login"));
+        request.remove(QStringLiteral("card"));
+        request.remove(QStringLiteral("identity"));
         request.remove(QStringLiteral("sshKey"));
         request.insert(QStringLiteral("type"), 2);
         QJsonObject note = request.value(QStringLiteral("secureNote")).toObject();
         if (!note.contains(QStringLiteral("type")))
             note.insert(QStringLiteral("type"), 0);
         request.insert(QStringLiteral("secureNote"), note);
+        return request;
+    }
+
+    if ((data.isCard && (encrypted.isEmpty() || request.value(QStringLiteral("type")).toInt() == 3))
+        || request.value(QStringLiteral("type")).toInt() == 3) {
+        request.remove(QStringLiteral("login"));
+        request.remove(QStringLiteral("secureNote"));
+        request.remove(QStringLiteral("identity"));
+        request.remove(QStringLiteral("sshKey"));
+        request.insert(QStringLiteral("type"), 3);
+        QJsonObject card = request.value(QStringLiteral("card")).toObject();
+        card.insert(QStringLiteral("cardholderName"), encryptedField(data.card.cardholderName, key));
+        card.insert(QStringLiteral("brand"), encryptedField(data.card.brand, key));
+        card.insert(QStringLiteral("number"), encryptedField(data.card.number.toString(), key));
+        card.insert(QStringLiteral("expMonth"), encryptedField(data.card.expMonth, key));
+        card.insert(QStringLiteral("expYear"), encryptedField(data.card.expYear, key));
+        card.insert(QStringLiteral("code"), encryptedField(data.card.code.toString(), key));
+        request.insert(QStringLiteral("card"), card);
+        return request;
+    }
+
+    if ((data.isIdentity && (encrypted.isEmpty() || request.value(QStringLiteral("type")).toInt() == 4))
+        || request.value(QStringLiteral("type")).toInt() == 4) {
+        request.remove(QStringLiteral("login"));
+        request.remove(QStringLiteral("secureNote"));
+        request.remove(QStringLiteral("card"));
+        request.remove(QStringLiteral("sshKey"));
+        request.insert(QStringLiteral("type"), 4);
+        QJsonObject id = request.value(QStringLiteral("identity")).toObject();
+        id.insert(QStringLiteral("title"), encryptedField(data.identity.title, key));
+        id.insert(QStringLiteral("firstName"), encryptedField(data.identity.firstName, key));
+        id.insert(QStringLiteral("middleName"), encryptedField(data.identity.middleName, key));
+        id.insert(QStringLiteral("lastName"), encryptedField(data.identity.lastName, key));
+        id.insert(QStringLiteral("company"), encryptedField(data.identity.company, key));
+        id.insert(QStringLiteral("email"), encryptedField(data.identity.email, key));
+        id.insert(QStringLiteral("phone"), encryptedField(data.identity.phone, key));
+        id.insert(QStringLiteral("address1"), encryptedField(data.identity.address1, key));
+        id.insert(QStringLiteral("address2"), encryptedField(data.identity.address2, key));
+        id.insert(QStringLiteral("address3"), encryptedField(data.identity.address3, key));
+        id.insert(QStringLiteral("city"), encryptedField(data.identity.city, key));
+        id.insert(QStringLiteral("state"), encryptedField(data.identity.state, key));
+        id.insert(QStringLiteral("postalCode"), encryptedField(data.identity.postalCode, key));
+        id.insert(QStringLiteral("country"), encryptedField(data.identity.country, key));
+        id.insert(QStringLiteral("ssn"), encryptedField(data.identity.ssn.toString(), key));
+        id.insert(QStringLiteral("passportNumber"), encryptedField(data.identity.passportNumber.toString(), key));
+        id.insert(QStringLiteral("licenseNumber"), encryptedField(data.identity.licenseNumber.toString(), key));
+        id.insert(QStringLiteral("username"), encryptedField(data.identity.username, key));
+        request.insert(QStringLiteral("identity"), id);
         return request;
     }
 
@@ -513,11 +677,11 @@ void BwAccount::decryptVault(const BwAccountState &state, const BwKeys &keys,
             items->insert(item->value(QStringLiteral("id")).toString(), *item);
             continue;
         }
-        // Other kinds and the trash are left out on purpose; only a login,
-        // secure note or SSH key that should be listed counts as lost.
+        // Other kinds and the trash are left out on purpose; only supported
+        // cipher types (login, note, card, identity, SSH) count as lost.
         const int type = cipher.value(QStringLiteral("type")).toInt();
         const QJsonValue deleted = cipher.value(QStringLiteral("deletedDate"));
-        if ((type == 1 || type == 2 || type == 5) && (deleted.isNull() || deleted.isUndefined()))
+        if (type >= 1 && type <= 5 && (deleted.isNull() || deleted.isUndefined()))
             ++failed;
     }
 

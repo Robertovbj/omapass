@@ -100,4 +100,32 @@ TestCase {
         menu.close();
         tryCompare(menu, "opened", false);
     }
+
+    function test_ctrl_s_focuses_open_sidebar_before_closing() {
+        const component = Qt.createComponent("qrc:/EntriesPage.qml");
+        const page = createTemporaryObject(component, testCase, {width: 600, height: 300});
+        const sidebarList = findChild(page, "sidebarList");
+        const pane = findChild(page, "entriesPane");
+        waitForRendering(page);
+
+        compare(page.sidebarOpen, false);
+        keyClick(Qt.Key_S, Qt.ControlModifier);
+        compare(page.sidebarOpen, true);
+        tryCompare(sidebarList, "activeFocus", true);
+
+        keyClick(Qt.Key_Escape);
+        compare(page.sidebarOpen, true);
+        compare(page.sidebarFocused, false);
+        tryCompare(pane, "activeFocus", true);
+
+        keyClick(Qt.Key_S, Qt.ControlModifier);
+        compare(page.sidebarOpen, true);
+        compare(page.sidebarFocused, true);
+        tryCompare(sidebarList, "activeFocus", true);
+
+        keyClick(Qt.Key_S, Qt.ControlModifier);
+        compare(page.sidebarOpen, false);
+        compare(page.sidebarFocused, false);
+        tryCompare(pane, "activeFocus", true);
+    }
 }

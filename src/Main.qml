@@ -33,7 +33,7 @@ ApplicationWindow {
     Shortcut {
         sequence: "Ctrl+C"
         context: Qt.ApplicationShortcut
-        enabled: !window.editingText && !window.settingsOpen
+        enabled: !window.editingText && !window.settingsOpen && controller.stage === "databases"
         onActivated: window.close()
     }
 
@@ -46,6 +46,16 @@ ApplicationWindow {
         context: Qt.ApplicationShortcut
         onActivated: window.settingsOpen = true
     }
+
+    Shortcut { sequence: "Ctrl+1"; context: Qt.ApplicationShortcut; enabled: !window.settingsOpen && controller.openDatabases.length >= 1; onActivated: controller.switchDatabaseAt(0) }
+    Shortcut { sequence: "Ctrl+2"; context: Qt.ApplicationShortcut; enabled: !window.settingsOpen && controller.openDatabases.length >= 2; onActivated: controller.switchDatabaseAt(1) }
+    Shortcut { sequence: "Ctrl+3"; context: Qt.ApplicationShortcut; enabled: !window.settingsOpen && controller.openDatabases.length >= 3; onActivated: controller.switchDatabaseAt(2) }
+    Shortcut { sequence: "Ctrl+4"; context: Qt.ApplicationShortcut; enabled: !window.settingsOpen && controller.openDatabases.length >= 4; onActivated: controller.switchDatabaseAt(3) }
+    Shortcut { sequence: "Ctrl+5"; context: Qt.ApplicationShortcut; enabled: !window.settingsOpen && controller.openDatabases.length >= 5; onActivated: controller.switchDatabaseAt(4) }
+    Shortcut { sequence: "Ctrl+6"; context: Qt.ApplicationShortcut; enabled: !window.settingsOpen && controller.openDatabases.length >= 6; onActivated: controller.switchDatabaseAt(5) }
+    Shortcut { sequence: "Ctrl+7"; context: Qt.ApplicationShortcut; enabled: !window.settingsOpen && controller.openDatabases.length >= 7; onActivated: controller.switchDatabaseAt(6) }
+    Shortcut { sequence: "Ctrl+8"; context: Qt.ApplicationShortcut; enabled: !window.settingsOpen && controller.openDatabases.length >= 8; onActivated: controller.switchDatabaseAt(7) }
+    Shortcut { sequence: "Ctrl+9"; context: Qt.ApplicationShortcut; enabled: !window.settingsOpen && controller.openDatabases.length >= 9; onActivated: controller.switchDatabaseAt(8) }
 
     SettingsModal {
         visible: window.settingsOpen
