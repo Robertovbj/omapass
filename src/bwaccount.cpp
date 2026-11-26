@@ -385,6 +385,14 @@ QJsonObject BwAccount::cipherRequest(const QJsonObject &encrypted, const QString
         // The server checks this against its own copy, so an edit made from
         // a stale one is refused rather than silently undoing another.
         request.insert(QStringLiteral("lastKnownRevisionDate"), encrypted.value(QStringLiteral("revisionDate")));
+        // Strip response-only fields from /sync or /ciphers/{id} so the server
+        // never prefers stale legacy `data` or rejects read-only metadata.
+        for (const char *keyName : {"data", "object", "id", "creationDate", "revisionDate",
+                                    "deletedDate", "archivedDate", "edit", "viewPassword",
+                                    "organizationUseTotp", "attachments", "permissions",
+                                    "collectionIds"}) {
+            request.remove(QLatin1String(keyName));
+        }
     }
 
     // Servers check that what they are given was encrypted by the account
@@ -429,6 +437,8 @@ QJsonObject BwAccount::cipherRequest(const QJsonObject &encrypted, const QString
     }
 
     QJsonObject login = request.value(QStringLiteral("login")).toObject();
+    // Legacy single-URI field returned by /sync; `uris` is the source of truth.
+    login.remove(QStringLiteral("uri"));
     login.insert(QStringLiteral("username"), encryptedField(data.username, key));
     // Written as given: Bitwarden reads an otpauth URI, a bare secret and
     // steam:// alike, so one that came from another client goes back as it was.

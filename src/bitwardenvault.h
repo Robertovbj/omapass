@@ -76,9 +76,9 @@ public:
 
     // Fetches a single cipher's latest details from the server and updates
     // the local decrypted cache and copy on disk (used by real-time sync).
-    bool syncCipher(const QString &cipherId, QString *error);
+    bool syncCipher(const QString &cipherId, QString *error) const;
     // Removes a cipher deleted remotely from the local cache and copy on disk.
-    bool removeLocalCipher(const QString &cipherId);
+    bool removeLocalCipher(const QString &cipherId) const;
 
     // Server URL (normalized) and a fresh access token for the notifications
     // WebSocket hub.

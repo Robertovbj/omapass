@@ -1847,9 +1847,11 @@ bool AppController::saveEntry(const QVariantMap &fields) {
                                            : QStringLiteral("app.entry_added")),
                             false);
             } else {
-                showMessage(I18n::t(isEdit ? QStringLiteral("app.edit_error")
-                                           : QStringLiteral("app.add_error")),
-                            true);
+                QString msg = I18n::t(isEdit ? QStringLiteral("app.edit_error")
+                                             : QStringLiteral("app.add_error"));
+                if (!result.error.isEmpty())
+                    msg += QStringLiteral(" ") + result.error;
+                showMessage(msg, true);
             }
             refreshEntries();
         });

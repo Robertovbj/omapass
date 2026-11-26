@@ -282,7 +282,7 @@ bool BitwardenVault::sync(QString *error, bool force) {
     return true;
 }
 
-bool BitwardenVault::syncCipher(const QString &cipherId, QString *error) {
+bool BitwardenVault::syncCipher(const QString &cipherId, QString *error) const {
     if (cipherId.isEmpty())
         return false;
     const BwResponse response = request("GET", QStringLiteral("/ciphers/%1/details").arg(cipherId), error);
@@ -299,7 +299,7 @@ bool BitwardenVault::syncCipher(const QString &cipherId, QString *error) {
     return true;
 }
 
-bool BitwardenVault::removeLocalCipher(const QString &cipherId) {
+bool BitwardenVault::removeLocalCipher(const QString &cipherId) const {
     if (cipherId.isEmpty())
         return false;
     bool existed = false;
@@ -729,7 +729,17 @@ bool BitwardenVault::editEntry(const QString &oldPath, const QString &newPath, c
     const BwResponse response = request("PUT", QStringLiteral("/ciphers/") + ref.id, error, body);
     if (!response.ok())
         return false;
-    storeCipher(response.json);
+    QJsonObject updated = response.json;
+    if (updated.value(QStringLiteral("id")).toString().isEmpty()
+        && updated.value(QStringLiteral("cipher")).isObject()) {
+        updated = updated.value(QStringLiteral("cipher")).toObject();
+    }
+    if (!updated.value(QStringLiteral("id")).toString().isEmpty()) {
+        storeCipher(updated);
+    } else {
+        QString ignored;
+        syncCipher(ref.id, &ignored);
+    }
     return true;
 }
 

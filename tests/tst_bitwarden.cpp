@@ -812,6 +812,40 @@ private slots:
         // Ping is not a sync event.
         QVERIFY(!BwSync::parseNotification(decoded.at(1)));
     }
+
+    void bitwardenEditRequestStripsResponseOnlyAndLegacyDataFields() {
+        const auto key = BwCrypto::keyFromBytes(BwCrypto::randomBytes(64));
+        QVERIFY(key);
+
+        QJsonObject existing{
+            {"id", "c-1"},
+            {"object", "cipherDetails"},
+            {"type", 1},
+            {"revisionDate", "2026-11-25T10:00:00Z"},
+            {"creationDate", "2026-01-01T00:00:00Z"},
+            {"edit", true},
+            {"viewPassword", true},
+            {"data", QJsonObject{{"username", "2.stale|data|mac"}}},
+            {"login", QJsonObject{{"uri", "2.stale|uri|mac"}, {"uris", QJsonArray()}}},
+        };
+        EntryData edited;
+        edited.username = QStringLiteral("novo@exemplo.com");
+        edited.password = Secret(QStringLiteral("nova-senha"));
+        edited.url = QStringLiteral("https://exemplo.com");
+
+        const QJsonObject req = BwAccount::cipherRequest(existing, QStringLiteral("velha"),
+                                                         QStringLiteral("Site"), QString(),
+                                                         edited, *key, QStringLiteral("user-1"));
+        QVERIFY(!req.contains("data"));
+        QVERIFY(!req.contains("object"));
+        QVERIFY(!req.contains("id"));
+        QVERIFY(!req.contains("revisionDate"));
+        QCOMPARE(req.value("lastKnownRevisionDate").toString(), QStringLiteral("2026-11-25T10:00:00Z"));
+        const QJsonObject login = req.value("login").toObject();
+        QVERIFY(!login.contains("uri"));
+        QCOMPARE(decrypted(login.value("username"), *key), QStringLiteral("novo@exemplo.com"));
+        QCOMPARE(decrypted(login.value("password"), *key), QStringLiteral("nova-senha"));
+    }
 };
 
 OMAPASS_TEST(TestBitwarden)
