@@ -33,6 +33,9 @@ Modal {
     property bool resumeDraft: false
     property bool isEdit: false
     property bool passBackend: false
+    // 1Password needs a vault for every item; the other backends keep an
+    // entry with no group at the root.
+    property bool groupRequired: false
     property var fields: ({})
 
     signal submitted(var payload)
@@ -78,13 +81,16 @@ Modal {
         passwordField.text = password;
     }
 
+    // With the field empty the groups are still listed, but none is picked
+    // up front: Enter then keeps the entry at the root, and the arrows reach
+    // the list. Only where a group is mandatory is the first one preselected.
     function refreshGroups() {
         groupSuggestions.model = controller.matchingGroups(groupField.text);
-        groupSuggestions.currentIndex = 0;
+        groupSuggestions.currentIndex = (groupField.text.length === 0 && !root.groupRequired) ? -1 : 0;
     }
 
     function acceptGroupSuggestion() {
-        if (groupSuggestions.model.length === 0)
+        if (groupSuggestions.model.length === 0 || groupSuggestions.currentIndex < 0)
             return false;
 
         groupField.text = groupSuggestions.model[groupSuggestions.currentIndex];
@@ -141,6 +147,7 @@ Modal {
         id: groupField
         width: parent.width
         label: i18n.t("common.group_label")
+        placeholderText: root.groupRequired ? "" : i18n.t("common.no_group_placeholder")
 
         onTextChanged: root.refreshGroups()
         onCancelled: root.takeKeyboard()
@@ -148,7 +155,14 @@ Modal {
         onListPrevious: groupSuggestions.previous()
         onNextRequested: root.focusNext(groupField)
         onPreviousRequested: root.focusPrevious(groupField)
-        onSubmitted: if (!root.acceptGroupSuggestion()) root.submit()
+        onSubmitted: {
+            if (root.acceptGroupSuggestion())
+                return;
+            if (groupField.text.trim().length === 0 && !root.groupRequired)
+                titleField.field.forceActiveFocus();
+            else
+                root.submit();
+        }
     }
 
     SuggestionList {

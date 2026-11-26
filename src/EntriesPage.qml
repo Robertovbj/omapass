@@ -425,6 +425,7 @@ FocusScope {
         statusIsError: true
         visible: page.mode === "form"
         passBackend: controller.passBackend
+        groupRequired: controller.onePasswordBackend
 
         onSubmitted: function(payload) {
             if (controller.saveEntry(payload))
