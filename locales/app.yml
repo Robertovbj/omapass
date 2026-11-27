@@ -843,8 +843,17 @@ onepassword.logout_confirm:
   pt-BR: "Desconectar a conta 1Password deste computador?"
   en: "Log out of the 1Password account on this device?"
 db_app.help_logout:
-  pt-BR: "Sair da conta (Bitwarden ou 1Password)"
-  en: "Log out of the account (Bitwarden or 1Password)"
+  pt-BR: "Remover banco da lista / sair da conta"
+  en: "Unlist database / log out"
+common.unlist:
+  pt-BR: "Remover da lista"
+  en: "Remove from list"
+keepass.unlist_confirm:
+  pt-BR: "Remover este banco KeePassXC da lista? O arquivo .kdbx no disco não será apagado."
+  en: "Remove this KeePassXC database from the list? The .kdbx file on disk will not be deleted."
+keepass.unlisted:
+  pt-BR: "Banco removido da lista."
+  en: "Database removed from the list."
 
 kdbx2pass.master_password_prompt:
   pt-BR: "Senha mestra de %{db}: "

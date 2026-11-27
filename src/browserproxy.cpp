@@ -3,6 +3,8 @@
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLocalSocket>
 #include <QProcess>
 #include <QSocketNotifier>
@@ -15,6 +17,8 @@
 #include <unistd.h>
 #endif
 
+#include "browsercrypto.h"
+#include "browserprotocol.h"
 #include "browserserver.h"
 
 namespace BrowserProxy {
@@ -80,30 +84,37 @@ int run(int argc, char *argv[]) {
     QLocalSocket socket;
     const QString socketPath = BrowserServer::socketPath();
     socket.connectToServer(socketPath);
-    if (!socket.waitForConnected(250)) {
-        // omapass is not running yet: start it so clicking the browser
-        // extension's icon opens the vault instead of failing silently.
+    socket.waitForConnected(150);
+
+    auto launchAndConnect = [&]() -> bool {
+        if (socket.state() == QLocalSocket::ConnectedState)
+            return true;
+        socket.abort();
+        socket.connectToServer(socketPath);
+        if (socket.waitForConnected(150))
+            return true;
+
         const QString appImage = qEnvironmentVariable("APPIMAGE").trimmed();
         const QString executable = (!appImage.isEmpty() && QFileInfo::exists(appImage))
             ? appImage : QCoreApplication::applicationFilePath();
         if (!QProcess::startDetached(executable, {}))
-            return 0;
+            return false;
 
         QElapsedTimer deadline;
         deadline.start();
-        bool connected = false;
         while (deadline.elapsed() < 6000) {
             QThread::msleep(150);
             socket.abort();
             socket.connectToServer(socketPath);
-            if (socket.waitForConnected(250)) {
-                connected = true;
-                break;
-            }
+            if (socket.waitForConnected(250))
+                return true;
         }
-        if (!connected)
-            return 0;
-    }
+        return false;
+    };
+
+    auto replyJson = [&](const QJsonObject &obj) -> bool {
+        return writeAll(STDOUT_FILENO, frame(QJsonDocument(obj).toJson(QJsonDocument::Compact)));
+    };
 
     QByteArray fromBrowser;
     QByteArray fromApp;
@@ -121,9 +132,60 @@ int run(int argc, char *argv[]) {
         }
         fromBrowser.append(chunk, qsizetype(n));
         bool broken = false;
-        for (const QByteArray &message : takeFrames(&fromBrowser, &broken))
-            socket.write(message);
-        socket.flush();
+        for (const QByteArray &message : takeFrames(&fromBrowser, &broken)) {
+            if (socket.state() != QLocalSocket::ConnectedState) {
+                socket.abort();
+                socket.connectToServer(socketPath);
+                socket.waitForConnected(50);
+            }
+            if (socket.state() == QLocalSocket::ConnectedState) {
+                socket.write(message);
+                continue;
+            }
+
+            // omapass is not running: stay quiet on browser startup and
+            // background checks, and only launch it when the user explicitly
+            // triggers an unlock (e.g. clicking the icon in a login field).
+            const QJsonObject req = QJsonDocument::fromJson(message).object();
+            const QString action = req.value(QStringLiteral("action")).toString();
+            if (action == QLatin1String("change-public-keys")) {
+                const QByteArray nonce = QByteArray::fromBase64(
+                    req.value(QStringLiteral("nonce")).toString().toLatin1(),
+                    QByteArray::AbortOnBase64DecodingErrors);
+                const BrowserCrypto::KeyPair pair = BrowserCrypto::generateKeyPair();
+                QJsonObject answer{
+                    {QStringLiteral("action"), action},
+                    {QStringLiteral("version"), QLatin1String(BrowserProtocol::hostVersion)},
+                    {QStringLiteral("publicKey"), QString::fromLatin1(pair.publicKey.toBase64())},
+                    {QStringLiteral("nonce"),
+                     QString::fromLatin1(BrowserCrypto::incremented(nonce).toBase64())},
+                    {QStringLiteral("success"), QStringLiteral("true")}
+                };
+                if (!replyJson(answer)) {
+                    app.quit();
+                    return;
+                }
+                continue;
+            }
+
+            const QJsonValue trigger = req.value(QStringLiteral("triggerUnlock"));
+            const bool wantsUnlock =
+                trigger.toBool() || trigger.toString() == QLatin1String("true");
+            if (wantsUnlock)
+                launchAndConnect();
+
+            QJsonObject err{
+                {QStringLiteral("action"), action},
+                {QStringLiteral("errorCode"), QString::number(BrowserProtocol::DatabaseNotOpened)},
+                {QStringLiteral("error"), BrowserProtocol::errorMessage(BrowserProtocol::DatabaseNotOpened)}
+            };
+            if (!replyJson(err)) {
+                app.quit();
+                return;
+            }
+        }
+        if (socket.state() == QLocalSocket::ConnectedState)
+            socket.flush();
         if (broken)
             app.quit();
     });

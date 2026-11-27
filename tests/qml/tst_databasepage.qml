@@ -113,7 +113,7 @@ TestCase {
         tryVerify(function() { return choice.opened; }, 3000);
         let keepass = null;
         tryVerify(function() {
-            keepass = findChild(choice.contentItem, "choice0");
+            keepass = findChild(choice.contentItem, "choice2");
             return keepass !== null && keepass.visible;
         }, 3000);
         wait(300);

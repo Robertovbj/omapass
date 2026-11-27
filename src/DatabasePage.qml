@@ -83,6 +83,8 @@ FocusScope {
                 page.mode = "confirmLogout";
             else if (controller.isOnePasswordDatabase(currentIndex))
                 page.mode = "confirmLogoutOp";
+            else if (controller.isKeepassDatabase(currentIndex))
+                page.mode = "confirmUnlistKeepass";
         }
         onHelpRequested: page.mode = "help"
         onQuitRequested: {
@@ -144,11 +146,12 @@ FocusScope {
         objectName: "typeChoice"
 
         readonly property var choices: {
-            const list = [{"label": "KeePassXC (.kdbx)", "action": "createDb"},
-                          {"label": "pass", "action": "createPass"}];
-            list.push({"label": "Bitwarden", "action": "bitwarden"});
+            const list = [];
             if (controller.onePasswordAvailable)
                 list.push({"label": "1Password", "action": "onepassword"});
+            list.push({"label": "Bitwarden", "action": "bitwarden"});
+            list.push({"label": "KeePassXC (.kdbx)", "action": "createDb"});
+            list.push({"label": "pass", "action": "createPass"});
             return list;
         }
 
@@ -269,6 +272,19 @@ FocusScope {
         onDismissed: page.mode = "list"
     }
 
+    ConfirmModal {
+        visible: page.mode === "confirmUnlistKeepass"
+        acceptText: i18n.t("common.unlist")
+        destructive: true
+        question: i18n.t("keepass.unlist_confirm")
+
+        onAccepted: {
+            page.mode = "list";
+            controller.unlistKeepassDatabase(pane.currentIndex);
+        }
+        onDismissed: page.mode = "list"
+    }
+
     AccountCheckModal {
         visible: controller.checkingAccount
         accountName: controller.checkingAccountName
@@ -305,10 +321,10 @@ FocusScope {
         sections: [
             {
                 "title": i18n.t("help.nav_section"),
-                "items": [["j / k", i18n.t("help.move_selection")],
+                "items": [["j / k / n / p", i18n.t("help.move_selection")],
                           ["g g / G", i18n.t("help.go_top_bottom")],
                           ["u / d", i18n.t("help.half_page")],
-                          ["n / p", i18n.t("help.next_prev")]]
+                          ["Ctrl+1..9", i18n.t("db_app.switch_database")]]
             },
             {
                 "title": i18n.t("help.actions_section"),
@@ -327,7 +343,7 @@ FocusScope {
                 "title": i18n.t("help.general_section"),
                 "items": [["? / Ctrl+?", i18n.t("help.this_help")],
                           ["Ctrl+O", i18n.t("settings.help")],
-                          ["Ctrl+Q / Ctrl+C", i18n.t("help.quit_app")]]
+                          ["Ctrl+Q", i18n.t("help.quit_app")]]
             }
         ]
 

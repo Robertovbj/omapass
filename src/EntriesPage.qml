@@ -1062,7 +1062,7 @@ FocusScope {
                 "items": [["? / Ctrl+?", i18n.t("help.this_help")],
                           ["Ctrl+O", i18n.t("settings.help")],
                           ["Esc / q", i18n.t("ui.help_lock")],
-                          ["Ctrl+Q / Ctrl+C", i18n.t("help.quit_app")]]
+                          ["Ctrl+Q", i18n.t("help.quit_app")]]
             }
         ]
 

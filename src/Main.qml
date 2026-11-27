@@ -30,13 +30,6 @@ ApplicationWindow {
         onActivated: window.close()
     }
 
-    Shortcut {
-        sequence: "Ctrl+C"
-        context: Qt.ApplicationShortcut
-        enabled: !window.editingText && !window.settingsOpen && controller.stage === "databases"
-        onActivated: window.close()
-    }
-
     // Settings live above the pages: they are the same wherever you are, and
     // the sheet has to survive the page changing under it.
     property bool settingsOpen: false

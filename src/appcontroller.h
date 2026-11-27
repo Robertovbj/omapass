@@ -200,6 +200,8 @@ public:
     Q_INVOKABLE void chooseBitwardenMethod(int method);
     Q_INVOKABLE void sendBitwardenCode(const QString &code);
     Q_INVOKABLE void cancelBitwardenLogin();
+    Q_INVOKABLE bool isKeepassDatabase(int index) const;
+    Q_INVOKABLE void unlistKeepassDatabase(int index);
     Q_INVOKABLE bool isBitwardenDatabase(int index) const;
     Q_INVOKABLE void logoutBitwarden(int index);
     Q_INVOKABLE void syncBitwarden();

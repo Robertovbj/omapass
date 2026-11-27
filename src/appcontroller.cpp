@@ -48,6 +48,7 @@ const auto windowGeometrySetting = QStringLiteral("window/geometry");
 const auto lastServerSetting = QStringLiteral("bitwarden/lastServer");
 const auto registeredKeepassSetting = QStringLiteral("registeredDatabases/kdbx");
 const auto registeredPassSetting = QStringLiteral("registeredDatabases/pass");
+const auto unlistedKeepassSetting = QStringLiteral("unlistedDatabases/kdbx");
 
 QString localPathFromInput(const QString &pathOrUrl) {
     QString trimmed = pathOrUrl.trimmed();
@@ -85,6 +86,30 @@ void registerLocalDatabase(const QString &path, VaultKind kind) {
         paths.append(path);
         settings.setValue(key, paths);
     }
+    if (kind == VaultKind::Keepass) {
+        QStringList unlisted = settings.value(unlistedKeepassSetting).toStringList();
+        if (unlisted.removeAll(path) > 0)
+            settings.setValue(unlistedKeepassSetting, unlisted);
+    }
+}
+
+void unlistLocalKeepassDatabase(const QString &path) {
+    if (path.isEmpty())
+        return;
+    QSettings settings;
+    QStringList registered = settings.value(registeredKeepassSetting).toStringList();
+    if (registered.removeAll(path) > 0)
+        settings.setValue(registeredKeepassSetting, registered);
+    QStringList unlisted = settings.value(unlistedKeepassSetting).toStringList();
+    if (!unlisted.contains(path)) {
+        unlisted.append(path);
+        settings.setValue(unlistedKeepassSetting, unlisted);
+    }
+}
+
+QSet<QString> loadUnlistedKeepassDatabases() {
+    const QStringList list = QSettings().value(unlistedKeepassSetting).toStringList();
+    return QSet<QString>(list.cbegin(), list.cend());
 }
 
 // Outcome of a backend call run in the background.
@@ -867,7 +892,14 @@ void AppController::setScanning(bool scanning) {
 }
 
 void AppController::adoptDatabases() {
-    m_databases = m_localDatabases + m_accountDatabases;
+    const QSet<QString> unlistedKeepass = loadUnlistedKeepassDatabases();
+    m_databases.clear();
+    for (const DbRef &ref : std::as_const(m_localDatabases)) {
+        if (ref.kind == VaultKind::Keepass && unlistedKeepass.contains(ref.path))
+            continue;
+        m_databases.append(ref);
+    }
+    m_databases += m_accountDatabases;
 
     // Most-used first, so the database you actually open is the one under the
     // cursor when the window appears.
@@ -2878,6 +2910,21 @@ void AppController::cancelBitwardenLogin() {
     setBusy(false);
     setUnlockError(QString());
     setLoginStep(QString());
+}
+
+bool AppController::isKeepassDatabase(int index) const {
+    return index >= 0 && index < m_filteredDatabases.size()
+        && !isOpen(m_filteredDatabases.at(index).path)
+        && m_filteredDatabases.at(index).kind == VaultKind::Keepass;
+}
+
+void AppController::unlistKeepassDatabase(int index) {
+    if (!requireIdle() || !isKeepassDatabase(index))
+        return;
+    const QString path = m_filteredDatabases.at(index).path;
+    unlistLocalKeepassDatabase(path);
+    showMessage(I18n::t(QStringLiteral("keepass.unlisted")), false);
+    refreshDatabases();
 }
 
 bool AppController::isBitwardenDatabase(int index) const {

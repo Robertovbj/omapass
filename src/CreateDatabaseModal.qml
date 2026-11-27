@@ -62,6 +62,13 @@ Modal {
         onAccepted: root.existingSelected(String(selectedFile))
     }
 
+    AppButton {
+        width: parent.width
+        enabled: !root.busy
+        text: i18n.t("db_app.open_existing_kdbx")
+        onClicked: root.chooseExistingFile()
+    }
+
     Field {
         id: nameField
         width: parent.width
@@ -87,12 +94,5 @@ Modal {
         onNextRequested: nameField.field.forceActiveFocus()
         onPreviousRequested: nameField.field.forceActiveFocus()
         onCancelled: root.takeKeyboard()
-    }
-
-    AppButton {
-        width: parent.width
-        enabled: !root.busy
-        text: i18n.t("db_app.open_existing_kdbx")
-        onClicked: root.chooseExistingFile()
     }
 }

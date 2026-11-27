@@ -179,6 +179,8 @@ public:
         m_lastOpened = address;
         emit copied();
     }
+    Q_INVOKABLE bool isKeepassDatabase(int) { return false; }
+    Q_INVOKABLE void unlistKeepassDatabase(int) {}
     Q_INVOKABLE bool isBitwardenDatabase(int) { return false; }
     Q_INVOKABLE bool isOnePasswordDatabase(int) { return false; }
     Q_INVOKABLE void cancelAccountCheck() { emit cancelAccountCheckCalled(); }
